@@ -13,6 +13,14 @@ CURRENT_NUMERIC_FEATURES = (
     "horse_weight_delta",
 )
 
+CURRENT_CATEGORICAL_FEATURES = (
+    "racecourse",
+    "surface",
+    "weather",
+    "track_condition",
+    "sex",
+)
+
 @dataclass(frozen=True)
 class FeatureBuildResult:
     frame: pd.DataFrame
@@ -59,7 +67,8 @@ def _add_entity_history(
         grouped["daily_finish_sum"].cumsum() - daily["daily_finish_sum"]
     )
     daily["_past_finish_count"] = (
-        grouped["daily_finish_count"].cumsum() - daily["daily_finish_count"]
+        grouped["daily_finish_count"].cumsum()
+        - daily["daily_finish_count"]
     )
 
     starts = daily[f"{prefix}_past_starts"].replace(0, np.nan)
@@ -104,6 +113,10 @@ def build_pre_race_features(frame: pd.DataFrame) -> FeatureBuildResult:
         if column in df.columns:
             df[column] = pd.to_numeric(df[column], errors="coerce")
 
+    for column in CURRENT_CATEGORICAL_FEATURES:
+        if column in df.columns:
+            df[column] = df[column].astype("string").fillna("UNKNOWN")
+
     for entity_col, prefix in (
         ("horse_name", "horse"),
         ("jockey", "jockey"),
@@ -125,6 +138,7 @@ def build_pre_race_features(frame: pd.DataFrame) -> FeatureBuildResult:
 
     feature_columns = tuple(
         [c for c in CURRENT_NUMERIC_FEATURES if c in df.columns]
+        + [c for c in CURRENT_CATEGORICAL_FEATURES if c in df.columns]
         + history_features
     )
     assert_leakage_safe(list(feature_columns))
