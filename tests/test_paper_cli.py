@@ -6,19 +6,19 @@ def _write_csv(path):
     path.write_text(
         "race_id,horse_id,horse_name,predicted_win_probability,"
         "decimal_odds,confidence,model_version,observed_at,predicted_at,"
-        "scheduled_post_time,source_reference\\n"
+        "scheduled_post_time,source_reference\n"
         "R1,H1,ALPHA,0.50,4.0,1.0,v1,"
         "2026-10-11T06:20:00+00:00,"
         "2026-10-11T06:21:00+00:00,"
-        "2026-10-11T06:30:00+00:00,q1\\n"
+        "2026-10-11T06:30:00+00:00,q1\n"
         "R1,H2,BRAVO,0.50,4.0,1.0,v1,"
         "2026-10-11T06:20:30+00:00,"
         "2026-10-11T06:21:30+00:00,"
-        "2026-10-11T06:30:00+00:00,q2\\n"
+        "2026-10-11T06:30:00+00:00,q2\n"
         "R2,H3,CHARLIE,0.50,4.0,1.0,v1,"
         "2026-10-11T06:50:00+00:00,"
         "2026-10-11T06:51:00+00:00,"
-        "2026-10-11T07:00:00+00:00,q3\\n",
+        "2026-10-11T07:00:00+00:00,q3\n",
         encoding="utf-8",
     )
 
@@ -57,7 +57,7 @@ def test_run_paper_csv_records_all_evaluations_and_risk_caps(tmp_path):
 def test_paper_csv_missing_required_columns_fails(tmp_path):
     input_path = tmp_path / "bad.csv"
     input_path.write_text(
-        "race_id,horse_id\\nR1,H1\\n",
+        "race_id,horse_id\nR1,H1\n",
         encoding="utf-8",
     )
 
