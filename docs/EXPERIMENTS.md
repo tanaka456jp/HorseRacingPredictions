@@ -102,3 +102,23 @@ For each Walk-Forward fold:
 No odds are used by the calibrator. The goal is specifically to shrink the
 nonlinear longshot overconfidence identified by v6 without tuning an EV cutoff
 on the same test sample.
+
+## v9 — forward-only strategy rule selection
+
+Branch: `feature/v9-forward-validation`.
+
+Keep the accepted v7 CatBoost probability model unchanged.
+
+For every target OOS fold, select an EV threshold using only earlier OOS folds.
+A threshold is eligible only when:
+
+- it belongs to the predeclared threshold grid,
+- at least 200 prior bets are available,
+- prior flat-bet ROI is positive.
+
+If no threshold satisfies the rule, the strategy abstains for that target fold.
+
+This tests whether the system can learn **when not to bet** without choosing a
+threshold from the same future fold used to report performance. The result
+remains research-only because the Kaggle price is final historical odds.
+
