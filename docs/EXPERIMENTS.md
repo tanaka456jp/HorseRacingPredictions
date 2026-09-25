@@ -18,6 +18,7 @@ Market benchmark: Brier 0.058098, Log loss 0.206064.
 | v4 | forward temperature calibration | 0.062666 | 0.229649 | -17.89% |
 | v5 | CatBoost nonlinear model | 0.062190 | 0.227285 | -19.61% |
 | v7 | recent form / pace history | **0.061549** | **0.223565** | **-1.90%** |
+| v8 | forward isotonic calibration | 0.061828 | 0.226416 | -10.58% |
 
 ## v6 — OOS loss-structure diagnostics
 
@@ -102,3 +103,40 @@ For each Walk-Forward fold:
 No odds are used by the calibrator. The goal is specifically to shrink the
 nonlinear longshot overconfidence identified by v6 without tuning an EV cutoff
 on the same test sample.
+
+
+## v8 result
+
+Commit: `7715152f49a7104451cd26545761b7ad0355b396`.
+Run: `36160012141`.
+
+- Brier: 0.061828
+- Log loss: 0.226416
+- Research ROI: -10.58%
+- Max drawdown: 97.83%
+
+Forward-only isotonic calibration made both probability quality and the
+research-only betting result worse than v7.
+
+**Decision: REJECT v8. Keep v7 probabilities uncalibrated.**
+
+## v9 result — forward-only strategy selection
+
+Run: `36160840635`.
+
+Using only earlier OOS folds to choose from the predeclared EV-threshold grid:
+
+- evaluated future folds: 16
+- active betting folds: 0
+- bets: 0
+- abstain rate: 100%
+
+No candidate EV threshold had both the minimum prior sample size and positive
+prior flat-bet ROI. Therefore the correct forward decision was **no bet** for
+every evaluated fold.
+
+This shows that v7's near-break-even full-sample research ROI does not justify
+a reusable EV threshold.
+
+**Decision: KEEP the forward-selection framework. Do not tune thresholds.
+Improve probability estimation before betting.**
