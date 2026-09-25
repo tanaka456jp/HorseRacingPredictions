@@ -31,6 +31,14 @@ SCHEMA = (
 "recorded_at TEXT NOT NULL,"
 "FOREIGN KEY(prediction_id) REFERENCES predictions(id),"
 "FOREIGN KEY(odds_snapshot_id) REFERENCES pre_race_odds_snapshots(id));"
+"CREATE TABLE IF NOT EXISTS paper_bet_evidence("
+"id INTEGER PRIMARY KEY AUTOINCREMENT,"
+"bet_id INTEGER NOT NULL UNIQUE,"
+"prediction_id INTEGER NOT NULL,"
+"broker TEXT NOT NULL,broker_reference TEXT NOT NULL,"
+"recorded_at TEXT NOT NULL,"
+"FOREIGN KEY(bet_id) REFERENCES bets(id),"
+"FOREIGN KEY(prediction_id) REFERENCES predictions(id));"
 )
 
 class Ledger:
@@ -158,6 +166,91 @@ class Ledger:
         )
         self.conn.commit()
         return int(cur.lastrowid)
+
+    def record_paper_bet(
+        self,
+        decision,
+        prediction_id,
+        broker="paper",
+        broker_reference="",
+    ):
+        row = self.conn.execute(
+            "SELECT p.race_id,p.horse_id,p.decimal_odds "
+            "FROM paper_prediction_evidence e "
+            "JOIN predictions p ON p.id=e.prediction_id "
+            "WHERE p.id=?",
+            (int(prediction_id),),
+        ).fetchone()
+        if row is None:
+            raise ValueError(
+                "paper bet requires a prediction with linked pre-race evidence"
+            )
+        if decision.stake_yen <= 0:
+            raise ValueError("paper bet stake must be positive")
+        if decision.race_id != row[0] or decision.horse_id != row[1]:
+            raise ValueError(
+                "paper bet decision does not match prediction evidence"
+            )
+        if abs(float(decision.decimal_odds) - float(row[2])) > 1e-12:
+            raise ValueError(
+                "paper bet odds must match prediction evidence"
+            )
+
+        with self.conn:
+            cur = self.conn.execute(
+                "INSERT INTO bets "
+                "(race_id,horse_id,horse_name,bet_type,stake_yen,decimal_odds,"
+                "expected_return_multiple,edge,reason,model_version,placed_at) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                (
+                    decision.race_id,
+                    decision.horse_id,
+                    decision.horse_name,
+                    decision.bet_type,
+                    int(decision.stake_yen),
+                    float(decision.decimal_odds),
+                    float(decision.expected_return_multiple),
+                    float(decision.edge),
+                    decision.reason,
+                    decision.model_version,
+                    datetime.now(timezone.utc).isoformat(),
+                ),
+            )
+            bet_id = int(cur.lastrowid)
+            self.conn.execute(
+                "INSERT INTO paper_bet_evidence "
+                "(bet_id,prediction_id,broker,broker_reference,recorded_at) "
+                "VALUES (?,?,?,?,?)",
+                (
+                    bet_id,
+                    int(prediction_id),
+                    broker,
+                    broker_reference,
+                    datetime.now(timezone.utc).isoformat(),
+                ),
+            )
+        return bet_id
+
+    def paper_bet_evidence(self, bet_id):
+        row = self.conn.execute(
+            "SELECT b.race_id,b.horse_id,b.stake_yen,b.decimal_odds,"
+            "e.prediction_id,e.broker,e.broker_reference "
+            "FROM paper_bet_evidence e "
+            "JOIN bets b ON b.id=e.bet_id "
+            "WHERE b.id=?",
+            (int(bet_id),),
+        ).fetchone()
+        if row is None:
+            return None
+        return {
+            "race_id": row[0],
+            "horse_id": row[1],
+            "stake_yen": row[2],
+            "decimal_odds": row[3],
+            "prediction_id": row[4],
+            "broker": row[5],
+            "broker_reference": row[6],
+        }
 
     def settle_bet(self, bet_id, won, payout_yen):
         self.conn.execute(
