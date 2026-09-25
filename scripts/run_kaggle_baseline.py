@@ -16,7 +16,7 @@ from horse_racing_predictions.validation import FINAL_WIN_ODDS
 
 DATASET_HANDLE = "takamotoki/jra-horse-racing-dataset"
 RACE_RESULT_FILE = "19860105-20210731_race_result.csv"
-EXPERIMENT_ID = "v4-forward-temperature-calibration"
+EXPERIMENT_ID = "v5-catboost-context-history"
 
 def _resolve_downloaded_file(downloaded: str | Path) -> Path:
     path = Path(downloaded)
@@ -44,7 +44,6 @@ def main() -> None:
     parser.add_argument("--end", default="2021-07-31")
     parser.add_argument("--min-train-dates", type=int, default=120)
     parser.add_argument("--test-dates", type=int, default=20)
-    parser.add_argument("--calibration-dates", type=int, default=20)
     parser.add_argument("--ev-threshold", type=float, default=1.15)
     parser.add_argument(
         "--output",
@@ -79,7 +78,8 @@ def main() -> None:
         min_train_dates=args.min_train_dates,
         test_dates=args.test_dates,
         model_version=EXPERIMENT_ID,
-        calibration_dates=args.calibration_dates,
+        calibration_dates=0,
+        model_kind="catboost",
     )
     pred = oos.predictions.copy()
     if pred.empty:
@@ -87,23 +87,6 @@ def main() -> None:
 
     pred["is_winner"] = pred["finish_position"].eq(1).astype(int)
     market_p = _market_implied_probability(pred)
-
-    model_brier = brier_score(
-        pred["predicted_win_probability"],
-        pred["is_winner"],
-    )
-    model_log_loss = binary_log_loss(
-        pred["predicted_win_probability"],
-        pred["is_winner"],
-    )
-    market_brier = brier_score(
-        market_p,
-        pred["is_winner"],
-    )
-    market_log_loss = binary_log_loss(
-        market_p,
-        pred["is_winner"],
-    )
 
     _, backtest = simulate_win_strategy(
         pred,
@@ -117,6 +100,7 @@ def main() -> None:
 
     result = {
         "experiment_id": EXPERIMENT_ID,
+        "model_kind": "catboost",
         "source": {
             "dataset": DATASET_HANDLE,
             "file": RACE_RESULT_FILE,
@@ -129,26 +113,28 @@ def main() -> None:
         "rows": int(len(pred)),
         "races": int(pred["race_id"].nunique()),
         "folds": int(oos.fold_count),
-        "calibration_dates": args.calibration_dates,
-        "temperature": {
-            "min": float(pred["temperature"].min()),
-            "median": float(pred["temperature"].median()),
-            "max": float(pred["temperature"].max()),
-        },
         "feature_columns": list(features.feature_columns),
         "probability_quality": {
-            "model_brier": model_brier,
-            "market_brier": market_brier,
-            "model_log_loss": model_log_loss,
-            "market_log_loss": market_log_loss,
+            "model_brier": brier_score(
+                pred["predicted_win_probability"],
+                pred["is_winner"],
+            ),
+            "market_brier": brier_score(
+                market_p,
+                pred["is_winner"],
+            ),
+            "model_log_loss": binary_log_loss(
+                pred["predicted_win_probability"],
+                pred["is_winner"],
+            ),
+            "market_log_loss": binary_log_loss(
+                market_p,
+                pred["is_winner"],
+            ),
         },
         "betting": asdict(backtest),
         "interpretation": {
-            "roi_status": (
-                "research_only"
-                if not backtest.roi_verified
-                else "verified"
-            ),
+            "roi_status": "research_only",
             "warning": (
                 "Final historical win odds are used for EV selection. "
                 "This is not forward-captured pre-race odds, so ROI must "

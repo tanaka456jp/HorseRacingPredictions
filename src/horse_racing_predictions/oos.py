@@ -4,7 +4,10 @@ import pandas as pd
 
 from .calibration import apply_temperature, fit_temperature
 from .leakage import assert_leakage_safe
-from .modeling import BaselineProbabilityModel
+from .modeling import (
+    BaselineProbabilityModel,
+    CatBoostProbabilityModel,
+)
 from .walkforward import expanding_walk_forward_splits
 
 @dataclass(frozen=True)
@@ -32,14 +35,22 @@ def _split_fit_and_calibration(
         .dt.normalize()
     )
     unique_dates = sorted(dates.unique())
-
     if calibration_dates <= 0 or len(unique_dates) <= calibration_dates + 10:
         return train, train.iloc[0:0].copy()
-
     calibration_set = set(unique_dates[-calibration_dates:])
     calibration = train.loc[dates.isin(calibration_set)].copy()
     fit = train.loc[~dates.isin(calibration_set)].copy()
     return fit, calibration
+
+def _make_model(
+    model_kind: str,
+    feature_columns: list[str],
+):
+    if model_kind == "logit":
+        return BaselineProbabilityModel(feature_columns)
+    if model_kind == "catboost":
+        return CatBoostProbabilityModel(feature_columns)
+    raise ValueError(f"unknown model_kind: {model_kind}")
 
 def generate_walk_forward_predictions(
     frame: pd.DataFrame,
@@ -49,17 +60,14 @@ def generate_walk_forward_predictions(
     gap_dates: int = 0,
     model_version: str = "baseline-logit-v0",
     calibration_dates: int = 0,
+    model_kind: str = "logit",
 ) -> OOSResult:
     feature_columns = list(feature_columns)
     assert_leakage_safe(feature_columns)
 
     required = {
-        "race_id",
-        "race_date",
-        "horse_name",
-        "finish_position",
-        "win_odds",
-        "is_winner",
+        "race_id", "race_date", "horse_name", "finish_position",
+        "win_odds", "is_winner",
     }
     missing = required - set(frame.columns)
     if missing:
@@ -85,7 +93,10 @@ def generate_walk_forward_predictions(
             calibration_dates=calibration_dates,
         )
 
-        model = BaselineProbabilityModel(feature_columns).fit(
+        model = _make_model(
+            model_kind,
+            feature_columns,
+        ).fit(
             model_train,
             target_col="is_winner",
         )
@@ -144,6 +155,7 @@ def generate_walk_forward_predictions(
         out["calibration_start"] = calibration_start
         out["test_start"] = fold.test_start
         out["temperature"] = temperature
+        out["model_kind"] = model_kind
 
         certainty = probability.groupby(test["race_id"]).transform(
             _race_certainty
@@ -153,14 +165,7 @@ def generate_walk_forward_predictions(
         fold_count += 1
 
     if not outputs:
-        columns = [
-            "race_id", "race_date", "horse_name", "finish_position",
-            "win_odds", "horse_id", "predicted_win_probability",
-            "decimal_odds", "model_version", "fold_number",
-            "train_end", "calibration_start", "test_start",
-            "temperature", "confidence",
-        ]
-        return OOSResult(pd.DataFrame(columns=columns), 0)
+        return OOSResult(pd.DataFrame(), 0)
 
     predictions = pd.concat(outputs, ignore_index=True)
     return OOSResult(predictions=predictions, fold_count=fold_count)
