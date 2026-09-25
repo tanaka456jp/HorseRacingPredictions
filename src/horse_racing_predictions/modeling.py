@@ -71,10 +71,28 @@ class BaselineProbabilityModel:
             )),
         ])
 
+    def _prepare(self, frame: pd.DataFrame) -> pd.DataFrame:
+        out = frame[self.feature_columns].copy()
+        for column in self.feature_columns:
+            if pd.api.types.is_numeric_dtype(out[column]):
+                out[column] = pd.to_numeric(
+                    out[column],
+                    errors="coerce",
+                )
+            else:
+                out[column] = (
+                    out[column]
+                    .astype("string")
+                    .fillna("UNKNOWN")
+                    .astype(str)
+                )
+        return out
+
     def fit(self, frame: pd.DataFrame, target_col: str = "is_winner"):
-        self.pipeline = self._build_pipeline(frame)
+        prepared = self._prepare(frame)
+        self.pipeline = self._build_pipeline(prepared)
         self.pipeline.fit(
-            frame[self.feature_columns],
+            prepared,
             frame[target_col].astype(int),
         )
         return self
@@ -87,7 +105,7 @@ class BaselineProbabilityModel:
         if self.pipeline is None:
             raise RuntimeError("model is not fitted")
         scores = self.pipeline.decision_function(
-            frame[self.feature_columns]
+            self._prepare(frame)
         )
         return _race_softmax(scores, frame[race_col], frame.index)
 
