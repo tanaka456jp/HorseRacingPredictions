@@ -29,8 +29,17 @@ class BaselineProbabilityModel:
         frame: pd.DataFrame,
         race_col: str = "race_id",
     ) -> pd.Series:
-        raw = self.pipeline.predict_proba(frame[self.feature_columns])[:, 1]
-        raw = pd.Series(np.clip(raw, 1e-9, None), index=frame.index, dtype=float)
-        totals = raw.groupby(frame[race_col]).transform("sum")
-        normalized = raw / totals.replace(0, np.nan)
-        return normalized.fillna(0.0)
+        scores = np.asarray(
+            self.pipeline.decision_function(frame[self.feature_columns]),
+            dtype=float,
+        )
+        scores = pd.Series(scores, index=frame.index, dtype=float)
+
+        # Convert horse-level utility scores into a proper race-level
+        # probability distribution.  Subtracting the race maximum keeps
+        # exp() numerically stable without changing the softmax.
+        race_max = scores.groupby(frame[race_col]).transform("max")
+        exp_score = np.exp(scores - race_max)
+        totals = exp_score.groupby(frame[race_col]).transform("sum")
+        probability = exp_score / totals.replace(0, np.nan)
+        return probability.fillna(0.0)
