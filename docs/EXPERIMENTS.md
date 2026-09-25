@@ -16,7 +16,8 @@ Market benchmark: Brier 0.058098, Log loss 0.206064.
 | v2 | pre-race context categories | 0.062810 | 0.230918 | -17.73% |
 | v3 | context-conditioned histories | 0.062556 | 0.229346 | -22.09% |
 | v4 | forward temperature calibration | 0.062666 | 0.229649 | -17.89% |
-| v5 | CatBoost nonlinear model | **0.062190** | **0.227285** | -19.61% |
+| v5 | CatBoost nonlinear model | 0.062190 | 0.227285 | -19.61% |
+| v7 | recent form / pace history | **0.061549** | **0.223565** | **-1.90%** |
 
 ## v6 — OOS loss-structure diagnostics
 
@@ -43,7 +44,10 @@ features first, then re-evaluate on unseen future folds.**
 
 ## v7 — recent form, pace history and race-relative context
 
-Work on branch `feature/v7-recent-form`.
+Commit: `f0f0bd7151fc822b0ccb7fb4efb0422f2bb9500d`.
+Run: `36157815918`.
+
+Merged to `main` after CI and historical research both passed.
 
 Keep the v5 CatBoost model and add only information available before the target
 race:
@@ -62,3 +66,39 @@ race:
 
 Current-race last-3F and corner positions remain forbidden as model inputs.
 They are used only after a one-day shift as historical features.
+
+
+### v7 result
+
+- Brier: 0.061549
+- Log loss: 0.223565
+- Research bets: 2,063
+- Stake: ¥4,991,300
+- Payout: ¥4,896,250
+- Profit: -¥95,050
+- Research ROI: **-1.90%**
+- Max drawdown: 99.70%
+
+This is a material probability-quality improvement over v5 and the first model
+to approach break-even on the research-only final-odds simulation.
+
+The result is **not live-profit evidence** because historical final odds are not
+a timestamped pre-race quote. The extreme drawdown also prevents production use.
+
+**Decision: ACCEPT THE v7 FEATURES AS THE NEW RESEARCH BASELINE.**
+
+## v8 — forward-only isotonic calibration
+
+Keep the v7 model and features unchanged.
+
+For each Walk-Forward fold:
+
+1. reserve the latest portion of the training period as a calibration window,
+2. fit CatBoost only on earlier dates,
+3. fit an isotonic calibrator on raw win probabilities versus actual outcomes,
+4. apply it to the future test fold,
+5. renormalize probabilities within each race.
+
+No odds are used by the calibrator. The goal is specifically to shrink the
+nonlinear longshot overconfidence identified by v6 without tuning an EV cutoff
+on the same test sample.
