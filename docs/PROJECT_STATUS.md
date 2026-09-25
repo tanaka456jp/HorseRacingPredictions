@@ -44,3 +44,15 @@ Phase 1 — Research Core
 ## Paid-data rule
 
 Paid data is not introduced until the free-data system demonstrates stable real profitability and a paid source shows reproducible incremental profit exceeding its cost.
+
+## CI policy
+
+This public repository uses GitHub-hosted `ubuntu-latest` as the default CI runner.
+
+- push to `main`: run tests
+- pull request to `main`: run tests
+- manual dispatch: supported
+- concurrency cancellation: enabled to prevent stale runs piling up
+- timeout: 15 minutes per test job
+- self-hosted runners are not the default for this repository
+\n
