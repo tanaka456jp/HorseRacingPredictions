@@ -7,67 +7,76 @@ Historical source: Kaggle `takamotoki/jra-horse-racing-dataset`.
 All listed ROI values use final historical win odds and are therefore
 **research-only**, not verified live profitability.
 
-OOS period for v0-v3: 2018-02-03 through 2021-07-31.
+OOS period for v0-v4: 2018-02-03 through 2021-07-31.
 Rows: 167,166. Races: 12,114. Walk-forward folds: 19.
 
-## v0 — normalized binary-logit baseline
+## v0
 
-- Commit: `43970ea9649333028e1c97db6415055ee6789b26`
-- Run: `36150124890`
+Normalized binary-logit baseline.
 
-| Metric | v0 | Market |
-|---|---:|---:|
-| Brier | 0.064329 | 0.058098 |
-| Log loss | 0.239325 | 0.206064 |
-| Research ROI | -67.20% | — |
+- Brier: 0.064329
+- Log loss: 0.239325
+- Research ROI: -67.20%
 
-**Decision: REJECTED.**
+**REJECTED.**
 
-## v1 — race-softmax probability conversion
+## v1
 
-- Commit: `e3bc519ae925586d651026fe0792be27434cc8c5`
-- Run: `36150569697`
+Race-level softmax replaces normalized independent sigmoids.
 
-| Metric | v1 | v0 | Market |
-|---|---:|---:|---:|
-| Brier | 0.062840 | 0.064329 | 0.058098 |
-| Log loss | 0.231272 | 0.239325 | 0.206064 |
-| Research ROI | -22.96% | -67.20% | — |
+- Brier: 0.062840
+- Log loss: 0.231272
+- Research ROI: -22.96%
 
-**Decision: REJECTED AS PRODUCTION; KEEP AS BASELINE.**
+**REJECTED AS PRODUCTION; KEPT AS BASELINE.**
 
-## v2 — pre-race context categories
+## v2
 
-- Commit: `09f2c49045e3c38b1f1856046697694cdda981a3`
-- Run: `36151543415`
-- Added: racecourse, turf/dirt, weather, track condition, sex
-- One-hot encoding with unknown-category handling
+Added pre-race racecourse/surface/weather/track/sex categories.
 
-| Metric | v2 | v1 | Market |
-|---|---:|---:|---:|
-| Brier | 0.062810 | 0.062840 | 0.058098 |
-| Log loss | 0.230918 | 0.231272 | 0.206064 |
-| Research ROI | -17.73% | -22.96% | — |
+- Brier: 0.062810
+- Log loss: 0.230918
+- Research ROI: -17.73%
 
-- Bets: 1,237
-- Profit: -¥95,080
-- Max drawdown: 97.89%
+**REJECTED AS PRODUCTION; CONTEXT FEATURES KEPT.**
 
-The direction is positive, but the improvement is too small and bankroll risk
-remains unacceptable.
+## v3
 
-**Decision: REJECTED AS PRODUCTION; KEEP THE CONTEXT FEATURES.**
+Added prior-only contextual aptitude histories:
 
-## v3 — context-conditioned historical aptitude
+- horse × surface
+- horse × course
+- horse × 200m distance bucket
+- jockey × course
+- trainer × course
 
-Keep all v2 behavior and add only past information:
+Run: `36151962433`
 
-- horse × surface historical record
-- horse × racecourse historical record
-- horse × 200m distance bucket historical record
-- jockey × racecourse historical record
-- trainer × racecourse historical record
+- Brier: **0.062556**
+- Log loss: **0.229346**
+- Market Brier: 0.058098
+- Market Log loss: 0.206064
+- Bets: 1,370
+- Research ROI: **-22.09%**
+- Max drawdown: **96.59%**
 
-For each group, create prior starts, prior win rate, prior average finish and
-days since that exact context was previously seen. Same-day outcomes are
-excluded by daily aggregation before cumulative history is computed.
+v3 improves probability quality but worsens the EV betting result versus v2.
+This indicates probability calibration is a separate problem from ranking and
+raw predictive accuracy.
+
+**REJECTED AS PRODUCTION; CONTEXTUAL HISTORY KEPT FOR NEXT TEST.**
+
+## v4 — forward temperature calibration
+
+No feature additions.
+
+Within each Walk-Forward fold:
+
+1. reserve the most recent 20 training dates as calibration data
+2. fit the model only on earlier dates
+3. choose temperature on the calibration period
+4. freeze that temperature
+5. predict the future test period
+
+This prevents test-period information from influencing calibration and directly
+tests whether over/under-confidence is responsible for poor EV selection.

@@ -2,6 +2,7 @@ from dataclasses import dataclass
 import math
 import pandas as pd
 
+from .calibration import apply_temperature, fit_temperature
 from .leakage import assert_leakage_safe
 from .modeling import BaselineProbabilityModel
 from .walkforward import expanding_walk_forward_splits
@@ -22,6 +23,24 @@ def _race_certainty(probabilities: pd.Series) -> float:
         return 1.0
     return max(0.0, min(1.0, 1.0 - entropy / maximum))
 
+def _split_fit_and_calibration(
+    train: pd.DataFrame,
+    calibration_dates: int,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    dates = (
+        pd.to_datetime(train["race_date"], errors="raise")
+        .dt.normalize()
+    )
+    unique_dates = sorted(dates.unique())
+
+    if calibration_dates <= 0 or len(unique_dates) <= calibration_dates + 10:
+        return train, train.iloc[0:0].copy()
+
+    calibration_set = set(unique_dates[-calibration_dates:])
+    calibration = train.loc[dates.isin(calibration_set)].copy()
+    fit = train.loc[~dates.isin(calibration_set)].copy()
+    return fit, calibration
+
 def generate_walk_forward_predictions(
     frame: pd.DataFrame,
     feature_columns: list[str] | tuple[str, ...],
@@ -29,6 +48,7 @@ def generate_walk_forward_predictions(
     test_dates: int = 7,
     gap_dates: int = 0,
     model_version: str = "baseline-logit-v0",
+    calibration_dates: int = 0,
 ) -> OOSResult:
     feature_columns = list(feature_columns)
     assert_leakage_safe(feature_columns)
@@ -60,14 +80,40 @@ def generate_walk_forward_predictions(
     ):
         train = frame.loc[fold.train_index].copy()
         test = frame.loc[fold.test_index].copy()
+        model_train, calibration = _split_fit_and_calibration(
+            train,
+            calibration_dates=calibration_dates,
+        )
 
         model = BaselineProbabilityModel(feature_columns).fit(
-            train,
+            model_train,
             target_col="is_winner",
         )
-        probability = model.predict_win_probability(
+
+        temperature = 1.0
+        calibration_start = pd.NaT
+        if not calibration.empty:
+            raw_cal = model.predict_win_probability(
+                calibration,
+                race_col="race_id",
+            )
+            temperature = fit_temperature(
+                raw_cal,
+                calibration["race_id"],
+                calibration["is_winner"],
+            )
+            calibration_start = pd.to_datetime(
+                calibration["race_date"]
+            ).min()
+
+        raw_probability = model.predict_win_probability(
             test,
             race_col="race_id",
+        )
+        probability = apply_temperature(
+            raw_probability,
+            test["race_id"],
+            temperature,
         )
 
         out = test[
@@ -92,8 +138,12 @@ def generate_walk_forward_predictions(
         )
         out["model_version"] = f"{model_version}-fold{fold_number}"
         out["fold_number"] = fold_number
-        out["train_end"] = fold.train_end
+        out["train_end"] = pd.to_datetime(
+            model_train["race_date"]
+        ).max()
+        out["calibration_start"] = calibration_start
         out["test_start"] = fold.test_start
+        out["temperature"] = temperature
 
         certainty = probability.groupby(test["race_id"]).transform(
             _race_certainty
@@ -107,7 +157,8 @@ def generate_walk_forward_predictions(
             "race_id", "race_date", "horse_name", "finish_position",
             "win_odds", "horse_id", "predicted_win_probability",
             "decimal_odds", "model_version", "fold_number",
-            "train_end", "test_start", "confidence",
+            "train_end", "calibration_start", "test_start",
+            "temperature", "confidence",
         ]
         return OOSResult(pd.DataFrame(columns=columns), 0)
 
