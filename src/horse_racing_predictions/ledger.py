@@ -1,5 +1,7 @@
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timezone
+
+from .snapshots import validate_prediction_evidence
 
 SCHEMA = (
 "CREATE TABLE IF NOT EXISTS predictions("
@@ -15,17 +17,32 @@ SCHEMA = (
 "expected_return_multiple REAL NOT NULL,edge REAL NOT NULL,reason TEXT NOT NULL,"
 "model_version TEXT NOT NULL,placed_at TEXT NOT NULL,result TEXT,"
 "payout_yen INTEGER DEFAULT 0);"
+"CREATE TABLE IF NOT EXISTS pre_race_odds_snapshots("
+"id INTEGER PRIMARY KEY AUTOINCREMENT,"
+"race_id TEXT NOT NULL,horse_id TEXT NOT NULL,horse_name TEXT NOT NULL,"
+"decimal_odds REAL NOT NULL,observed_at TEXT NOT NULL,"
+"scheduled_post_time TEXT NOT NULL,source TEXT NOT NULL,"
+"source_reference TEXT NOT NULL DEFAULT '',"
+"UNIQUE(race_id,horse_id,observed_at,source));"
+"CREATE TABLE IF NOT EXISTS paper_prediction_evidence("
+"id INTEGER PRIMARY KEY AUTOINCREMENT,"
+"prediction_id INTEGER NOT NULL UNIQUE,"
+"odds_snapshot_id INTEGER NOT NULL,"
+"recorded_at TEXT NOT NULL,"
+"FOREIGN KEY(prediction_id) REFERENCES predictions(id),"
+"FOREIGN KEY(odds_snapshot_id) REFERENCES pre_race_odds_snapshots(id));"
 )
 
 class Ledger:
     def __init__(self, path):
         self.path = str(path)
         self.conn = sqlite3.connect(self.path)
+        self.conn.execute("PRAGMA foreign_keys = ON")
         self.conn.executescript(SCHEMA)
         self.conn.commit()
 
     def record_prediction(self, p):
-        self.conn.execute(
+        cur = self.conn.execute(
             "INSERT INTO predictions "
             "(race_id,horse_id,horse_name,predicted_win_probability,decimal_odds,"
             "confidence,expected_return_multiple,edge,model_version,predicted_at) "
@@ -35,6 +52,99 @@ class Ledger:
              p.model_version,p.predicted_at.isoformat())
         )
         self.conn.commit()
+        return int(cur.lastrowid)
+
+    def record_pre_race_snapshot(self, snapshot):
+        existing = self.conn.execute(
+            "SELECT id,horse_name,decimal_odds,scheduled_post_time,source_reference "
+            "FROM pre_race_odds_snapshots "
+            "WHERE race_id=? AND horse_id=? AND observed_at=? AND source=?",
+            (
+                snapshot.race_id,
+                snapshot.horse_id,
+                snapshot.observed_at.isoformat(),
+                snapshot.source,
+            ),
+        ).fetchone()
+
+        expected = (
+            snapshot.horse_name,
+            float(snapshot.decimal_odds),
+            snapshot.scheduled_post_time.isoformat(),
+            snapshot.source_reference,
+        )
+        if existing is not None:
+            actual = (
+                existing[1],
+                float(existing[2]),
+                existing[3],
+                existing[4],
+            )
+            if actual != expected:
+                raise ValueError(
+                    "immutable odds snapshot conflict for the same observation key"
+                )
+            return int(existing[0])
+
+        cur = self.conn.execute(
+            "INSERT INTO pre_race_odds_snapshots "
+            "(race_id,horse_id,horse_name,decimal_odds,observed_at,"
+            "scheduled_post_time,source,source_reference) "
+            "VALUES (?,?,?,?,?,?,?,?)",
+            (
+                snapshot.race_id,
+                snapshot.horse_id,
+                snapshot.horse_name,
+                float(snapshot.decimal_odds),
+                snapshot.observed_at.isoformat(),
+                snapshot.scheduled_post_time.isoformat(),
+                snapshot.source,
+                snapshot.source_reference,
+            ),
+        )
+        self.conn.commit()
+        return int(cur.lastrowid)
+
+    def record_paper_prediction(self, prediction, snapshot):
+        validate_prediction_evidence(prediction, snapshot)
+        snapshot_id = self.record_pre_race_snapshot(snapshot)
+        prediction_id = self.record_prediction(prediction)
+        self.conn.execute(
+            "INSERT INTO paper_prediction_evidence "
+            "(prediction_id,odds_snapshot_id,recorded_at) VALUES (?,?,?)",
+            (
+                prediction_id,
+                snapshot_id,
+                datetime.now(timezone.utc).isoformat(),
+            ),
+        )
+        self.conn.commit()
+        return prediction_id
+
+    def paper_evidence(self, prediction_id):
+        row = self.conn.execute(
+            "SELECT p.race_id,p.horse_id,p.decimal_odds,p.predicted_at,"
+            "s.decimal_odds,s.observed_at,s.scheduled_post_time,"
+            "s.source,s.source_reference "
+            "FROM paper_prediction_evidence e "
+            "JOIN predictions p ON p.id=e.prediction_id "
+            "JOIN pre_race_odds_snapshots s ON s.id=e.odds_snapshot_id "
+            "WHERE p.id=?",
+            (int(prediction_id),),
+        ).fetchone()
+        if row is None:
+            return None
+        return {
+            "race_id": row[0],
+            "horse_id": row[1],
+            "prediction_odds": row[2],
+            "predicted_at": row[3],
+            "snapshot_odds": row[4],
+            "observed_at": row[5],
+            "scheduled_post_time": row[6],
+            "source": row[7],
+            "source_reference": row[8],
+        }
 
     def record_bet(self, d):
         cur = self.conn.execute(
@@ -44,7 +154,7 @@ class Ledger:
             "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
             (d.race_id,d.horse_id,d.horse_name,d.bet_type,d.stake_yen,d.decimal_odds,
              d.expected_return_multiple,d.edge,d.reason,d.model_version,
-             datetime.now().isoformat())
+             datetime.now(timezone.utc).isoformat())
         )
         self.conn.commit()
         return int(cur.lastrowid)
