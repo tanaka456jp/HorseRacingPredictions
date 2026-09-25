@@ -44,7 +44,7 @@ def _split_fit_and_calibration(
         .dt.normalize()
     )
     unique_dates = sorted(dates.unique())
-    if calibration_dates <= 0 or len(unique_dates) <= calibration_dates + 10:
+    if calibration_dates <= 0 or len(unique_dates) <= calibration_dates + 2:
         return train, train.iloc[0:0].copy()
     calibration_set = set(unique_dates[-calibration_dates:])
     calibration = train.loc[dates.isin(calibration_set)].copy()
@@ -71,11 +71,16 @@ def generate_walk_forward_predictions(
     gap_dates: int = 0,
     model_version: str = "baseline-logit-v0",
     calibration_dates: int = 0,
-    calibration_method: str = "none",
+    calibration_method: str | None = None,
     model_kind: str = "logit",
 ) -> OOSResult:
     feature_columns = list(feature_columns)
     assert_leakage_safe(feature_columns)
+
+    if calibration_method is None:
+        calibration_method = (
+            "temperature" if calibration_dates > 0 else "none"
+        )
 
     if calibration_method not in {"none", "temperature", "isotonic"}:
         raise ValueError(
