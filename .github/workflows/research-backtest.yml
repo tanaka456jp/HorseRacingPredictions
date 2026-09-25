@@ -7,7 +7,20 @@ on:
       - "feature/**"
     paths:
       - "scripts/run_kaggle_baseline.py"
-      - "src/horse_racing_predictions/**"
+      - "src/horse_racing_predictions/backtest.py"
+      - "src/horse_racing_predictions/calibration.py"
+      - "src/horse_racing_predictions/config.py"
+      - "src/horse_racing_predictions/data_sources.py"
+      - "src/horse_racing_predictions/diagnostics.py"
+      - "src/horse_racing_predictions/evaluation.py"
+      - "src/horse_racing_predictions/features.py"
+      - "src/horse_racing_predictions/leakage.py"
+      - "src/horse_racing_predictions/modeling.py"
+      - "src/horse_racing_predictions/oos.py"
+      - "src/horse_racing_predictions/staking.py"
+      - "src/horse_racing_predictions/strategy.py"
+      - "src/horse_racing_predictions/strategy_selection.py"
+      - "src/horse_racing_predictions/walkforward.py"
       - "pyproject.toml"
 
 concurrency:
