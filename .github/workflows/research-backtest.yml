@@ -6,25 +6,10 @@ on:
     branches:
       - "feature/**"
     paths:
-      - "scripts/run_kaggle_baseline.py"
-      - "src/horse_racing_predictions/backtest.py"
-      - "src/horse_racing_predictions/calibration.py"
-      - "src/horse_racing_predictions/config.py"
-      - "src/horse_racing_predictions/data_sources.py"
-      - "src/horse_racing_predictions/diagnostics.py"
-      - "src/horse_racing_predictions/evaluation.py"
-      - "src/horse_racing_predictions/features.py"
-      - "src/horse_racing_predictions/leakage.py"
-      - "src/horse_racing_predictions/modeling.py"
-      - "src/horse_racing_predictions/oos.py"
-      - "src/horse_racing_predictions/staking.py"
-      - "src/horse_racing_predictions/strategy.py"
-      - "src/horse_racing_predictions/strategy_selection.py"
-      - "src/horse_racing_predictions/walkforward.py"
-      - "pyproject.toml"
+      - "research/full_run_request.txt"
 
 concurrency:
-  group: historical-research-${{ github.ref }}
+  group: historical-research-full-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -48,15 +33,15 @@ jobs:
           pip install -e ".[dev,research]"
           pip install kagglehub
 
-      - name: Download public historical input and run baseline
+      - name: Run full historical research
         run: |
           python scripts/run_kaggle_baseline.py
 
-      - name: Publish research artifacts
+      - name: Publish full research artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: kaggle-research-artifacts
+          name: kaggle-full-research-artifacts
           path: artifacts/*.json
           if-no-files-found: warn
           retention-days: 14
