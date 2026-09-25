@@ -21,42 +21,56 @@ CURRENT_CATEGORICAL_FEATURES = (
     "sex",
 )
 
+HISTORY_SUFFIXES = (
+    "past_starts",
+    "past_win_rate",
+    "past_avg_finish",
+    "days_since_seen",
+)
+
 @dataclass(frozen=True)
 class FeatureBuildResult:
     frame: pd.DataFrame
     feature_columns: tuple[str, ...]
 
-def _add_entity_history(
+def _add_group_history(
     frame: pd.DataFrame,
-    entity_col: str,
+    group_cols: list[str],
     prefix: str,
-) -> pd.DataFrame:
-    if entity_col not in frame.columns:
-        return frame
+) -> tuple[pd.DataFrame, list[str]]:
+    if any(column not in frame.columns for column in group_cols):
+        return frame, []
 
     df = frame.copy()
-    work = pd.DataFrame({
-        entity_col: df[entity_col],
-        "_race_day": df["_race_day"],
-        "_starts": 1,
-        "_wins": df["is_winner"].astype(int),
-        "_finish": pd.to_numeric(df["finish_position"], errors="coerce"),
-    })
+    work = df[group_cols + ["_race_day"]].copy()
+    work["_starts"] = 1
+    work["_wins"] = df["is_winner"].astype(int)
+    work["_finish"] = pd.to_numeric(
+        df["finish_position"], errors="coerce"
+    )
     work["_finish_valid"] = work["_finish"].notna().astype(int)
     work["_finish_sum"] = work["_finish"].fillna(0.0)
 
     daily = (
-        work.groupby([entity_col, "_race_day"], dropna=False, as_index=False)
+        work.groupby(
+            group_cols + ["_race_day"],
+            dropna=False,
+            as_index=False,
+        )
         .agg(
             daily_starts=("_starts", "sum"),
             daily_wins=("_wins", "sum"),
             daily_finish_sum=("_finish_sum", "sum"),
             daily_finish_count=("_finish_valid", "sum"),
         )
-        .sort_values([entity_col, "_race_day"])
+        .sort_values(group_cols + ["_race_day"])
     )
 
-    grouped = daily.groupby(entity_col, dropna=False, sort=False)
+    grouped = daily.groupby(
+        group_cols,
+        dropna=False,
+        sort=False,
+    )
     daily[f"{prefix}_past_starts"] = (
         grouped["daily_starts"].cumsum() - daily["daily_starts"]
     )
@@ -64,7 +78,8 @@ def _add_entity_history(
         grouped["daily_wins"].cumsum() - daily["daily_wins"]
     )
     daily["_past_finish_sum"] = (
-        grouped["daily_finish_sum"].cumsum() - daily["daily_finish_sum"]
+        grouped["daily_finish_sum"].cumsum()
+        - daily["daily_finish_sum"]
     )
     daily["_past_finish_count"] = (
         grouped["daily_finish_count"].cumsum()
@@ -84,15 +99,21 @@ def _add_entity_history(
         daily["_race_day"] - previous_day
     ).dt.days
 
-    keep = [
-        entity_col,
-        "_race_day",
+    generated = [
         f"{prefix}_past_starts",
         f"{prefix}_past_win_rate",
         f"{prefix}_past_avg_finish",
         f"{prefix}_days_since_seen",
     ]
-    return df.merge(daily[keep], on=[entity_col, "_race_day"], how="left")
+    keep = group_cols + ["_race_day"] + generated
+    return (
+        df.merge(
+            daily[keep],
+            on=group_cols + ["_race_day"],
+            how="left",
+        ),
+        generated,
+    )
 
 def build_pre_race_features(frame: pd.DataFrame) -> FeatureBuildResult:
     required = {"race_id", "race_date", "horse_name", "finish_position"}
@@ -115,26 +136,35 @@ def build_pre_race_features(frame: pd.DataFrame) -> FeatureBuildResult:
 
     for column in CURRENT_CATEGORICAL_FEATURES:
         if column in df.columns:
-            df[column] = df[column].astype("string").fillna("UNKNOWN")
+            df[column] = (
+                df[column].astype("string").fillna("UNKNOWN")
+            )
 
-    for entity_col, prefix in (
-        ("horse_name", "horse"),
-        ("jockey", "jockey"),
-        ("trainer", "trainer"),
-    ):
-        df = _add_entity_history(df, entity_col, prefix)
+    if "distance_m" in df.columns:
+        bucket = (df["distance_m"] // 200) * 200
+        df["_distance_bucket"] = (
+            bucket.astype("Int64").astype("string").fillna("UNKNOWN")
+        )
 
-    history_features = []
-    for prefix in ("horse", "jockey", "trainer"):
-        for suffix in (
-            "past_starts",
-            "past_win_rate",
-            "past_avg_finish",
-            "days_since_seen",
-        ):
-            name = f"{prefix}_{suffix}"
-            if name in df.columns:
-                history_features.append(name)
+    history_features: list[str] = []
+    history_specs = [
+        (["horse_name"], "horse"),
+        (["jockey"], "jockey"),
+        (["trainer"], "trainer"),
+        (["horse_name", "surface"], "horse_surface"),
+        (["horse_name", "racecourse"], "horse_course"),
+        (["horse_name", "_distance_bucket"], "horse_distance"),
+        (["jockey", "racecourse"], "jockey_course"),
+        (["trainer", "racecourse"], "trainer_course"),
+    ]
+
+    for group_cols, prefix in history_specs:
+        df, generated = _add_group_history(
+            df,
+            group_cols,
+            prefix,
+        )
+        history_features.extend(generated)
 
     feature_columns = tuple(
         [c for c in CURRENT_NUMERIC_FEATURES if c in df.columns]
@@ -143,9 +173,13 @@ def build_pre_race_features(frame: pd.DataFrame) -> FeatureBuildResult:
     )
     assert_leakage_safe(list(feature_columns))
 
+    drop_columns = ["_row_order", "_race_day"]
+    if "_distance_bucket" in df.columns:
+        drop_columns.append("_distance_bucket")
+
     df = (
         df.sort_values("_row_order")
-        .drop(columns=["_row_order", "_race_day"])
+        .drop(columns=drop_columns)
         .reset_index(drop=True)
     )
     return FeatureBuildResult(
