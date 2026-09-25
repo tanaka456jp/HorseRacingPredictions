@@ -1,8 +1,14 @@
 from dataclasses import dataclass
 import math
+import numpy as np
 import pandas as pd
 
-from .calibration import apply_temperature, fit_temperature
+from .calibration import (
+    apply_isotonic,
+    apply_temperature,
+    fit_isotonic,
+    fit_temperature,
+)
 from .leakage import assert_leakage_safe
 from .modeling import (
     BaselineProbabilityModel,
@@ -10,10 +16,12 @@ from .modeling import (
 )
 from .walkforward import expanding_walk_forward_splits
 
+
 @dataclass(frozen=True)
 class OOSResult:
     predictions: pd.DataFrame
     fold_count: int
+
 
 def _race_certainty(probabilities: pd.Series) -> float:
     p = probabilities[probabilities > 0].astype(float)
@@ -25,6 +33,7 @@ def _race_certainty(probabilities: pd.Series) -> float:
     if maximum <= 0:
         return 1.0
     return max(0.0, min(1.0, 1.0 - entropy / maximum))
+
 
 def _split_fit_and_calibration(
     train: pd.DataFrame,
@@ -42,6 +51,7 @@ def _split_fit_and_calibration(
     fit = train.loc[~dates.isin(calibration_set)].copy()
     return fit, calibration
 
+
 def _make_model(
     model_kind: str,
     feature_columns: list[str],
@@ -52,6 +62,7 @@ def _make_model(
         return CatBoostProbabilityModel(feature_columns)
     raise ValueError(f"unknown model_kind: {model_kind}")
 
+
 def generate_walk_forward_predictions(
     frame: pd.DataFrame,
     feature_columns: list[str] | tuple[str, ...],
@@ -60,10 +71,16 @@ def generate_walk_forward_predictions(
     gap_dates: int = 0,
     model_version: str = "baseline-logit-v0",
     calibration_dates: int = 0,
+    calibration_method: str = "none",
     model_kind: str = "logit",
 ) -> OOSResult:
     feature_columns = list(feature_columns)
     assert_leakage_safe(feature_columns)
+
+    if calibration_method not in {"none", "temperature", "isotonic"}:
+        raise ValueError(
+            "calibration_method must be one of: none, temperature, isotonic"
+        )
 
     required = {
         "race_id", "race_date", "horse_name", "finish_position",
@@ -101,31 +118,50 @@ def generate_walk_forward_predictions(
             target_col="is_winner",
         )
 
-        temperature = 1.0
         calibration_start = pd.NaT
-        if not calibration.empty:
+        temperature = np.nan
+        calibrator = None
+
+        if calibration_method != "none" and not calibration.empty:
             raw_cal = model.predict_win_probability(
                 calibration,
                 race_col="race_id",
-            )
-            temperature = fit_temperature(
-                raw_cal,
-                calibration["race_id"],
-                calibration["is_winner"],
             )
             calibration_start = pd.to_datetime(
                 calibration["race_date"]
             ).min()
 
+            if calibration_method == "temperature":
+                temperature = fit_temperature(
+                    raw_cal,
+                    calibration["race_id"],
+                    calibration["is_winner"],
+                )
+            elif calibration_method == "isotonic":
+                calibrator = fit_isotonic(
+                    raw_cal,
+                    calibration["is_winner"],
+                )
+
         raw_probability = model.predict_win_probability(
             test,
             race_col="race_id",
         )
-        probability = apply_temperature(
-            raw_probability,
-            test["race_id"],
-            temperature,
-        )
+
+        if calibration_method == "temperature" and not np.isnan(temperature):
+            probability = apply_temperature(
+                raw_probability,
+                test["race_id"],
+                float(temperature),
+            )
+        elif calibration_method == "isotonic" and calibrator is not None:
+            probability = apply_isotonic(
+                raw_probability,
+                test["race_id"],
+                calibrator,
+            )
+        else:
+            probability = raw_probability
 
         out = test[
             ["race_id", "race_date", "horse_name", "finish_position", "win_odds"]
@@ -155,6 +191,7 @@ def generate_walk_forward_predictions(
         out["calibration_start"] = calibration_start
         out["test_start"] = fold.test_start
         out["temperature"] = temperature
+        out["calibration_method"] = calibration_method
         out["model_kind"] = model_kind
 
         certainty = probability.groupby(test["race_id"]).transform(

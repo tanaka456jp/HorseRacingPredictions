@@ -17,7 +17,7 @@ from horse_racing_predictions.validation import FINAL_WIN_ODDS
 
 DATASET_HANDLE = "takamotoki/jra-horse-racing-dataset"
 RACE_RESULT_FILE = "19860105-20210731_race_result.csv"
-EXPERIMENT_ID = "v7-catboost-recent-form"
+EXPERIMENT_ID = "v8-catboost-isotonic"
 
 def _resolve_downloaded_file(downloaded: str | Path) -> Path:
     path = Path(downloaded)
@@ -45,6 +45,7 @@ def main() -> None:
     parser.add_argument("--end", default="2021-07-31")
     parser.add_argument("--min-train-dates", type=int, default=120)
     parser.add_argument("--test-dates", type=int, default=20)
+    parser.add_argument("--calibration-dates", type=int, default=40)
     parser.add_argument("--ev-threshold", type=float, default=1.15)
     parser.add_argument(
         "--output",
@@ -83,7 +84,8 @@ def main() -> None:
         min_train_dates=args.min_train_dates,
         test_dates=args.test_dates,
         model_version=EXPERIMENT_ID,
-        calibration_dates=0,
+        calibration_dates=args.calibration_dates,
+        calibration_method="isotonic",
         model_kind="catboost",
     )
     pred = oos.predictions.copy()
@@ -114,6 +116,8 @@ def main() -> None:
     result = {
         "experiment_id": EXPERIMENT_ID,
         "model_kind": "catboost",
+        "calibration_method": "isotonic",
+        "calibration_dates": args.calibration_dates,
         "source": {
             "dataset": DATASET_HANDLE,
             "file": RACE_RESULT_FILE,
