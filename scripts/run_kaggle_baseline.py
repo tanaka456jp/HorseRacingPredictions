@@ -9,6 +9,7 @@ import pandas as pd
 from horse_racing_predictions.backtest import simulate_win_strategy
 from horse_racing_predictions.config import StrategyConfig
 from horse_racing_predictions.data_sources import load_jra_history_csv
+from horse_racing_predictions.diagnostics import build_oos_diagnostics
 from horse_racing_predictions.evaluation import brier_score, binary_log_loss
 from horse_racing_predictions.features import build_pre_race_features
 from horse_racing_predictions.oos import generate_walk_forward_predictions
@@ -16,7 +17,7 @@ from horse_racing_predictions.validation import FINAL_WIN_ODDS
 
 DATASET_HANDLE = "takamotoki/jra-horse-racing-dataset"
 RACE_RESULT_FILE = "19860105-20210731_race_result.csv"
-EXPERIMENT_ID = "v5-catboost-context-history"
+EXPERIMENT_ID = "v6-catboost-diagnostics"
 
 def _resolve_downloaded_file(downloaded: str | Path) -> Path:
     path = Path(downloaded)
@@ -48,6 +49,10 @@ def main() -> None:
     parser.add_argument(
         "--output",
         default="artifacts/kaggle_baseline_summary.json",
+    )
+    parser.add_argument(
+        "--diagnostics-output",
+        default="artifacts/kaggle_baseline_diagnostics.json",
     )
     args = parser.parse_args()
 
@@ -98,6 +103,14 @@ def main() -> None:
         odds_evidence=FINAL_WIN_ODDS,
     )
 
+    diagnostics = build_oos_diagnostics(pred)
+    diagnostics_output = Path(args.diagnostics_output)
+    diagnostics_output.parent.mkdir(parents=True, exist_ok=True)
+    diagnostics_output.write_text(
+        json.dumps(diagnostics, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
     result = {
         "experiment_id": EXPERIMENT_ID,
         "model_kind": "catboost",
@@ -133,6 +146,7 @@ def main() -> None:
             ),
         },
         "betting": asdict(backtest),
+        "diagnostics_file": str(diagnostics_output),
         "interpretation": {
             "roi_status": "research_only",
             "warning": (
