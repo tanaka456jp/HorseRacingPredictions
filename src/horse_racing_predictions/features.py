@@ -133,12 +133,28 @@ def _add_recent_horse_form(
         "_last_3f": "last_3f",
         "_early_ratio": "_early_position_ratio",
         "_late_ratio": "_late_position_ratio",
+        "_win_odds": "win_odds",
+        "_popularity": "popularity",
+        "_distance": "distance_m",
     }
     for target, source_col in optional.items():
         if source_col in df.columns:
             source[target] = pd.to_numeric(
                 df[source_col], errors="coerce"
             )
+
+    if "_win_odds" in source.columns:
+        source["_log_odds"] = np.log(
+            source["_win_odds"].where(source["_win_odds"] > 1.0)
+        )
+    if "surface" in df.columns:
+        source["_surface"] = (
+            df["surface"].astype("string").fillna("UNKNOWN")
+        )
+    if "racecourse" in df.columns:
+        source["_racecourse"] = (
+            df["racecourse"].astype("string").fillna("UNKNOWN")
+        )
 
     aggregations = {
         "finish": ("_finish", "mean"),
@@ -151,6 +167,17 @@ def _add_recent_horse_form(
         aggregations["early_ratio"] = ("_early_ratio", "mean")
     if "_late_ratio" in source.columns:
         aggregations["late_ratio"] = ("_late_ratio", "mean")
+    if "_win_odds" in source.columns:
+        aggregations["win_odds"] = ("_win_odds", "mean")
+        aggregations["log_odds"] = ("_log_odds", "mean")
+    if "_popularity" in source.columns:
+        aggregations["popularity"] = ("_popularity", "mean")
+    if "_distance" in source.columns:
+        aggregations["distance"] = ("_distance", "mean")
+    if "_surface" in source.columns:
+        aggregations["surface"] = ("_surface", "first")
+    if "_racecourse" in source.columns:
+        aggregations["racecourse"] = ("_racecourse", "first")
 
     daily = (
         source.groupby(
@@ -177,6 +204,10 @@ def _add_recent_horse_form(
             metrics[f"horse_recent_early_ratio_mean_{window}"] = "early_ratio"
         if "late_ratio" in daily.columns:
             metrics[f"horse_recent_late_ratio_mean_{window}"] = "late_ratio"
+        if "log_odds" in daily.columns:
+            metrics[f"horse_recent_log_odds_mean_{window}"] = "log_odds"
+        if "popularity" in daily.columns:
+            metrics[f"horse_recent_popularity_mean_{window}"] = "popularity"
 
         for output, metric in metrics.items():
             daily[output] = grouped[metric].transform(
@@ -203,6 +234,18 @@ def _add_recent_horse_form(
             - daily["horse_recent_finish_mean_5"]
         )
         generated.append("horse_recent_finish_trend_3_vs_5")
+
+    last_metrics = {
+        "horse_last_odds": "win_odds",
+        "horse_last_popularity": "popularity",
+        "horse_last_distance_m": "distance",
+        "horse_last_surface": "surface",
+        "horse_last_racecourse": "racecourse",
+    }
+    for output, metric in last_metrics.items():
+        if metric in daily.columns:
+            daily[output] = grouped[metric].shift(1)
+            generated.append(output)
 
     keep = ["horse_name", "_race_day"] + generated
     return (
