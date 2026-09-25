@@ -3,7 +3,9 @@ name: Historical Research Backtest
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches:
+      - main
+      - "feature/**"
     paths:
       - ".github/workflows/research-backtest.yml"
       - "scripts/run_kaggle_baseline.py"

@@ -37,12 +37,30 @@ COLUMN_ALIASES = {
     "jockey": ["騎手", "Jockey", "jockey"],
     "win_odds": ["単勝", "Win Odds(100Yen)", "win_odds"],
     "horse_weight": ["馬体重", "Horse Weight", "horse_weight"],
-    "horse_weight_delta": ["場体重増減", "馬体重増減", "Horse Weight Gain and Loss", "horse_weight_delta"],
+    "horse_weight_delta": [
+        "場体重増減", "馬体重増減",
+        "Horse Weight Gain and Loss", "horse_weight_delta"
+    ],
     "trainer": ["調教師", "Trainer", "trainer"],
+    "last_3f": ["上り", "上り3F", "Last 3F", "last_3f"],
+    "corner_1": ["1コーナー", "Corner 1", "corner_1"],
+    "corner_2": ["2コーナー", "Corner 2", "corner_2"],
+    "corner_3": ["3コーナー", "Corner 3", "corner_3"],
+    "corner_4": ["4コーナー", "Corner 4", "corner_4"],
+    "race_class": ["競争条件", "Race Class", "race_class"],
+    "graded_race": [
+        "リステッド・重賞競走", "Graded Race", "graded_race"
+    ],
 }
 
 REQUIRED_HISTORY_COLUMNS = {
     "race_id", "race_date", "finish_position", "horse_name", "win_odds"
+}
+
+NUMERIC_COLUMNS = {
+    "finish_position", "win_odds", "distance_m", "post_position",
+    "age", "carried_weight", "horse_weight", "horse_weight_delta",
+    "last_3f", "corner_1", "corner_2", "corner_3", "corner_4",
 }
 
 def _find_column(frame: pd.DataFrame, aliases: list[str]) -> str | None:
@@ -65,15 +83,9 @@ def normalize_jra_history(frame: pd.DataFrame) -> pd.DataFrame:
 
     out["race_id"] = out["race_id"].astype(str)
     out["race_date"] = pd.to_datetime(out["race_date"], errors="raise")
-    out["finish_position"] = pd.to_numeric(out["finish_position"], errors="coerce")
-    out["win_odds"] = pd.to_numeric(out["win_odds"], errors="coerce")
-    if "distance_m" in out:
-        out["distance_m"] = pd.to_numeric(out["distance_m"], errors="coerce")
-    if "horse_weight" in out:
-        out["horse_weight"] = pd.to_numeric(out["horse_weight"], errors="coerce")
-    if "horse_weight_delta" in out:
-        out["horse_weight_delta"] = pd.to_numeric(out["horse_weight_delta"], errors="coerce")
-
+    for column in NUMERIC_COLUMNS:
+        if column in out.columns:
+            out[column] = pd.to_numeric(out[column], errors="coerce")
     return out
 
 def load_jra_history_csv(path: str | Path) -> pd.DataFrame:

@@ -17,7 +17,7 @@ from horse_racing_predictions.validation import FINAL_WIN_ODDS
 
 DATASET_HANDLE = "takamotoki/jra-horse-racing-dataset"
 RACE_RESULT_FILE = "19860105-20210731_race_result.csv"
-EXPERIMENT_ID = "v6-catboost-diagnostics"
+EXPERIMENT_ID = "v7-catboost-recent-form"
 
 def _resolve_downloaded_file(downloaded: str | Path) -> Path:
     path = Path(downloaded)

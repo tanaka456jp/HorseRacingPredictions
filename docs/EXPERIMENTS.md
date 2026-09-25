@@ -18,39 +18,47 @@ Market benchmark: Brier 0.058098, Log loss 0.206064.
 | v4 | forward temperature calibration | 0.062666 | 0.229649 | -17.89% |
 | v5 | CatBoost nonlinear model | **0.062190** | **0.227285** | -19.61% |
 
-## v5 conclusion
-
-Commit: `b34f82f6a651eb97c8fd9c8623f063a54c566b2a`.
-Run: `36152828769`.
-
-- Bets: 1,275
-- Stake: ¥485,000
-- Payout: ¥389,910
-- Profit: -¥95,090
-- Research ROI: -19.61%
-- Max drawdown: 95.97%
-
-CatBoost improves both Brier and Log loss versus the linear v3 baseline.
-However, the EV-selected betting result remains strongly negative.
-
-**Decision: KEEP CATBOOST AS THE NEW PROBABILITY BASELINE, NOT AS A
-PRODUCTION BETTING MODEL.**
-
 ## v6 — OOS loss-structure diagnostics
 
-Keep the v5 predictions unchanged. Do not tune the model.
+Commit: `62d6df6b963ce82fdc2a05eb867631794bcd7025`.
+Run: `36155468906`.
 
-Produce post-hoc research diagnostics for:
+The CatBoost probability model is materially overconfident on market longshots.
+Raising the EV threshold makes the selected population worse rather than better.
 
-- EV bands
-- decimal-odds bands
-- race-confidence bands
-- model probability minus market-implied probability bands
-- an EV-threshold sweep
+Examples from the post-hoc diagnostic:
 
-Each segment records count, wins, predicted win rate, actual win rate,
-calibration error and flat-bet ROI.
+- EV 1.15-1.25: predicted win rate 7.88%, actual 5.05%
+- EV 1.50-2.00: predicted 6.40%, actual 2.96%
+- EV >=3.00: predicted 5.18%, actual 0.76%
+- model minus market >=10pt: predicted 22.88%, actual 8.47%
+- flat ¥100 ROI at EV>=1.15: -30.61%
+- flat ¥100 ROI at EV>=3.00: -37.69%
 
-This is explicitly diagnostic. Any threshold or filter discovered here must
-later be selected using only prior folds and evaluated on later unseen folds
-before it can become a strategy rule.
+This demonstrates that the immediate problem is probability estimation for
+supposed value longshots, not an insufficiently high EV cutoff.
+
+**Decision: DO NOT TUNE THE EV THRESHOLD ON THIS SAMPLE. Improve horse-state
+features first, then re-evaluate on unseen future folds.**
+
+## v7 — recent form, pace history and race-relative context
+
+Work on branch `feature/v7-recent-form`.
+
+Keep the v5 CatBoost model and add only information available before the target
+race:
+
+- field size
+- relative post position
+- carried-weight difference versus race mean
+- horse-weight difference versus race mean
+- race class and graded-race category
+- prior 3/5 race average finish
+- prior 3/5 race win and top-3 rate
+- prior 3/5 race average last-3F
+- prior best last-3F over five races
+- prior 3/5 race early/late corner-position ratios
+- short-versus-medium recent finish trend
+
+Current-race last-3F and corner positions remain forbidden as model inputs.
+They are used only after a one-day shift as historical features.

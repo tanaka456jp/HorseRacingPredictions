@@ -11,6 +11,10 @@ CURRENT_NUMERIC_FEATURES = (
     "carried_weight",
     "horse_weight",
     "horse_weight_delta",
+    "field_size",
+    "relative_post_position",
+    "carried_weight_vs_race_mean",
+    "horse_weight_vs_race_mean",
 )
 
 CURRENT_CATEGORICAL_FEATURES = (
@@ -19,13 +23,8 @@ CURRENT_CATEGORICAL_FEATURES = (
     "weather",
     "track_condition",
     "sex",
-)
-
-HISTORY_SUFFIXES = (
-    "past_starts",
-    "past_win_rate",
-    "past_avg_finish",
-    "days_since_seen",
+    "race_class",
+    "graded_race",
 )
 
 @dataclass(frozen=True)
@@ -66,11 +65,7 @@ def _add_group_history(
         .sort_values(group_cols + ["_race_day"])
     )
 
-    grouped = daily.groupby(
-        group_cols,
-        dropna=False,
-        sort=False,
-    )
+    grouped = daily.groupby(group_cols, dropna=False, sort=False)
     daily[f"{prefix}_past_starts"] = (
         grouped["daily_starts"].cumsum() - daily["daily_starts"]
     )
@@ -115,6 +110,163 @@ def _add_group_history(
         generated,
     )
 
+def _add_recent_horse_form(
+    frame: pd.DataFrame,
+) -> tuple[pd.DataFrame, list[str]]:
+    if "horse_name" not in frame.columns:
+        return frame, []
+
+    df = frame.copy()
+    source = pd.DataFrame({
+        "horse_name": df["horse_name"],
+        "_race_day": df["_race_day"],
+        "_finish": pd.to_numeric(
+            df["finish_position"], errors="coerce"
+        ),
+        "_is_win": df["is_winner"].astype(float),
+        "_is_top3": pd.to_numeric(
+            df["finish_position"], errors="coerce"
+        ).le(3).astype(float),
+    })
+
+    optional = {
+        "_last_3f": "last_3f",
+        "_early_ratio": "_early_position_ratio",
+        "_late_ratio": "_late_position_ratio",
+    }
+    for target, source_col in optional.items():
+        if source_col in df.columns:
+            source[target] = pd.to_numeric(
+                df[source_col], errors="coerce"
+            )
+
+    aggregations = {
+        "finish": ("_finish", "mean"),
+        "win": ("_is_win", "mean"),
+        "top3": ("_is_top3", "mean"),
+    }
+    if "_last_3f" in source.columns:
+        aggregations["last_3f"] = ("_last_3f", "mean")
+    if "_early_ratio" in source.columns:
+        aggregations["early_ratio"] = ("_early_ratio", "mean")
+    if "_late_ratio" in source.columns:
+        aggregations["late_ratio"] = ("_late_ratio", "mean")
+
+    daily = (
+        source.groupby(
+            ["horse_name", "_race_day"],
+            dropna=False,
+            as_index=False,
+        )
+        .agg(**aggregations)
+        .sort_values(["horse_name", "_race_day"])
+    )
+
+    generated: list[str] = []
+    grouped = daily.groupby("horse_name", dropna=False, sort=False)
+
+    for window in (3, 5):
+        metrics = {
+            f"horse_recent_finish_mean_{window}": "finish",
+            f"horse_recent_win_rate_{window}": "win",
+            f"horse_recent_top3_rate_{window}": "top3",
+        }
+        if "last_3f" in daily.columns:
+            metrics[f"horse_recent_last_3f_mean_{window}"] = "last_3f"
+        if "early_ratio" in daily.columns:
+            metrics[f"horse_recent_early_ratio_mean_{window}"] = "early_ratio"
+        if "late_ratio" in daily.columns:
+            metrics[f"horse_recent_late_ratio_mean_{window}"] = "late_ratio"
+
+        for output, metric in metrics.items():
+            daily[output] = grouped[metric].transform(
+                lambda x, w=window: x.shift(1).rolling(
+                    w, min_periods=1
+                ).mean()
+            )
+            generated.append(output)
+
+    if "last_3f" in daily.columns:
+        daily["horse_recent_last_3f_best_5"] = grouped[
+            "last_3f"
+        ].transform(
+            lambda x: x.shift(1).rolling(5, min_periods=1).min()
+        )
+        generated.append("horse_recent_last_3f_best_5")
+
+    if {
+        "horse_recent_finish_mean_3",
+        "horse_recent_finish_mean_5",
+    }.issubset(daily.columns):
+        daily["horse_recent_finish_trend_3_vs_5"] = (
+            daily["horse_recent_finish_mean_3"]
+            - daily["horse_recent_finish_mean_5"]
+        )
+        generated.append("horse_recent_finish_trend_3_vs_5")
+
+    keep = ["horse_name", "_race_day"] + generated
+    return (
+        df.merge(
+            daily[keep],
+            on=["horse_name", "_race_day"],
+            how="left",
+        ),
+        generated,
+    )
+
+def _prepare_race_relative_features(df: pd.DataFrame) -> pd.DataFrame:
+    out = df.copy()
+    out["field_size"] = out.groupby("race_id")["race_id"].transform(
+        "size"
+    ).astype(float)
+
+    if "post_position" in out.columns:
+        denominator = out["field_size"].replace(0, np.nan)
+        out["relative_post_position"] = (
+            pd.to_numeric(out["post_position"], errors="coerce")
+            / denominator
+        )
+
+    if "carried_weight" in out.columns:
+        weight = pd.to_numeric(out["carried_weight"], errors="coerce")
+        race_mean = weight.groupby(out["race_id"]).transform("mean")
+        out["carried_weight_vs_race_mean"] = weight - race_mean
+
+    if "horse_weight" in out.columns:
+        weight = pd.to_numeric(out["horse_weight"], errors="coerce")
+        race_mean = weight.groupby(out["race_id"]).transform("mean")
+        out["horse_weight_vs_race_mean"] = weight - race_mean
+
+    return out
+
+def _prepare_postrace_history_sources(df: pd.DataFrame) -> pd.DataFrame:
+    out = df.copy()
+    for column in (
+        "corner_1", "corner_2", "corner_3", "corner_4", "last_3f"
+    ):
+        if column in out.columns:
+            out[column] = pd.to_numeric(out[column], errors="coerce")
+
+    field = out["field_size"].replace(0, np.nan)
+
+    early_cols = [
+        c for c in ("corner_1", "corner_2")
+        if c in out.columns
+    ]
+    late_cols = [
+        c for c in ("corner_3", "corner_4")
+        if c in out.columns
+    ]
+    if early_cols:
+        out["_early_position_ratio"] = (
+            out[early_cols].mean(axis=1) / field
+        )
+    if late_cols:
+        out["_late_position_ratio"] = (
+            out[late_cols].mean(axis=1) / field
+        )
+    return out
+
 def build_pre_race_features(frame: pd.DataFrame) -> FeatureBuildResult:
     required = {"race_id", "race_date", "horse_name", "finish_position"}
     missing = required - set(frame.columns)
@@ -130,7 +282,11 @@ def build_pre_race_features(frame: pd.DataFrame) -> FeatureBuildResult:
     )
     df["is_winner"] = df["finish_position"].eq(1).astype(int)
 
-    for column in CURRENT_NUMERIC_FEATURES:
+    for column in (
+        "distance_m", "post_position", "age", "carried_weight",
+        "horse_weight", "horse_weight_delta", "last_3f",
+        "corner_1", "corner_2", "corner_3", "corner_4",
+    ):
         if column in df.columns:
             df[column] = pd.to_numeric(df[column], errors="coerce")
 
@@ -139,6 +295,9 @@ def build_pre_race_features(frame: pd.DataFrame) -> FeatureBuildResult:
             df[column] = (
                 df[column].astype("string").fillna("UNKNOWN")
             )
+
+    df = _prepare_race_relative_features(df)
+    df = _prepare_postrace_history_sources(df)
 
     if "distance_m" in df.columns:
         bucket = (df["distance_m"] // 200) * 200
@@ -159,12 +318,11 @@ def build_pre_race_features(frame: pd.DataFrame) -> FeatureBuildResult:
     ]
 
     for group_cols, prefix in history_specs:
-        df, generated = _add_group_history(
-            df,
-            group_cols,
-            prefix,
-        )
+        df, generated = _add_group_history(df, group_cols, prefix)
         history_features.extend(generated)
+
+    df, recent_features = _add_recent_horse_form(df)
+    history_features.extend(recent_features)
 
     feature_columns = tuple(
         [c for c in CURRENT_NUMERIC_FEATURES if c in df.columns]
@@ -173,9 +331,13 @@ def build_pre_race_features(frame: pd.DataFrame) -> FeatureBuildResult:
     )
     assert_leakage_safe(list(feature_columns))
 
-    drop_columns = ["_row_order", "_race_day"]
+    drop_columns = [
+        "_row_order", "_race_day", "_early_position_ratio",
+        "_late_position_ratio",
+    ]
     if "_distance_bucket" in df.columns:
         drop_columns.append("_distance_bucket")
+    drop_columns = [c for c in drop_columns if c in df.columns]
 
     df = (
         df.sort_values("_row_order")
