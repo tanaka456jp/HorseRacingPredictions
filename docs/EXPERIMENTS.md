@@ -140,3 +140,27 @@ a reusable EV threshold.
 
 **Decision: KEEP the forward-selection framework. Do not tune thresholds.
 Improve probability estimation before betting.**
+
+
+## v10 — lagged market-history features
+
+Branch: `feature/v10-market-history`.
+
+Keep the accepted v7 CatBoost model and all v7 features. Add only market
+information from **previous races**, never the target race:
+
+- last-race win odds
+- rolling 3/5-race mean log odds
+- last-race popularity
+- rolling 3/5-race mean popularity
+- last-race distance
+- last-race surface
+- last-race racecourse
+
+The target race's current odds and popularity remain excluded from model inputs.
+All historical market fields are aggregated by horse/day and shifted by at least
+one prior day before becoming features.
+
+Purpose: test whether the model can distinguish horses that the market has
+consistently rated highly in prior starts from apparent longshot value created
+by model overconfidence.

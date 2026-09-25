@@ -36,6 +36,7 @@ COLUMN_ALIASES = {
     "carried_weight": ["斤量", "Weight(Kg)", "carried_weight"],
     "jockey": ["騎手", "Jockey", "jockey"],
     "win_odds": ["単勝", "Win Odds(100Yen)", "win_odds"],
+    "popularity": ["人気", "Popularity", "popularity"],
     "horse_weight": ["馬体重", "Horse Weight", "horse_weight"],
     "horse_weight_delta": [
         "場体重増減", "馬体重増減",
@@ -61,6 +62,7 @@ NUMERIC_COLUMNS = {
     "finish_position", "win_odds", "distance_m", "post_position",
     "age", "carried_weight", "horse_weight", "horse_weight_delta",
     "last_3f", "corner_1", "corner_2", "corner_3", "corner_4",
+    "popularity",
 }
 
 def _find_column(frame: pd.DataFrame, aliases: list[str]) -> str | None:
