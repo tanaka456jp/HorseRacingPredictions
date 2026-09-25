@@ -4,10 +4,8 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - main
       - "feature/**"
     paths:
-      - ".github/workflows/research-backtest.yml"
       - "scripts/run_kaggle_baseline.py"
       - "src/horse_racing_predictions/**"
       - "pyproject.toml"
