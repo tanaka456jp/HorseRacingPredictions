@@ -1,5 +1,6 @@
 import argparse
 import json
+import math
 from dataclasses import asdict
 from pathlib import Path
 
@@ -13,11 +14,21 @@ from horse_racing_predictions.diagnostics import build_oos_diagnostics
 from horse_racing_predictions.evaluation import brier_score, binary_log_loss
 from horse_racing_predictions.features import build_pre_race_features
 from horse_racing_predictions.oos import generate_walk_forward_predictions
+from horse_racing_predictions.strategy_selection import (
+    forward_select_ev_threshold,
+    summarize_forward_selection,
+)
 from horse_racing_predictions.validation import FINAL_WIN_ODDS
 
 DATASET_HANDLE = "takamotoki/jra-horse-racing-dataset"
 RACE_RESULT_FILE = "19860105-20210731_race_result.csv"
-EXPERIMENT_ID = "v7-catboost-recent-form"
+EXPERIMENT_ID = "v9-forward-strategy-selection"
+
+CANDIDATE_THRESHOLDS = (
+    1.05, 1.10, 1.15, 1.20, 1.25,
+    1.30, 1.40, 1.50, 1.75, 2.00,
+)
+
 
 def _resolve_downloaded_file(downloaded: str | Path) -> Path:
     path = Path(downloaded)
@@ -33,11 +44,26 @@ def _resolve_downloaded_file(downloaded: str | Path) -> Path:
         )
     return matches[0]
 
+
 def _market_implied_probability(frame: pd.DataFrame) -> pd.Series:
     odds = pd.to_numeric(frame["decimal_odds"], errors="coerce")
     inverse = 1.0 / odds.where(odds > 1.0)
     denominator = inverse.groupby(frame["race_id"]).transform("sum")
     return (inverse / denominator).fillna(0.0)
+
+
+def _json_safe(value):
+    if isinstance(value, float) and not math.isfinite(value):
+        return None
+    return value
+
+
+def _decision_dict(decision):
+    return {
+        key: _json_safe(value)
+        for key, value in asdict(decision).items()
+    }
+
 
 def main() -> None:
     parser = argparse.ArgumentParser()
@@ -46,6 +72,8 @@ def main() -> None:
     parser.add_argument("--min-train-dates", type=int, default=120)
     parser.add_argument("--test-dates", type=int, default=20)
     parser.add_argument("--ev-threshold", type=float, default=1.15)
+    parser.add_argument("--strategy-min-history-folds", type=int, default=3)
+    parser.add_argument("--strategy-min-prior-bets", type=int, default=200)
     parser.add_argument(
         "--output",
         default="artifacts/kaggle_baseline_summary.json",
@@ -53,6 +81,10 @@ def main() -> None:
     parser.add_argument(
         "--diagnostics-output",
         default="artifacts/kaggle_baseline_diagnostics.json",
+    )
+    parser.add_argument(
+        "--strategy-output",
+        default="artifacts/kaggle_forward_strategy.json",
     )
     args = parser.parse_args()
 
@@ -111,6 +143,36 @@ def main() -> None:
         encoding="utf-8",
     )
 
+    selected_rows, decisions = forward_select_ev_threshold(
+        pred,
+        candidate_thresholds=CANDIDATE_THRESHOLDS,
+        min_history_folds=args.strategy_min_history_folds,
+        min_prior_bets=args.strategy_min_prior_bets,
+        require_positive_prior_roi=True,
+    )
+    strategy_summary = summarize_forward_selection(selected_rows)
+    strategy_result = {
+        "status": "forward_historical_research_only",
+        "warning": (
+            "Rule choice uses only earlier OOS folds, but the odds are final "
+            "historical odds rather than timestamped pre-race quotes. This is "
+            "not evidence of verified live profitability."
+        ),
+        "candidate_thresholds": list(CANDIDATE_THRESHOLDS),
+        "min_history_folds": args.strategy_min_history_folds,
+        "min_prior_bets": args.strategy_min_prior_bets,
+        "require_positive_prior_roi": True,
+        "summary": strategy_summary,
+        "decisions": [_decision_dict(d) for d in decisions],
+    }
+
+    strategy_output = Path(args.strategy_output)
+    strategy_output.parent.mkdir(parents=True, exist_ok=True)
+    strategy_output.write_text(
+        json.dumps(strategy_result, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
     result = {
         "experiment_id": EXPERIMENT_ID,
         "model_kind": "catboost",
@@ -145,14 +207,16 @@ def main() -> None:
                 pred["is_winner"],
             ),
         },
-        "betting": asdict(backtest),
+        "fixed_threshold_betting": asdict(backtest),
+        "forward_strategy": strategy_summary,
         "diagnostics_file": str(diagnostics_output),
+        "strategy_file": str(strategy_output),
         "interpretation": {
             "roi_status": "research_only",
             "warning": (
-                "Final historical win odds are used for EV selection. "
-                "This is not forward-captured pre-race odds, so ROI must "
-                "not be treated as verified live profitability."
+                "All betting metrics still use final historical win odds. "
+                "Forward fold rule selection reduces threshold overfitting, "
+                "but does not convert the result into verified live ROI."
             ),
         },
     }
@@ -164,6 +228,7 @@ def main() -> None:
         encoding="utf-8",
     )
     print(json.dumps(result, ensure_ascii=False, indent=2))
+
 
 if __name__ == "__main__":
     main()
