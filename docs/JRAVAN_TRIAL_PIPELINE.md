@@ -138,3 +138,8 @@ Audit output:
 The report records counts, excluded row counts, and exact race IDs. Full and
 Resume console output also shows zero_winner_races and
 multiple_winner_races.
+
+
+Quarantine changes only the modeling/intake copy (history_supplement.csv and
+current_history.csv). The original parsed_history.csv remains unchanged for
+audit/reprocessing.
