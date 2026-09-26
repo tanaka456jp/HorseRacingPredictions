@@ -73,6 +73,7 @@ class JraVanDoctorReport:
         return self.status in {
             "ready",
             "connected_no_ra_se",
+            "connected_no_records",
         }
 
 
