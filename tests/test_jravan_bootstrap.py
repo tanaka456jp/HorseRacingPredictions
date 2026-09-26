@@ -33,11 +33,16 @@ def test_double_click_launchers_delegate_to_bootstrap():
     full = Path(
         "RUN_JRAVAN_FULL.cmd"
     ).read_text(encoding="utf-8")
+    resume = Path(
+        "RUN_JRAVAN_RESUME.cmd"
+    ).read_text(encoding="utf-8")
 
     assert "bootstrap_jravan_trial.ps1" in smoke
     assert "bootstrap_jravan_trial.ps1" in full
+    assert "bootstrap_jravan_trial.ps1" in resume
     assert "-Full" not in smoke
     assert "-Full" in full
+    assert "-Resume" in resume
 
 
 def test_jravan_requirements_use_real_lines():
@@ -71,3 +76,14 @@ def test_runtime_check_delegates_to_registration_doctor():
     assert "write_runtime_report" in text
     assert "struct.calcsize" in runtime
     assert 'Dispatch(PROGID)' in runtime
+
+
+def test_bootstrap_resume_skips_jvlink_reacquisition():
+    text = Path(
+        "scripts/bootstrap_jravan_trial.ps1"
+    ).read_text(encoding="utf-8")
+
+    assert "[switch]$Resume" in text
+    assert "jravan_trial_resume.py" in text
+    assert "parsed_history.csv" in text
+    assert "Resuming Current History Intake without JV-Link reacquisition" in text
