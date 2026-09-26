@@ -42,3 +42,9 @@ When status=ready, run:
 
 That performs a bounded RA/SE export and immediately runs the official-spec
 parser. No raw JV-Data is committed or redistributed.
+
+
+A bounded doctor sample that contains valid RACE records but happens to contain
+no RA/SE is treated as a working JV-Link connection, not as a hard failure.
+The larger trial smoke is responsible for proving that RA/SE can actually be
+captured and parsed.
