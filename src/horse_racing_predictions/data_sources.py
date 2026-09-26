@@ -57,6 +57,10 @@ REQUIRED_HISTORY_COLUMNS = {
     "race_id", "race_date", "finish_position", "horse_name", "win_odds"
 }
 
+REQUIRED_ENTRY_COLUMNS = {
+    "race_id", "race_date", "horse_name"
+}
+
 NUMERIC_COLUMNS = {
     "finish_position", "win_odds", "distance_m", "post_position",
     "age", "carried_weight", "horse_weight", "horse_weight_delta",
@@ -100,3 +104,49 @@ def load_jra_history_csv(path: str | Path) -> pd.DataFrame:
     if last_error:
         raise last_error
     raise RuntimeError("could not load CSV")
+
+
+def normalize_future_entries(frame: pd.DataFrame) -> pd.DataFrame:
+    normalized = {}
+    for target, aliases in COLUMN_ALIASES.items():
+        source = _find_column(frame, aliases)
+        if source is not None:
+            normalized[target] = frame[source]
+
+    out = pd.DataFrame(normalized).copy()
+    missing = REQUIRED_ENTRY_COLUMNS - set(out.columns)
+    if missing:
+        raise ValueError(
+            f"missing required entry columns: {sorted(missing)}"
+        )
+
+    out["race_id"] = out["race_id"].astype(str)
+    out["race_date"] = pd.to_datetime(
+        out["race_date"],
+        errors="raise",
+    )
+    for column in NUMERIC_COLUMNS:
+        if column in out.columns:
+            out[column] = pd.to_numeric(
+                out[column],
+                errors="coerce",
+            )
+    return out
+
+
+def load_future_entries_csv(path: str | Path) -> pd.DataFrame:
+    path = Path(path)
+    last_error = None
+    for encoding in ("utf-8-sig", "cp932", "utf-8"):
+        try:
+            raw = pd.read_csv(
+                path,
+                encoding=encoding,
+                low_memory=False,
+            )
+            return normalize_future_entries(raw)
+        except UnicodeDecodeError as exc:
+            last_error = exc
+    if last_error:
+        raise last_error
+    raise RuntimeError("could not load future entries CSV")
