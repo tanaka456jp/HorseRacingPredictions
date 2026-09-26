@@ -147,7 +147,7 @@ $forwardSummaryPath = Join-Path $forwardOutputDir "forward_paper_summary.json"
 if (-not (Test-UsableFile $forwardSummaryPath)) {
     throw "forward_paper_summary.json was not created."
 }
-$forwardSummary = Get-Content -LiteralPath $forwardSummaryPath -Raw | ConvertFrom-Json
+$forwardSummary = [System.IO.File]::ReadAllText($forwardSummaryPath, [System.Text.Encoding]::UTF8) | ConvertFrom-Json
 $evaluations = @($forwardSummary.paper_result.evaluations)
 $accepted = @($evaluations | Where-Object { $_.accepted -eq $true })
 
