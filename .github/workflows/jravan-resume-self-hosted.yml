@@ -1,0 +1,52 @@
+name: JRA-VAN Resume (Self-hosted)
+
+on:
+  workflow_dispatch:
+    inputs:
+      parsed_history_path:
+        description: "Optional absolute path to the existing parsed_history.csv on the runner PC"
+        required: false
+        type: string
+      base_history_path:
+        description: "Optional absolute path to the approved base history CSV; blank uses the FREE-FIRST Kaggle base"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: jravan-resume-self-hosted
+  cancel-in-progress: false
+
+jobs:
+  resume:
+    name: Resume current history on Windows runner
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout without deleting local ignored data
+        uses: actions/checkout@v4
+        with:
+          clean: false
+          persist-credentials: false
+
+      - name: Resume from existing parsed JRA-VAN history
+        shell: powershell
+        env:
+          INPUT_PARSED_HISTORY_PATH: ${{ inputs.parsed_history_path }}
+          INPUT_BASE_HISTORY_PATH: ${{ inputs.base_history_path }}
+        run: |
+          & .\scripts\run_jravan_resume_runner.ps1 `
+            -ParsedHistoryPath $env:INPUT_PARSED_HISTORY_PATH `
+            -BaseHistoryPath $env:INPUT_BASE_HISTORY_PATH
+
+      - name: Publish sanitized validation only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jravan-resume-validation
+          path: artifacts/jravan_runner_validation.json
+          if-no-files-found: warn
+          retention-days: 14
