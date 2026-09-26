@@ -8,7 +8,7 @@ $ErrorActionPreference = "Stop"
 
 Write-Host "=== HorseRacingPredictions JRA-VAN Trial ==="
 & $Python --version
-& $Python -c "import struct; print(f'Python bits={struct.calcsize("P")*8}')"
+& $Python -c 'import struct; print("Python bits=%d" % (struct.calcsize("P")*8))'
 
 Write-Host "[setup] Installing JRA-VAN trial dependencies"
 & $Python -m pip install -r requirements-jravan.txt
