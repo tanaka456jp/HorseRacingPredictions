@@ -13,10 +13,6 @@ from .current_history import (
 )
 from .data_sources import load_jra_history_csv
 from .jravan import export_race_raw
-from .jravan_doctor import (
-    run_jravan_doctor,
-    write_doctor_report,
-)
 from .jravan_parser import convert_raw_jsonl
 
 
@@ -124,21 +120,6 @@ def run_jravan_trial_pipeline(
     artifact_dir = Path(artifact_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     artifact_dir.mkdir(parents=True, exist_ok=True)
-
-    doctor = run_jravan_doctor(
-        from_time="00000000000000",
-        option=2,
-        max_records=1000,
-    )
-    write_doctor_report(
-        doctor,
-        artifact_dir / "doctor.json",
-    )
-    if not doctor.ready:
-        raise RuntimeError(
-            "JV-Link doctor did not reach ready state. "
-            "See artifacts/jravan_full/doctor.json."
-        )
 
     raw_path = output_dir / "race_raw.jsonl"
     export_race_raw(
