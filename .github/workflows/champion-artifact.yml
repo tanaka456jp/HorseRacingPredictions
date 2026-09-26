@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - "feature/model-artifact-inference"
+      - "feature/model-artifact-inference*"
     paths:
       - "research/champion_build_request.txt"
 
