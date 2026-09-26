@@ -2,3 +2,4 @@ JRA-VAN FREE-FIRST self-hosted Forward Paper request marker.
 Update this file on main to explicitly capture current-week entries/realtime odds
 from the local free-trial JV-Link runtime and run PaperBroker only when inputs
 are complete and still safely pre-race.
+request=2026-09-26T20:44:00+09:00
