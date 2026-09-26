@@ -12,13 +12,13 @@ def main() -> None:
     )
     parser.add_argument(
         "--from-time",
-        default="20210801000000",
+        default="00000000000000",
     )
     parser.add_argument(
         "--option",
         type=int,
         choices=(1, 2, 3, 4),
-        default=4,
+        default=2,
     )
     parser.add_argument(
         "--sid",
