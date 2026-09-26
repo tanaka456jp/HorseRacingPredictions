@@ -15,10 +15,12 @@ class FakeJvLink:
         records=None,
         init_code=0,
         open_result=(0, 3, 1, "20260926123456"),
+        status_values=None,
     ):
         self.records = list(records or [])
         self.init_code = init_code
         self.open_result = open_result
+        self.status_values = list(status_values or [])
         self.closed = 0
         self.open_args = None
 
@@ -30,7 +32,11 @@ class FakeJvLink:
         return 0
 
     def JVStatus(self):
-        return 0
+        if self.status_values:
+            if len(self.status_values) == 1:
+                return self.status_values[0]
+            return self.status_values.pop(0)
+        return int(self.open_result[2] or 0)
 
     def JVOpen(
         self,
@@ -86,6 +92,53 @@ def test_jvlink_open_uses_race_dataspec_and_tuple_result():
     assert fake.open_args[0] == "RACE"
     assert fake.open_args[1] == "20210801000000"
     assert fake.open_args[2] == 4
+
+
+
+
+def test_wait_for_downloads_follows_jvstatus_until_complete():
+    fake = FakeJvLink(
+        open_result=(0, 3, 3, "20260926123456"),
+        status_values=[0, 1, 3],
+    )
+    sleeps = []
+    client = JvLinkClient(
+        jvlink=fake,
+        sleep_fn=lambda seconds: sleeps.append(seconds),
+    )
+    client.initialize()
+    result = client.open_race(
+        from_time="20210801000000",
+        option=4,
+    )
+
+    status = client.wait_for_downloads(
+        result,
+        max_polls=10,
+        poll_seconds=0.1,
+    )
+
+    assert status == 3
+    assert sleeps == [0.1, 0.1]
+
+
+def test_wait_for_downloads_fails_closed_on_download_error():
+    fake = FakeJvLink(
+        open_result=(0, 3, 3, "20260926123456"),
+        status_values=[-502],
+    )
+    client = JvLinkClient(
+        jvlink=fake,
+        sleep_fn=lambda _: None,
+    )
+    client.initialize()
+    result = client.open_race(
+        from_time="20210801000000",
+        option=4,
+    )
+
+    with pytest.raises(JraVanApiError, match="download failure"):
+        client.wait_for_downloads(result)
 
 
 def test_jvlink_iter_records_handles_file_boundary_and_wait():
