@@ -12,6 +12,9 @@ def build_future_feature_frame(
     history: pd.DataFrame,
     entries: pd.DataFrame,
     required_feature_columns: tuple[str, ...] | list[str],
+    *,
+    max_history_gap_days: int = 14,
+    allow_stale_history: bool = False,
 ) -> pd.DataFrame:
     if history.empty:
         raise ValueError("historical frame must not be empty")
@@ -27,11 +30,25 @@ def build_future_feature_frame(
         entries["race_date"], errors="raise"
     )
 
+    if max_history_gap_days < 0:
+        raise ValueError("max_history_gap_days must be non-negative")
+
     history_end = history["race_date"].max().normalize()
     entry_start = entries["race_date"].min().normalize()
     if entry_start <= history_end:
         raise ValueError(
             "future entries must be strictly later than historical data"
+        )
+
+    history_gap_days = int((entry_start - history_end).days)
+    if (
+        history_gap_days > max_history_gap_days
+        and not allow_stale_history
+    ):
+        raise ValueError(
+            "historical data is stale for forward inference: "
+            f"gap={history_gap_days} days exceeds "
+            f"max_history_gap_days={max_history_gap_days}"
         )
 
     entries["_prediction_row"] = True
@@ -77,11 +94,16 @@ def predict_future_entries(
     champion: LoadedChampion,
     history: pd.DataFrame,
     entries: pd.DataFrame,
+    *,
+    max_history_gap_days: int = 14,
+    allow_stale_history: bool = False,
 ) -> pd.DataFrame:
     future = build_future_feature_frame(
         history,
         entries,
         champion.manifest.feature_columns,
+        max_history_gap_days=max_history_gap_days,
+        allow_stale_history=allow_stale_history,
     )
     probability = champion.model.predict_win_probability(
         future,
@@ -110,7 +132,12 @@ def predict_future_entries(
     ).transform(_race_certainty)
     output["model_version"] = champion.manifest.model_version
     output["experiment_id"] = champion.manifest.experiment_id
-    output["history_cutoff"] = champion.manifest.train_end
+    output["history_cutoff"] = str(
+        pd.to_datetime(history["race_date"], errors="raise")
+        .max()
+        .date()
+    )
+    output["model_train_end"] = champion.manifest.train_end
 
     sums = output.groupby("race_id")[
         "predicted_win_probability"
