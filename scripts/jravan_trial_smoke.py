@@ -56,8 +56,8 @@ def main() -> None:
     artifact_dir.mkdir(parents=True, exist_ok=True)
 
     doctor = run_jravan_doctor(
-        from_time=args.from_time,
-        option=args.option,
+        from_time="00000000000000",
+        option=2,
         max_records=args.doctor_records,
     )
     write_doctor_report(
