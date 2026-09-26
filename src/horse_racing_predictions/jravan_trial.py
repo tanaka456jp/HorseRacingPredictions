@@ -20,6 +20,52 @@ from .jravan_doctor import (
 from .jravan_parser import convert_raw_jsonl
 
 
+DATASET_HANDLE = "takamotoki/jra-horse-racing-dataset"
+RACE_RESULT_FILE = "19860105-20210731_race_result.csv"
+
+
+def resolve_approved_base_history(
+    base_path: str | Path | None = None,
+    *,
+    cache_dir: str | Path = "data/raw",
+) -> Path:
+    if base_path is not None:
+        path = Path(base_path)
+        if not path.exists():
+            raise FileNotFoundError(path)
+        return path
+
+    try:
+        import kagglehub
+    except ImportError as exc:
+        raise RuntimeError(
+            "Automatic base-history download requires kagglehub. "
+            "Install requirements-jravan.txt."
+        ) from exc
+
+    cache_dir = Path(cache_dir)
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    downloaded = kagglehub.dataset_download(
+        DATASET_HANDLE,
+        path=RACE_RESULT_FILE,
+        output_dir=str(cache_dir),
+    )
+    path = Path(downloaded)
+    if path.is_file():
+        return path
+
+    direct = path / RACE_RESULT_FILE
+    if direct.exists():
+        return direct
+
+    matches = list(path.rglob(RACE_RESULT_FILE))
+    if len(matches) != 1:
+        raise FileNotFoundError(
+            f"could not uniquely locate {RACE_RESULT_FILE}: {matches}"
+        )
+    return matches[0]
+
+
 @dataclass(frozen=True)
 class JraVanTrialPipelineSummary:
     status: str
@@ -67,12 +113,13 @@ def filter_after_base_history(
 
 def run_jravan_trial_pipeline(
     *,
-    base_path: str | Path,
+    base_path: str | Path | None = None,
     output_dir: str | Path = "data/jravan/full",
     artifact_dir: str | Path = "artifacts/jravan_full",
     from_time: str = "20210801000000",
     option: int = 4,
 ) -> JraVanTrialPipelineSummary:
+    base_path = resolve_approved_base_history(base_path)
     output_dir = Path(output_dir)
     artifact_dir = Path(artifact_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
