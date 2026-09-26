@@ -127,7 +127,7 @@ class JvLinkClient:
         *,
         jvlink=None,
         com_factory: Callable | None = None,
-        application_id: str = "HorseRacingPredictions/0.1.0",
+        application_id: str = "UNKNOWN",
         sleep_fn: Callable[[float], None] = time.sleep,
     ):
         self.application_id = application_id
