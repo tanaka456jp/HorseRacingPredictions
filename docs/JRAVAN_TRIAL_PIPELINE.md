@@ -17,8 +17,8 @@ should be used.
 
 The full flow is:
 
-1. JV-Link doctor
-2. bounded RA/SE smoke
+1. lightweight current-week JV-Link doctor
+2. bounded setup RA/SE smoke
 3. setup RA/SE raw acquisition
 4. official-spec RA/SE parsing
 5. discard race dates at/before the approved base cutoff
@@ -35,3 +35,8 @@ Output files remain under ignored data/ directories. Raw JV-Data is not
 committed or redistributed.
 
 The final current history can then be supplied to scripts/run_forward_paper.py.
+
+
+JVOpen may return before setup files finish downloading. The acquisition layer
+therefore polls JVStatus until the reported downloaded-file count reaches
+JVOpen download_count before it starts JVGets.
