@@ -69,6 +69,7 @@ function Write-SupportBundle {
     New-Item -ItemType Directory -Force -Path $bundleDir | Out-Null
 
     $candidates = @(
+        "artifacts\jravan_runtime.json",
         "artifacts\jravan_doctor.json",
         "artifacts\jravan_smoke",
         "artifacts\jravan_full",
@@ -131,7 +132,7 @@ try {
     }
 
     Write-Host "[3/5] Verifying Python and JV-Link COM"
-    & $venvPython (Join-Path $ProjectRoot "scripts\check_jravan_runtime.py")
+    & $venvPython (Join-Path $ProjectRoot "scripts\check_jravan_runtime.py") --output (Join-Path $ProjectRoot "artifacts\jravan_runtime.json")
     if ($LASTEXITCODE -ne 0) {
         throw "Python/JV-Link runtime check failed"
     }
