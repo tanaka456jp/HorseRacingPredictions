@@ -11,7 +11,7 @@ def test_jravan_bootstrap_is_location_independent_and_isolated():
     assert ".venv-jravan" in text
     assert 'pip install -e ".[research]"' in text
     assert "requirements-jravan.txt" in text
-    assert 'JVDTLab.JVLink' in text
+    assert "check_jravan_runtime.py" in text
 
 
 def test_jravan_bootstrap_packages_support_bundle():
