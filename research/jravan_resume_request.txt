@@ -1,0 +1,3 @@
+JRA-VAN self-hosted resume request marker.
+Update this file on main to explicitly trigger a local Resume validation.
+FREE-FIRST: this trigger must not start a paid-data acquisition.
