@@ -1,0 +1,60 @@
+name: Build Champion Artifact
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - "feature/model-artifact-inference"
+    paths:
+      - "research/champion_build_request.txt"
+
+concurrency:
+  group: champion-artifact-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev,research]"
+          pip install kagglehub
+
+      - name: Test native artifact roundtrip
+        run: |
+          pytest -q tests/test_model_artifact_inference.py
+
+      - name: Train frozen v7 Champion
+        run: |
+          python scripts/train_champion_artifact.py             --start 2017-01-01             --end 2021-07-31             --output-dir artifacts/champion_v7
+
+      - name: Validate saved artifact
+        run: |
+          python - <<'PY'
+          from horse_racing_predictions.model_artifact import load_champion_artifact
+          loaded = load_champion_artifact("artifacts/champion_v7")
+          print(loaded.manifest.model_version)
+          print(loaded.manifest.experiment_id)
+          print(len(loaded.manifest.feature_columns))
+          PY
+
+      - name: Publish Champion artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: champion-v7-catboost
+          path: artifacts/champion_v7/**
+          if-no-files-found: error
+          retention-days: 14
