@@ -67,6 +67,35 @@ NUMERIC_COLUMNS = {
     "last_3f", "corner_1", "corner_2", "corner_3", "corner_4",
 }
 
+CSV_ENCODINGS = (
+    "utf-8-sig",
+    "cp932",
+    "shift_jis",
+    "euc_jp",
+    "utf-8",
+)
+
+
+def read_csv_flexible(
+    path: str | Path,
+    *,
+    low_memory: bool = False,
+) -> pd.DataFrame:
+    path = Path(path)
+    errors: list[Exception] = []
+    for encoding in CSV_ENCODINGS:
+        try:
+            return pd.read_csv(
+                path,
+                encoding=encoding,
+                low_memory=low_memory,
+            )
+        except UnicodeDecodeError as exc:
+            errors.append(exc)
+    if errors:
+        raise errors[-1]
+    raise RuntimeError(f"could not load CSV: {path}")
+
 def _find_column(frame: pd.DataFrame, aliases: list[str]) -> str | None:
     for name in aliases:
         if name in frame.columns:
@@ -94,16 +123,24 @@ def normalize_jra_history(frame: pd.DataFrame) -> pd.DataFrame:
 
 def load_jra_history_csv(path: str | Path) -> pd.DataFrame:
     path = Path(path)
-    last_error = None
-    for encoding in ("utf-8-sig", "cp932", "utf-8"):
+    errors: list[Exception] = []
+    for encoding in CSV_ENCODINGS:
         try:
-            raw = pd.read_csv(path, encoding=encoding, low_memory=False)
+            raw = pd.read_csv(
+                path,
+                encoding=encoding,
+                low_memory=False,
+            )
             return normalize_jra_history(raw)
-        except UnicodeDecodeError as exc:
-            last_error = exc
-    if last_error:
-        raise last_error
-    raise RuntimeError("could not load CSV")
+        except (UnicodeDecodeError, ValueError) as exc:
+            errors.append(exc)
+    if errors:
+        raise RuntimeError(
+            "could not decode/normalize JRA history CSV "
+            f"{path}; tried={CSV_ENCODINGS}; "
+            f"last_error={errors[-1]}"
+        ) from errors[-1]
+    raise RuntimeError(f"could not load CSV: {path}")
 
 
 def normalize_future_entries(frame: pd.DataFrame) -> pd.DataFrame:
@@ -136,8 +173,8 @@ def normalize_future_entries(frame: pd.DataFrame) -> pd.DataFrame:
 
 def load_future_entries_csv(path: str | Path) -> pd.DataFrame:
     path = Path(path)
-    last_error = None
-    for encoding in ("utf-8-sig", "cp932", "utf-8"):
+    errors: list[Exception] = []
+    for encoding in CSV_ENCODINGS:
         try:
             raw = pd.read_csv(
                 path,
@@ -145,8 +182,12 @@ def load_future_entries_csv(path: str | Path) -> pd.DataFrame:
                 low_memory=False,
             )
             return normalize_future_entries(raw)
-        except UnicodeDecodeError as exc:
-            last_error = exc
-    if last_error:
-        raise last_error
-    raise RuntimeError("could not load future entries CSV")
+        except (UnicodeDecodeError, ValueError) as exc:
+            errors.append(exc)
+    if errors:
+        raise RuntimeError(
+            "could not decode/normalize future entries CSV "
+            f"{path}; tried={CSV_ENCODINGS}; "
+            f"last_error={errors[-1]}"
+        ) from errors[-1]
+    raise RuntimeError(f"could not load future entries CSV: {path}")
