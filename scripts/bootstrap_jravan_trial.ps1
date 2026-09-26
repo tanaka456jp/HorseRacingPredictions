@@ -63,9 +63,29 @@ function Invoke-BasePython {
     }
 }
 
+function Reset-JraVanArtifacts {
+    $targets = @(
+        "artifacts\jravan_runtime.json",
+        "artifacts\jravan_smoke",
+        "artifacts\jravan_full",
+        "artifacts\jravan_support",
+        "artifacts\jravan_support_bundle.zip"
+    )
+
+    foreach ($relative in $targets) {
+        $target = Join-Path $ProjectRoot $relative
+        if (Test-Path $target) {
+            Remove-Item $target -Recurse -Force
+        }
+    }
+}
+
 function Write-SupportBundle {
     $bundleDir = Join-Path $ProjectRoot "artifacts\jravan_support"
     $bundleZip = Join-Path $ProjectRoot "artifacts\jravan_support_bundle.zip"
+    if (Test-Path $bundleDir) {
+        Remove-Item $bundleDir -Recurse -Force
+    }
     New-Item -ItemType Directory -Force -Path $bundleDir | Out-Null
 
     $candidates = @(
@@ -131,13 +151,15 @@ try {
         throw "JRA-VAN dependency installation failed"
     }
 
+    Reset-JraVanArtifacts
+
     Write-Host "[3/5] Verifying Python and JV-Link COM"
     & $venvPython (Join-Path $ProjectRoot "scripts\check_jravan_runtime.py") --output (Join-Path $ProjectRoot "artifacts\jravan_runtime.json")
     if ($LASTEXITCODE -ne 0) {
         throw "Python/JV-Link runtime check failed"
     }
 
-    Write-Host "[4/5] Running Doctor + RA/SE smoke"
+    Write-Host "[4/5] Running RA/SE smoke / optional full acquisition"
     $trialArgs = @(
         "-ExecutionPolicy", "Bypass",
         "-File", (Join-Path $ProjectRoot "scripts\run_jravan_trial.ps1"),
