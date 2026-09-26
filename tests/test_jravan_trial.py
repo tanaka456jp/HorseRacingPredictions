@@ -9,6 +9,7 @@ from horse_racing_predictions.jravan_trial import (
     filter_after_base_history,
     recent_normal_from_time,
     resolve_approved_base_history,
+    resume_current_history_from_parsed,
 )
 
 
@@ -181,3 +182,66 @@ def test_trial_acquisition_does_not_hide_non_auth_errors(tmp_path):
             setup_from_time="20210801000000",
             exporter=exporter,
         )
+
+
+def test_resume_current_history_reuses_existing_parsed_file(tmp_path):
+    base_path = tmp_path / "base.csv"
+    pd.DataFrame([
+        {
+            "race_id": "B1",
+            "race_date": "2021-07-31",
+            "finish_position": 1,
+            "horse_name": "BASE_A",
+            "win_odds": 2.0,
+        },
+        {
+            "race_id": "B1",
+            "race_date": "2021-07-31",
+            "finish_position": 2,
+            "horse_name": "BASE_B",
+            "win_odds": 4.0,
+        },
+    ]).to_csv(
+        base_path,
+        index=False,
+        encoding="utf-8-sig",
+    )
+
+    output_dir = tmp_path / "full"
+    output_dir.mkdir()
+    parsed_path = output_dir / "parsed_history.csv"
+    pd.DataFrame([
+        {
+            "race_id": "N1",
+            "race_date": "2026-09-20",
+            "finish_position": 1,
+            "post_position": 1,
+            "horse_name": "NEW_A",
+            "win_odds": 3.0,
+        },
+        {
+            "race_id": "N1",
+            "race_date": "2026-09-20",
+            "finish_position": 2,
+            "post_position": 2,
+            "horse_name": "NEW_B",
+            "win_odds": 5.0,
+        },
+    ]).to_csv(
+        parsed_path,
+        index=False,
+        encoding="utf-8-sig",
+    )
+
+    artifact_dir = tmp_path / "artifacts"
+    summary = resume_current_history_from_parsed(
+        base_path=base_path,
+        output_dir=output_dir,
+        artifact_dir=artifact_dir,
+    )
+
+    assert summary.acquisition_mode == "resume_existing_parsed"
+    assert summary.supplemental_rows_after_base == 2
+    assert summary.current_history_end == "2026-09-20"
+    assert (output_dir / "current_history.csv").exists()
+    assert (artifact_dir / "pipeline_summary.json").exists()
