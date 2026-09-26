@@ -245,3 +245,68 @@ def test_close_releases_com_before_couninitialize():
     client.close()
 
     assert events == ["release", "uninit"]
+
+
+def test_wait_for_downloads_reports_progress_even_when_status_stalls():
+    fake = FakeJvLink(
+        open_result=(0, 3, 3, "20260926123456"),
+        status_values=[0, 0, 0, 3],
+    )
+    messages = []
+    client = JvLinkClient(
+        jvlink=fake,
+        sleep_fn=lambda _: None,
+    )
+    client.initialize()
+    result = client.open_race(
+        from_time="20250926000000",
+        option=1,
+    )
+
+    status = client.wait_for_downloads(
+        result,
+        max_polls=10,
+        poll_seconds=0.1,
+        progress_callback=messages.append,
+        progress_every_polls=2,
+    )
+
+    assert status == 3
+    assert any(
+        "download_progress=0/3" in message
+        for message in messages
+    )
+    assert any(
+        "download_progress=3/3" in message
+        for message in messages
+    )
+
+
+def test_raw_export_reports_open_and_record_progress(tmp_path):
+    fake = FakeJvLink(
+        records=[
+            ("RAaaaa", "a.jvd"),
+            ("SEbbbb", "b.jvd"),
+        ],
+        open_result=(0, 2, 0, "20260926123456"),
+    )
+    client = JvLinkClient(jvlink=fake)
+    messages = []
+
+    export_race_raw(
+        output_path=tmp_path / "raw.jsonl",
+        summary_path=tmp_path / "summary.json",
+        from_time="20250926000000",
+        option=1,
+        record_types={"RA", "SE"},
+        client=client,
+        progress_callback=messages.append,
+        record_progress_every=1,
+    )
+
+    assert any("jvopen_ok" in message for message in messages)
+    assert "record_progress=1" in messages
+    assert any(
+        message == "record_progress=2 complete"
+        for message in messages
+    )
