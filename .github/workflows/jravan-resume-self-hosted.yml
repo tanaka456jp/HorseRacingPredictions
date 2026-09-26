@@ -22,7 +22,7 @@ permissions:
 
 concurrency:
   group: jravan-resume-self-hosted
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   resume:
