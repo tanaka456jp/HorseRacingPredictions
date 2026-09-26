@@ -186,10 +186,20 @@ def load_jra_history_csv(path: str | Path) -> pd.DataFrame:
         except (UnicodeDecodeError, ValueError) as exc:
             errors.append(exc)
     if errors:
+        try:
+            prefix_hex = path.read_bytes()[:16].hex()
+        except OSError:
+            prefix_hex = "unavailable"
         raise RuntimeError(
             "could not decode/normalize JRA history CSV "
             f"{path}; tried={CSV_ENCODINGS}; "
-            f"last_error={errors[-1]}"
+            f"is_zip={zipfile.is_zipfile(path)}; "
+            f"prefix_hex={prefix_hex}; "
+            "errors="
+            + " | ".join(
+                f"{type(error).__name__}: {error}"
+                for error in errors
+            )
         ) from errors[-1]
     raise RuntimeError(f"could not load CSV: {path}")
 
