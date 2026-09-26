@@ -11,6 +11,11 @@ on:
         description: "Optional absolute path to the approved base history CSV; blank uses the FREE-FIRST Kaggle base"
         required: false
         type: string
+  push:
+    branches:
+      - main
+    paths:
+      - "research/jravan_resume_request.txt"
 
 permissions:
   contents: read
