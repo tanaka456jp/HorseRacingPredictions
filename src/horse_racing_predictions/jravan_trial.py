@@ -4,6 +4,7 @@ from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
+from typing import Callable
 
 import pandas as pd
 
@@ -108,14 +109,21 @@ def acquire_trial_race_raw(
     recent_days: int = 365,
     now: datetime | None = None,
     exporter=export_race_raw,
+    progress_callback: Callable[[str], None] | None = None,
 ):
     try:
+        if progress_callback is not None:
+            progress_callback(
+                "acquisition_attempt=setup_full "
+                f"from_time={setup_from_time} option={setup_option}"
+            )
         summary = exporter(
             output_path=output_path,
             summary_path=summary_path,
             from_time=setup_from_time,
             option=setup_option,
             record_types={"RA", "SE"},
+            progress_callback=progress_callback,
         )
         return (
             summary,
@@ -133,12 +141,19 @@ def acquire_trial_race_raw(
             now=now,
             days=recent_days,
         )
+        if progress_callback is not None:
+            progress_callback(
+                "setup_full_blocked=-301; "
+                "switching_to=recent_normal_fallback "
+                f"from_time={fallback_from} option=1"
+            )
         summary = exporter(
             output_path=output_path,
             summary_path=summary_path,
             from_time=fallback_from,
             option=1,
             record_types={"RA", "SE"},
+            progress_callback=progress_callback,
         )
         return (
             summary,
@@ -209,6 +224,10 @@ def run_jravan_trial_pipeline(
         summary_path=artifact_dir / "raw_summary.json",
         setup_from_time=from_time,
         setup_option=option,
+        progress_callback=lambda message: print(
+            message,
+            flush=True,
+        ),
     )
 
     parsed_path = output_dir / "parsed_history.csv"
