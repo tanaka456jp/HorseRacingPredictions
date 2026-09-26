@@ -5,6 +5,10 @@ Run this before a large free-trial acquisition.
     pip install -r requirements-jravan.txt
     python scripts/jravan_doctor.py
 
+The default doctor is intentionally lightweight: it opens RACE with option 2
+and fromtime 00000000000000, which requests current-week data instead of
+starting the historical setup download.
+
 The doctor checks:
 
 - Python architecture/version
@@ -48,3 +52,8 @@ A bounded doctor sample that contains valid RACE records but happens to contain
 no RA/SE is treated as a working JV-Link connection, not as a hard failure.
 The larger trial smoke is responsible for proving that RA/SE can actually be
 captured and parsed.
+
+
+For setup/full acquisition, the exporter waits for JVStatus to reach the
+JVOpen download_count before JVGets begins. JVGets -3 handling remains as a
+fallback, but normal operation follows the official download-completion flow.
