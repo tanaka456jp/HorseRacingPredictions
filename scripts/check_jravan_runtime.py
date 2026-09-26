@@ -1,29 +1,43 @@
-import struct
-import sys
+import argparse
+
+from horse_racing_predictions.jravan_runtime import (
+    inspect_jravan_runtime,
+    write_runtime_report,
+)
 
 
 def main() -> None:
-    print(
-        f"Python={sys.version.split()[0]} "
-        f"bits={struct.calcsize('P') * 8}"
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--output",
+        default="artifacts/jravan_runtime.json",
     )
+    args = parser.parse_args()
 
-    try:
-        import win32com.client.dynamic
-    except ImportError as exc:
-        raise SystemExit(
-            "pywin32 is not installed in the JRA-VAN environment"
-        ) from exc
+    report = inspect_jravan_runtime()
+    write_runtime_report(report, args.output)
 
-    try:
-        win32com.client.dynamic.Dispatch("JVDTLab.JVLink")
-    except Exception as exc:
-        raise SystemExit(
+    print(
+        f"Python={report.python_version} "
+        f"bits={report.python_bits}"
+    )
+    print(
+        "JV-Link registry: "
+        f"64bit={report.registered_64bit} "
+        f"32bit={report.registered_32bit}"
+    )
+    if report.com_created:
+        print("JV-Link COM=OK")
+    else:
+        print(
             "JV-Link COM is not registered or cannot be created: "
-            f"{type(exc).__name__}: {exc}"
-        ) from exc
+            f"{report.error}"
+        )
+    for message in report.guidance:
+        print(f"GUIDANCE: {message}")
 
-    print("JV-Link COM=OK")
+    if report.status != "ready":
+        raise SystemExit(2)
 
 
 if __name__ == "__main__":
