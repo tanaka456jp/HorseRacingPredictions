@@ -23,3 +23,19 @@ It never invokes LiveBroker.
 Current limitation: the approved free historical source ends in 2021, so a
 current forward run still requires an approved or user-supplied up-to-date
 history file. The code does not silently scrape an unapproved source.
+
+
+## Local JRA-VAN free-trial runner
+
+When the one-month local JRA-VAN free trial is active, a Windows self-hosted
+runner can prepare the three Forward Paper inputs without purchasing a data
+contract:
+
+1. reuse `data/jravan/full/current_history.csv`,
+2. capture current-week RA/SE locally and derive future entries,
+3. capture realtime `0B31` win odds for races that are still safely pre-race,
+4. run the frozen Champion and PaperBroker only when every active entry has a
+   valid timestamped odds snapshot.
+
+Use `.github/workflows/jravan-forward-paper-self-hosted.yml`. The workflow
+fails/defer-closes when inputs are incomplete and uploads only sanitized counts.
