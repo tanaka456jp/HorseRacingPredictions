@@ -207,14 +207,34 @@ class JvLinkClient:
         *,
         max_polls: int = 7200,
         poll_seconds: float = 0.5,
+        progress_callback: Callable[[str], None] | None = None,
+        progress_every_polls: int = 20,
     ) -> int | None:
         if open_result.download_count <= 0:
             return 0
         if max_polls < 1:
             raise ValueError("max_polls must be positive")
+        if progress_every_polls < 1:
+            raise ValueError("progress_every_polls must be positive")
 
-        for _ in range(max_polls):
+        last_status = None
+        expected = open_result.download_count
+
+        for poll_index in range(max_polls):
             status = self.status()
+            if (
+                progress_callback is not None
+                and (
+                    status != last_status
+                    or poll_index % progress_every_polls == 0
+                )
+            ):
+                shown = 0 if status in (None, -203) else max(status, 0)
+                progress_callback(
+                    f"download_progress={shown}/{expected} "
+                    f"poll={poll_index + 1}"
+                )
+            last_status = status
             if status is None:
                 return None
             if status >= open_result.download_count:
@@ -333,9 +353,13 @@ def export_race_raw(
     client: JvLinkClient | None = None,
     download_wait_polls: int = 7200,
     download_poll_seconds: float = 0.5,
+    progress_callback: Callable[[str], None] | None = None,
+    record_progress_every: int = 5000,
 ) -> JvExportSummary:
     if max_records is not None and max_records < 1:
         raise ValueError("max_records must be positive")
+    if record_progress_every < 1:
+        raise ValueError("record_progress_every must be positive")
 
     output_path = Path(output_path)
     summary_path = Path(summary_path)
@@ -355,10 +379,18 @@ def export_race_raw(
             from_time=from_time,
             option=option,
         )
+        if progress_callback is not None:
+            progress_callback(
+                "jvopen_ok "
+                f"from_time={from_time} option={option} "
+                f"read_count={open_result.read_count} "
+                f"download_count={open_result.download_count}"
+            )
         client.wait_for_downloads(
             open_result,
             max_polls=download_wait_polls,
             poll_seconds=download_poll_seconds,
+            progress_callback=progress_callback,
         )
 
         with output_path.open(
@@ -384,6 +416,14 @@ def export_race_raw(
                 written += 1
 
                 if (
+                    progress_callback is not None
+                    and written % record_progress_every == 0
+                ):
+                    progress_callback(
+                        f"record_progress={written}"
+                    )
+
+                if (
                     max_records is not None
                     and written >= max_records
                 ):
@@ -393,6 +433,11 @@ def export_race_raw(
             client.close()
         elif own_client:
             client.close()
+
+    if progress_callback is not None:
+        progress_callback(
+            f"record_progress={written} complete"
+        )
 
     digest = hashlib.sha256(
         output_path.read_bytes()
