@@ -61,7 +61,7 @@ $inputSummaryPath = Join-Path $ProjectRoot "artifacts\jravan_forward\trial_forwa
 if (-not (Test-UsableFile $inputSummaryPath)) {
     throw "trial_forward_input_summary.json was not created."
 }
-$inputSummary = Get-Content -LiteralPath $inputSummaryPath -Raw | ConvertFrom-Json
+$inputSummary = Get-Content -LiteralPath $inputSummaryPath -Raw -Encoding UTF8 | ConvertFrom-Json
 $commit = (& git rev-parse HEAD).Trim()
 
 $baseValidation = @{
@@ -147,7 +147,7 @@ $forwardSummaryPath = Join-Path $forwardOutputDir "forward_paper_summary.json"
 if (-not (Test-UsableFile $forwardSummaryPath)) {
     throw "forward_paper_summary.json was not created."
 }
-$forwardSummary = Get-Content -LiteralPath $forwardSummaryPath -Raw | ConvertFrom-Json
+$forwardSummary = Get-Content -LiteralPath $forwardSummaryPath -Raw -Encoding UTF8 | ConvertFrom-Json
 $evaluations = @($forwardSummary.paper_result.evaluations)
 $accepted = @($evaluations | Where-Object { $_.accepted -eq $true })
 
