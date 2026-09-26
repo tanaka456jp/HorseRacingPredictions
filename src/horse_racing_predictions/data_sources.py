@@ -1,5 +1,7 @@
 from dataclasses import dataclass
 from pathlib import Path
+import zipfile
+
 import pandas as pd
 
 @dataclass(frozen=True)
@@ -76,6 +78,55 @@ CSV_ENCODINGS = (
 )
 
 
+
+def _read_csv_candidate(
+    path: Path,
+    *,
+    encoding: str,
+    low_memory: bool,
+) -> pd.DataFrame:
+    if not zipfile.is_zipfile(path):
+        return pd.read_csv(
+            path,
+            encoding=encoding,
+            low_memory=low_memory,
+        )
+
+    with zipfile.ZipFile(path) as archive:
+        members = [
+            name
+            for name in archive.namelist()
+            if not name.endswith("/")
+        ]
+        exact = [
+            name
+            for name in members
+            if Path(name).name == path.name
+        ]
+        csv_members = [
+            name
+            for name in members
+            if name.lower().endswith(".csv")
+        ]
+
+        if len(exact) == 1:
+            member = exact[0]
+        elif len(csv_members) == 1:
+            member = csv_members[0]
+        else:
+            raise ValueError(
+                "ZIP-wrapped CSV could not be resolved uniquely: "
+                f"path={path}, members={members[:20]}"
+            )
+
+        with archive.open(member) as handle:
+            return pd.read_csv(
+                handle,
+                encoding=encoding,
+                low_memory=low_memory,
+            )
+
+
 def read_csv_flexible(
     path: str | Path,
     *,
@@ -85,7 +136,7 @@ def read_csv_flexible(
     errors: list[Exception] = []
     for encoding in CSV_ENCODINGS:
         try:
-            return pd.read_csv(
+            return _read_csv_candidate(
                 path,
                 encoding=encoding,
                 low_memory=low_memory,
@@ -126,7 +177,7 @@ def load_jra_history_csv(path: str | Path) -> pd.DataFrame:
     errors: list[Exception] = []
     for encoding in CSV_ENCODINGS:
         try:
-            raw = pd.read_csv(
+            raw = _read_csv_candidate(
                 path,
                 encoding=encoding,
                 low_memory=False,
