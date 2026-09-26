@@ -126,8 +126,8 @@ def run_jravan_trial_pipeline(
     artifact_dir.mkdir(parents=True, exist_ok=True)
 
     doctor = run_jravan_doctor(
-        from_time=from_time,
-        option=option,
+        from_time="00000000000000",
+        option=2,
         max_records=1000,
     )
     write_doctor_report(
