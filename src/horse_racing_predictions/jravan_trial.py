@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
 
@@ -12,7 +12,7 @@ from .current_history import (
     prepare_current_history,
 )
 from .data_sources import load_jra_history_csv
-from .jravan import export_race_raw
+from .jravan import JraVanApiError, export_race_raw
 from .jravan_parser import convert_raw_jsonl
 
 
@@ -65,6 +65,12 @@ def resolve_approved_base_history(
 @dataclass(frozen=True)
 class JraVanTrialPipelineSummary:
     status: str
+    acquisition_mode: str
+    requested_from_time: str
+    effective_from_time: str
+    effective_option: int
+    fallback_reason: str | None
+    history_gap_days: int | None
     base_end: str
     parsed_rows: int
     parsed_races: int
@@ -75,6 +81,76 @@ class JraVanTrialPipelineSummary:
     current_history_end: str | None
     output_dir: str
     artifact_dir: str
+
+
+
+
+def recent_normal_from_time(
+    *,
+    now: datetime | None = None,
+    days: int = 365,
+) -> str:
+    if days < 1:
+        raise ValueError("days must be positive")
+    now = now or datetime.now(timezone.utc)
+    if now.tzinfo is None or now.utcoffset() is None:
+        raise ValueError("now must be timezone-aware")
+    start = (now - timedelta(days=days)).astimezone(timezone.utc)
+    return start.strftime("%Y%m%d000000")
+
+
+def acquire_trial_race_raw(
+    *,
+    output_path: str | Path,
+    summary_path: str | Path,
+    setup_from_time: str,
+    setup_option: int = 4,
+    recent_days: int = 365,
+    now: datetime | None = None,
+    exporter=export_race_raw,
+):
+    try:
+        summary = exporter(
+            output_path=output_path,
+            summary_path=summary_path,
+            from_time=setup_from_time,
+            option=setup_option,
+            record_types={"RA", "SE"},
+        )
+        return (
+            summary,
+            "setup_full",
+            setup_from_time,
+            setup_option,
+            None,
+        )
+    except JraVanApiError as exc:
+        message = str(exc)
+        if "return code -301" not in message:
+            raise
+
+        fallback_from = recent_normal_from_time(
+            now=now,
+            days=recent_days,
+        )
+        summary = exporter(
+            output_path=output_path,
+            summary_path=summary_path,
+            from_time=fallback_from,
+            option=1,
+            record_types={"RA", "SE"},
+        )
+        return (
+            summary,
+            "recent_normal_fallback",
+            fallback_from,
+            1,
+            (
+                "setup JVOpen returned -301 authentication error; "
+                "fell back to normal data (option=1) for the recent "
+                f"{recent_days}-day window"
+            ),
+        )
 
 
 def filter_after_base_history(
@@ -122,12 +198,17 @@ def run_jravan_trial_pipeline(
     artifact_dir.mkdir(parents=True, exist_ok=True)
 
     raw_path = output_dir / "race_raw.jsonl"
-    export_race_raw(
+    (
+        _raw_summary,
+        acquisition_mode,
+        effective_from_time,
+        effective_option,
+        fallback_reason,
+    ) = acquire_trial_race_raw(
         output_path=raw_path,
         summary_path=artifact_dir / "raw_summary.json",
-        from_time=from_time,
-        option=option,
-        record_types={"RA", "SE"},
+        setup_from_time=from_time,
+        setup_option=option,
     )
 
     parsed_path = output_dir / "parsed_history.csv"
@@ -165,10 +246,18 @@ def run_jravan_trial_pipeline(
     )
 
     manifest = HistorySourceManifest.create(
-        source_name="JRA-VAN Data Lab free trial",
+        source_name=(
+            "JRA-VAN Data Lab free trial"
+            if acquisition_mode == "setup_full"
+            else "JRA-VAN Data Lab free trial recent normal data"
+        ),
         source_kind="licensed_provider",
         source_reference=(
-            f"JV-Link local trial export from_time={from_time} option={option}"
+            "JV-Link local trial export "
+            f"requested_from_time={from_time} requested_option={option} "
+            f"effective_from_time={effective_from_time} "
+            f"effective_option={effective_option} "
+            f"mode={acquisition_mode}"
         ),
         rights_note=(
             "Acquired locally through official JRA-VAN Data Lab/JV-Link. "
@@ -215,8 +304,25 @@ def run_jravan_trial_pipeline(
         errors="raise",
     ).max()
 
+    gap_days = int(
+        (
+            pd.to_datetime(supplement_start).normalize()
+            - base_end.normalize()
+        ).days
+    )
+
     summary = JraVanTrialPipelineSummary(
-        status="ready",
+        status=(
+            "ready"
+            if acquisition_mode == "setup_full"
+            else "ready_recent_history_gap"
+        ),
+        acquisition_mode=acquisition_mode,
+        requested_from_time=from_time,
+        effective_from_time=effective_from_time,
+        effective_option=effective_option,
+        fallback_reason=fallback_reason,
+        history_gap_days=gap_days,
         base_end=str(base_end.date()),
         parsed_rows=int(parse_report.output_rows),
         parsed_races=int(parse_report.output_races),
