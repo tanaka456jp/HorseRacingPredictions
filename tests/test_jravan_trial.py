@@ -7,6 +7,7 @@ from horse_racing_predictions.jravan import JraVanApiError
 from horse_racing_predictions.jravan_trial import (
     acquire_trial_race_raw,
     filter_after_base_history,
+    filter_single_winner_races,
     recent_normal_from_time,
     resolve_approved_base_history,
     resume_current_history_from_parsed,
@@ -245,3 +246,62 @@ def test_resume_current_history_reuses_existing_parsed_file(tmp_path):
     assert summary.current_history_end == "2026-09-20"
     assert (output_dir / "current_history.csv").exists()
     assert (artifact_dir / "pipeline_summary.json").exists()
+
+
+def test_filter_single_winner_races_quarantines_zero_and_multiple_winner_races():
+    frame = pd.DataFrame([
+        {
+            "race_id": "OK",
+            "race_date": "2026-09-20",
+            "finish_position": 1,
+            "horse_name": "OK_A",
+            "win_odds": 2.5,
+        },
+        {
+            "race_id": "OK",
+            "race_date": "2026-09-20",
+            "finish_position": 2,
+            "horse_name": "OK_B",
+            "win_odds": 4.0,
+        },
+        {
+            "race_id": "ZERO",
+            "race_date": "2026-09-21",
+            "finish_position": 2,
+            "horse_name": "ZERO_A",
+            "win_odds": 3.0,
+        },
+        {
+            "race_id": "ZERO",
+            "race_date": "2026-09-21",
+            "finish_position": 3,
+            "horse_name": "ZERO_B",
+            "win_odds": 5.0,
+        },
+        {
+            "race_id": "MULTI",
+            "race_date": "2026-09-22",
+            "finish_position": 1,
+            "horse_name": "MULTI_A",
+            "win_odds": 6.0,
+        },
+        {
+            "race_id": "MULTI",
+            "race_date": "2026-09-22",
+            "finish_position": 1,
+            "horse_name": "MULTI_B",
+            "win_odds": 7.0,
+        },
+    ])
+
+    filtered, report = filter_single_winner_races(frame)
+
+    assert set(filtered["race_id"]) == {"OK"}
+    assert report.total_races == 3
+    assert report.kept_races == 1
+    assert report.zero_winner_races == 1
+    assert report.multiple_winner_races == 1
+    assert report.excluded_races == 2
+    assert report.excluded_rows == 4
+    assert report.zero_winner_race_ids == ("ZERO",)
+    assert report.multiple_winner_race_ids == ("MULTI",)
