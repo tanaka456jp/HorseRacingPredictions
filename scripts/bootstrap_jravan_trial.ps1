@@ -1,5 +1,6 @@
 param(
     [switch]$Full,
+    [switch]$Resume,
     [string]$BaseHistory = "",
     [string]$Python = ""
 )
@@ -120,6 +121,10 @@ function Write-SupportBundle {
 Write-Host "=== HorseRacingPredictions JRA-VAN Bootstrap ==="
 Write-Host "Project: $ProjectRoot"
 
+if ($Full -and $Resume) {
+    throw "-Full and -Resume cannot be used together."
+}
+
 $exitCode = 0
 try {
     $pythonSpec = Find-Python -Requested $Python
@@ -152,37 +157,58 @@ try {
 
     Reset-JraVanArtifacts
 
-    Write-Host "[3/5] Verifying Python and JV-Link COM"
-    & $venvPython (Join-Path $ProjectRoot "scripts\check_jravan_runtime.py") --output (Join-Path $ProjectRoot "artifacts\jravan_runtime.json")
-    if ($LASTEXITCODE -ne 0) {
-        throw "Python/JV-Link runtime check failed"
-    }
+    if ($Resume) {
+        Write-Host "[3/5] Resume preflight: existing parsed history"
+        $parsedPath = Join-Path $ProjectRoot "data\jravan\full\parsed_history.csv"
+        if (-not (Test-Path $parsedPath)) {
+            throw "Resume requires data\jravan\full\parsed_history.csv"
+        }
 
-    Write-Host "[4/5] Running RA/SE smoke / optional full acquisition"
-    $trialArgs = @(
-        "-ExecutionPolicy", "Bypass",
-        "-File", (Join-Path $ProjectRoot "scripts\run_jravan_trial.ps1"),
-        "-Python", $venvPython
-    )
-    if ($Full) {
-        $trialArgs += "-Full"
+        Write-Host "[4/5] Resuming Current History Intake without JV-Link reacquisition"
+        $resumeArgs = @(
+            (Join-Path $ProjectRoot "scripts\jravan_trial_resume.py")
+        )
+        if (-not [string]::IsNullOrWhiteSpace($BaseHistory)) {
+            $resumeArgs += @("--base", $BaseHistory)
+        }
+        & $venvPython @resumeArgs
+        if ($LASTEXITCODE -ne 0) {
+            throw "JRA-VAN resume workflow failed"
+        }
     }
-    if (-not [string]::IsNullOrWhiteSpace($BaseHistory)) {
-        $trialArgs += @("-BaseHistory", $BaseHistory)
-    }
+    else {
+        Write-Host "[3/5] Verifying Python and JV-Link COM"
+        & $venvPython (Join-Path $ProjectRoot "scripts\check_jravan_runtime.py") --output (Join-Path $ProjectRoot "artifacts\jravan_runtime.json")
+        if ($LASTEXITCODE -ne 0) {
+            throw "Python/JV-Link runtime check failed"
+        }
 
-    & powershell.exe @trialArgs
-    if ($LASTEXITCODE -ne 0) {
-        throw "JRA-VAN trial workflow failed"
+        Write-Host "[4/5] Running RA/SE smoke / optional full acquisition"
+        $trialArgs = @(
+            "-ExecutionPolicy", "Bypass",
+            "-File", (Join-Path $ProjectRoot "scripts\run_jravan_trial.ps1"),
+            "-Python", $venvPython
+        )
+        if ($Full) {
+            $trialArgs += "-Full"
+        }
+        if (-not [string]::IsNullOrWhiteSpace($BaseHistory)) {
+            $trialArgs += @("-BaseHistory", $BaseHistory)
+        }
+
+        & powershell.exe @trialArgs
+        if ($LASTEXITCODE -ne 0) {
+            throw "JRA-VAN trial workflow failed"
+        }
     }
 
     Write-Host "[5/5] Packaging audit/support report"
     Write-SupportBundle
 
-    if ($Full) {
+    if ($Full -or $Resume) {
         $historyPath = Join-Path $ProjectRoot "data\jravan\full\current_history.csv"
         if (-not (Test-Path $historyPath)) {
-            throw "Full run ended without current_history.csv"
+            throw "Run ended without current_history.csv"
         }
         Write-Host "Current history: $historyPath"
     }
