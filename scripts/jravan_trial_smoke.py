@@ -5,10 +5,6 @@ from dataclasses import asdict
 from pathlib import Path
 
 from horse_racing_predictions.jravan import export_race_raw
-from horse_racing_predictions.jravan_doctor import (
-    run_jravan_doctor,
-    write_doctor_report,
-)
 from horse_racing_predictions.jravan_parser import (
     convert_raw_jsonl,
 )
@@ -33,24 +29,19 @@ def _write_smoke_error(artifact_dir: Path, exc: BaseException) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(
         description=(
-            "Run JV-Link doctor, capture a bounded RA/SE sample, "
-            "and parse it to canonical history."
+            "Capture one bounded current-week RA/SE sample and "
+            "parse it to canonical history."
         )
     )
     parser.add_argument(
         "--from-time",
-        default="20210801000000",
+        default="00000000000000",
     )
     parser.add_argument(
         "--option",
         type=int,
         choices=(1, 2, 3, 4),
-        default=4,
-    )
-    parser.add_argument(
-        "--doctor-records",
-        type=int,
-        default=1000,
+        default=2,
     )
     parser.add_argument(
         "--sample-records",
@@ -73,20 +64,6 @@ def main() -> None:
     artifact_dir.mkdir(parents=True, exist_ok=True)
 
     try:
-        doctor = run_jravan_doctor(
-            from_time="00000000000000",
-            option=2,
-            max_records=args.doctor_records,
-        )
-        write_doctor_report(
-            doctor,
-            artifact_dir / "doctor.json",
-        )
-        if not doctor.ready:
-            raise RuntimeError(
-                "JV-Link doctor did not reach a usable connection state"
-            )
-
         raw_summary = export_race_raw(
             output_path=output_dir / "race_raw.jsonl",
             summary_path=artifact_dir / "raw_summary.json",
@@ -108,7 +85,6 @@ def main() -> None:
                 if parse_report.output_rows > 0
                 else "blocked_no_completed_rows"
             ),
-            "doctor": asdict(doctor),
             "raw": asdict(raw_summary),
             "parse": asdict(parse_report),
             "canonical_history": str(
