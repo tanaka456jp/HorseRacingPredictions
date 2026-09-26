@@ -57,7 +57,10 @@ def main() -> None:
         (history["race_date"] >= start)
         & (history["race_date"] <= end)
     ].copy()
-    history = history.dropna(subset=["finish_position"])
+    history = history.dropna(
+        subset=["finish_position", "win_odds"]
+    )
+    history = history[history["win_odds"] > 1.0].copy()
 
     built = build_pre_race_features(history)
     model = CatBoostProbabilityModel(
