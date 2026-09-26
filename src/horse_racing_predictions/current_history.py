@@ -17,6 +17,12 @@ SourceKind = Literal[
     "licensed_provider",
 ]
 
+ALLOWED_SOURCE_KINDS = {
+    "user_supplied",
+    "approved_free_provider",
+    "licensed_provider",
+}
+
 
 @dataclass(frozen=True)
 class HistorySourceManifest:
@@ -45,6 +51,10 @@ class HistorySourceManifest:
             raise ValueError("acquired_at must be timezone-aware")
         if not source_name.strip():
             raise ValueError("source_name must not be empty")
+        if source_kind not in ALLOWED_SOURCE_KINDS:
+            raise ValueError(
+                f"unsupported source_kind: {source_kind}"
+            )
         if not rights_note.strip():
             raise ValueError("rights_note must not be empty")
         return cls(
