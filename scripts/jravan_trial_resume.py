@@ -45,6 +45,19 @@ def main() -> None:
         f"{summary.supplemental_rows_after_base}"
     )
     print(
+        "winner_conflict_excluded_races="
+        f"{summary.winner_conflict_excluded_races}"
+    )
+    print(
+        "winner_conflict_excluded_rows="
+        f"{summary.winner_conflict_excluded_rows}"
+    )
+    print(f"zero_winner_races={summary.zero_winner_races}")
+    print(
+        "multiple_winner_races="
+        f"{summary.multiple_winner_races}"
+    )
+    print(
         f"supplemental_period={summary.supplemental_start}"
         f"..{summary.supplemental_end}"
     )
