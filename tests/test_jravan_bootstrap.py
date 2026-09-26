@@ -22,7 +22,8 @@ def test_jravan_bootstrap_packages_support_bundle():
     assert "Write-SupportBundle" in text
     assert "Compress-Archive" in text
     assert "jravan_support_bundle.zip" in text
-    assert "jravan_doctor.json" in text
+    assert "jravan_runtime.json" in text
+    assert "jravan_smoke" in text
 
 
 def test_double_click_launchers_delegate_to_bootstrap():
