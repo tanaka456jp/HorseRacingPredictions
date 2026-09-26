@@ -8,8 +8,8 @@ from horse_racing_predictions.jravan_trial import (
 def main() -> None:
     parser = argparse.ArgumentParser(
         description=(
-            "Run the full JRA-VAN free-trial acquisition pipeline "
-            "from JV-Link through Current History Intake."
+            "Run JRA-VAN history acquisition. Full setup is attempted "
+            "first; free-trial -301 falls back to recent normal data."
         )
     )
     parser.add_argument(
@@ -48,6 +48,13 @@ def main() -> None:
     )
 
     print(f"status={summary.status}")
+    print(f"acquisition_mode={summary.acquisition_mode}")
+    print(f"requested_from_time={summary.requested_from_time}")
+    print(f"effective_from_time={summary.effective_from_time}")
+    print(f"effective_option={summary.effective_option}")
+    if summary.fallback_reason:
+        print(f"WARNING: {summary.fallback_reason}")
+    print(f"history_gap_days={summary.history_gap_days}")
     print(f"base_end={summary.base_end}")
     print(f"parsed_rows={summary.parsed_rows}")
     print(
