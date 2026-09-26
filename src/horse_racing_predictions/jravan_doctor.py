@@ -70,7 +70,10 @@ class JraVanDoctorReport:
 
     @property
     def ready(self) -> bool:
-        return self.status == "ready"
+        return self.status in {
+            "ready",
+            "connected_no_ra_se",
+        }
 
 
 def _extract_code(message: str) -> int | None:
@@ -158,8 +161,9 @@ def run_jravan_doctor(
         elif ra_count == 0 and se_count == 0:
             status = "connected_no_ra_se"
             guidance.append(
-                "RACE returned data but the bounded sample contained no "
-                "RA/SE. Increase max_records before concluding RA/SE are absent."
+                "JVOpen/JVGets connectivity is working, but the bounded "
+                "sample contained no RA/SE. Continue to the larger RA/SE "
+                "smoke export before treating this as a data problem."
             )
         else:
             status = "ready"
