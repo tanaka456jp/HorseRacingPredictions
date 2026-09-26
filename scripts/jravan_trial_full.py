@@ -14,8 +14,10 @@ def main() -> None:
     )
     parser.add_argument(
         "--base",
-        required=True,
-        help="Approved base history CSV ending 2021-07-31.",
+        help=(
+            "Optional approved base history CSV ending 2021-07-31. "
+            "If omitted, the approved Kaggle base is downloaded automatically."
+        ),
     )
     parser.add_argument(
         "--from-time",
