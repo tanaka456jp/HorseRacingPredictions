@@ -71,3 +71,24 @@ def test_paper_csv_missing_required_columns_fails(tmp_path):
         assert "missing paper CSV columns" in str(exc)
     else:
         raise AssertionError("expected missing-column failure")
+
+
+def test_run_paper_csv_creates_nested_ledger_directory(tmp_path):
+    input_path = tmp_path / "paper.csv"
+    ledger_path = tmp_path / "nested" / "paper" / "paper.sqlite3"
+    _write_csv(input_path)
+
+    result = run_paper_csv(
+        input_path,
+        ledger_path,
+        bankroll_yen=100_000,
+        config=StrategyConfig(
+            min_ev=10.0,
+            min_probability=0.99,
+            min_confidence=1.0,
+        ),
+    )
+
+    assert ledger_path.exists()
+    assert ledger_path.parent.is_dir()
+    assert len(result["evaluations"]) == 3

@@ -1,4 +1,5 @@
 import sqlite3
+from pathlib import Path
 from datetime import datetime, timezone
 
 from .snapshots import validate_prediction_evidence
@@ -44,6 +45,10 @@ SCHEMA = (
 class Ledger:
     def __init__(self, path):
         self.path = str(path)
+        if self.path != ":memory:":
+            parent = Path(self.path).parent
+            if parent != Path("."):
+                parent.mkdir(parents=True, exist_ok=True)
         self.conn = sqlite3.connect(self.path)
         self.conn.execute("PRAGMA foreign_keys = ON")
         self.conn.executescript(SCHEMA)
