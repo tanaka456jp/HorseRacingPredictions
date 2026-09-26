@@ -37,3 +37,12 @@ def test_double_click_launchers_delegate_to_bootstrap():
     assert "bootstrap_jravan_trial.ps1" in full
     assert "-Full" not in smoke
     assert "-Full" in full
+
+
+def test_jravan_requirements_use_real_lines():
+    text = Path("requirements-jravan.txt").read_text(encoding="utf-8")
+    assert "\\n" not in text
+    assert text.splitlines() == [
+        "pywin32>=311",
+        "kagglehub",
+    ]
