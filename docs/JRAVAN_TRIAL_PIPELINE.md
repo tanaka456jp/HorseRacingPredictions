@@ -17,9 +17,9 @@ should be used.
 
 The full flow is:
 
-1. lightweight current-week JV-Link doctor
-2. bounded setup RA/SE smoke
-3. setup RA/SE raw acquisition
+1. JV-Link COM/runtime preflight
+2. one bounded current-week RA/SE smoke (single JVOpen)
+3. setup RA/SE raw acquisition for full mode
 4. official-spec RA/SE parsing
 5. discard race dates at/before the approved base cutoff
 6. provenance manifest creation
@@ -40,3 +40,14 @@ The final current history can then be supplied to scripts/run_forward_paper.py.
 JVOpen may return before setup files finish downloading. The acquisition layer
 therefore polls JVStatus until the reported downloaded-file count reaches
 JVOpen download_count before it starts JVGets.
+
+
+## Why the smoke uses only one JVOpen
+
+A repeated current-week JVOpen in the same bootstrap sequence can cause the
+second connection to report a much larger pending download count. The smoke
+therefore does not invoke the Doctor internally.
+
+The bootstrap performs COM/runtime validation first, then the smoke performs
+exactly one current-week RACE open with fromtime 00000000000000 and option 2.
+Full mode performs the historical setup open only after the smoke succeeds.
