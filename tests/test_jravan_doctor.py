@@ -129,3 +129,15 @@ def test_doctor_reports_connected_without_ra_se():
     assert report.status == "connected_no_ra_se"
     assert report.ready
     assert report.sample_records == 2
+
+
+def test_doctor_accepts_successful_empty_open_as_connected():
+    fake = FakeJvLink(records=[])
+    report = run_jravan_doctor(
+        client=_client(fake),
+        max_records=10,
+    )
+
+    assert report.status == "connected_no_records"
+    assert report.ready
+    assert report.open_return_code == 0
