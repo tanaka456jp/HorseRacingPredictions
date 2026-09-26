@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import asdict, dataclass
 import hashlib
+import gc
 import json
 import platform
 from pathlib import Path
@@ -300,11 +301,17 @@ class JvLinkClient:
 
     def close(self) -> None:
         try:
-            if self.opened:
+            if self.opened and self.jvlink is not None:
                 self.jvlink.JVClose()
         finally:
             self.opened = False
             if self._owns_runtime and self._runtime is not None:
+                # Release the COM object before leaving the COM apartment.
+                # Otherwise pywin32 may emit:
+                # "Win32 exception occurred releasing IUnknown".
+                self.jvlink = None
+                gc.collect()
+
                 uninit = getattr(
                     self._runtime,
                     "CoUninitialize",
