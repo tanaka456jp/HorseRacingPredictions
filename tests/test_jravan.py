@@ -23,6 +23,8 @@ class FakeJvLink:
         self.status_values = list(status_values or [])
         self.closed = 0
         self.open_args = None
+        self.rt_open_args = None
+        self.rt_open_result = 0
 
     def JVInit(self, app_id):
         self.app_id = app_id
@@ -56,6 +58,10 @@ class FakeJvLink:
             timestamp,
         )
         return self.open_result
+
+    def JVRTOpen(self, dataspec, key):
+        self.rt_open_args = (dataspec, key)
+        return self.rt_open_result
 
     def JVGets(self, buff, size, fname):
         if not self.records:
@@ -310,3 +316,31 @@ def test_raw_export_reports_open_and_record_progress(tmp_path):
         message == "record_progress=2 complete"
         for message in messages
     )
+
+
+def test_jvlink_realtime_open_uses_dataspec_and_race_key():
+    fake = FakeJvLink()
+    client = JvLinkClient(jvlink=fake)
+    client.initialize()
+
+    result = client.open_realtime(
+        dataspec="0B31",
+        key="2026092708030411",
+    )
+
+    assert result == 0
+    assert fake.rt_open_args == ("0B31", "2026092708030411")
+    assert client.opened is True
+
+
+def test_jvlink_realtime_open_fails_closed():
+    fake = FakeJvLink()
+    fake.rt_open_result = -114
+    client = JvLinkClient(jvlink=fake)
+    client.initialize()
+
+    with pytest.raises(JraVanApiError, match="JVRTOpen failed"):
+        client.open_realtime(
+            dataspec="0B31",
+            key="2026092708030411",
+        )
