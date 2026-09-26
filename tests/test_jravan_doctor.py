@@ -77,6 +77,8 @@ def test_doctor_marks_ra_se_connectivity_ready():
 
     assert report.ready
     assert report.initialized
+    assert report.from_time == "00000000000000"
+    assert report.option == 2
     assert report.status_before_open == -203
     assert report.ra_records == 1
     assert report.se_records == 1
