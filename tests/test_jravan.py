@@ -225,3 +225,23 @@ def test_raw_export_writes_jsonl_summary_and_closes(tmp_path):
         )
     )
     assert saved["raw_redistribution_allowed"] is False
+
+
+def test_close_releases_com_before_couninitialize():
+    events = []
+
+    class ReleasableJvLink:
+        def __del__(self):
+            events.append("release")
+
+    class Runtime:
+        def CoUninitialize(self):
+            events.append("uninit")
+
+    def factory():
+        return ReleasableJvLink(), Runtime()
+
+    client = JvLinkClient(com_factory=factory)
+    client.close()
+
+    assert events == ["release", "uninit"]
