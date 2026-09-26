@@ -1,6 +1,5 @@
 param(
-    [Parameter(Mandatory=$true)]
-    [string]$BaseHistory,
+    [string]$BaseHistory = "",
     [string]$Python = "python",
     [switch]$Full
 )
@@ -26,6 +25,10 @@ if ($LASTEXITCODE -ne 0) {
 if (-not $Full) {
     Write-Host "Smoke PASS. Re-run with -Full to acquire and build current history."
     exit 0
+}
+
+if ([string]::IsNullOrWhiteSpace($BaseHistory)) {
+    throw "-BaseHistory is required when -Full is specified."
 }
 
 Write-Host "[3/3] Full setup acquisition + Current History Intake"
