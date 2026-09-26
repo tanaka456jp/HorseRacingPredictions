@@ -57,3 +57,9 @@ captured and parsed.
 For setup/full acquisition, the exporter waits for JVStatus to reach the
 JVOpen download_count before JVGets begins. JVGets -3 handling remains as a
 fallback, but normal operation follows the official download-completion flow.
+
+
+A successful JVOpen with zero current-week records is also considered a
+connected Doctor result. The bounded setup Smoke is the gate that must prove
+RA/SE can actually be exported and parsed, so a quiet current-week feed does
+not block the historical trial pipeline.
