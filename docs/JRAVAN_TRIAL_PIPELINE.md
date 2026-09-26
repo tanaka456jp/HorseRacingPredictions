@@ -89,3 +89,27 @@ it is not treated as equivalent to a continuous 2021-2026 history.
 
 FREE-FIRST remains in force. A paid Data Lab subscription is not required just
 to continue the present research workflow.
+
+
+## Resume after a completed acquisition
+
+If JV-Link acquisition and RA/SE parsing already completed but a later CSV
+decode/intake step failed, do not reacquire hundreds of thousands of records.
+
+Run:
+
+    RUN_JRAVAN_RESUME.cmd
+
+Resume reuses:
+
+    data/jravan/full/parsed_history.csv
+
+and restarts from base-history loading / Current History Intake only.
+
+Japanese CSV loading tries UTF-8 BOM, CP932, Shift-JIS, EUC-JP and UTF-8, and
+the JRA history loader only accepts an encoding when the required canonical
+columns can be normalized.
+
+Successful resume output:
+
+    data/jravan/full/current_history.csv
