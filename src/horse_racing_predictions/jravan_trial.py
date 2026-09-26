@@ -12,7 +12,10 @@ from .current_history import (
     HistorySourceManifest,
     prepare_current_history,
 )
-from .data_sources import load_jra_history_csv
+from .data_sources import (
+    load_jra_history_csv,
+    read_csv_flexible,
+)
 from .jravan import JraVanApiError, export_race_raw
 from .jravan_parser import convert_raw_jsonl
 
@@ -259,9 +262,8 @@ def run_jravan_trial_pipeline(
 
     progress("phase=current_history_intake start")
     base = load_jra_history_csv(base_path)
-    parsed = pd.read_csv(
+    parsed = read_csv_flexible(
         parsed_path,
-        encoding="utf-8-sig",
         low_memory=False,
     )
     supplement, base_end = filter_after_base_history(
@@ -325,9 +327,8 @@ def run_jravan_trial_pipeline(
         f"merged_rows={intake.merged_rows}"
     )
 
-    current = pd.read_csv(
+    current = read_csv_flexible(
         current_history_path,
-        encoding="utf-8-sig",
         low_memory=False,
     )
     current_dates = pd.to_datetime(
@@ -376,6 +377,151 @@ def run_jravan_trial_pipeline(
         output_dir=str(output_dir),
         artifact_dir=str(artifact_dir),
     )
+    (artifact_dir / "pipeline_summary.json").write_text(
+        json.dumps(
+            asdict(summary),
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    return summary
+
+
+def resume_current_history_from_parsed(
+    *,
+    base_path: str | Path | None = None,
+    output_dir: str | Path = "data/jravan/full",
+    artifact_dir: str | Path = "artifacts/jravan_full",
+) -> JraVanTrialPipelineSummary:
+    def progress(message: str) -> None:
+        print(message, flush=True)
+
+    output_dir = Path(output_dir)
+    artifact_dir = Path(artifact_dir)
+    parsed_path = output_dir / "parsed_history.csv"
+    raw_path = output_dir / "race_raw.jsonl"
+
+    if not parsed_path.exists():
+        raise FileNotFoundError(
+            "parsed_history.csv does not exist; a completed acquisition/"
+            "parse run is required before resume"
+        )
+
+    progress("resume=existing_parsed_history")
+    progress("phase=resolve_base_history start")
+    base_path = resolve_approved_base_history(base_path)
+    progress(
+        "phase=resolve_base_history complete "
+        f"path={base_path}"
+    )
+
+    progress("phase=current_history_intake start")
+    base = load_jra_history_csv(base_path)
+    parsed = read_csv_flexible(
+        parsed_path,
+        low_memory=False,
+    )
+    supplement, base_end = filter_after_base_history(
+        base,
+        parsed,
+    )
+    if supplement.empty:
+        raise RuntimeError(
+            "Existing parsed JRA-VAN data contains no completed races after "
+            f"base history end {base_end.date()}."
+        )
+
+    supplement_path = output_dir / "history_supplement.csv"
+    supplement.to_csv(
+        supplement_path,
+        index=False,
+        encoding="utf-8-sig",
+    )
+
+    manifest = HistorySourceManifest.create(
+        source_name="JRA-VAN Data Lab free trial recovered local history",
+        source_kind="licensed_provider",
+        source_reference=(
+            "Recovered from existing local parsed_history.csv after a "
+            "completed JV-Link acquisition; raw redistribution disabled."
+        ),
+        rights_note=(
+            "Acquired locally through official JRA-VAN Data Lab/JV-Link. "
+            "This resume path reuses already-downloaded local data."
+        ),
+        approved_for_modeling=True,
+        raw_redistribution_allowed=False,
+        acquired_at=datetime.now(timezone.utc),
+    )
+
+    current_history_path = output_dir / "current_history.csv"
+    intake = prepare_current_history(
+        base_path=base_path,
+        supplemental_path=supplement_path,
+        output_path=current_history_path,
+        manifest_path=artifact_dir / "source_manifest.json",
+        report_path=artifact_dir / "intake_report.json",
+        manifest=manifest,
+        max_gap_days=14,
+        allow_gap=True,
+    )
+    if not intake.ready:
+        raise RuntimeError(
+            "Current History Intake blocked resumed JRA-VAN data: "
+            + "; ".join(intake.errors)
+        )
+
+    current = read_csv_flexible(
+        current_history_path,
+        low_memory=False,
+    )
+    current_dates = pd.to_datetime(
+        current["race_date"],
+        errors="raise",
+    )
+
+    supplement_dates = pd.to_datetime(
+        supplement["race_date"],
+        errors="raise",
+    )
+    supplement_start = supplement_dates.min()
+    supplement_end = supplement_dates.max()
+    gap_days = int(
+        (
+            supplement_start.normalize()
+            - base_end.normalize()
+        ).days
+    )
+
+    progress(
+        "phase=current_history_intake complete "
+        f"merged_rows={intake.merged_rows}"
+    )
+
+    summary = JraVanTrialPipelineSummary(
+        status="ready_recent_history_gap",
+        acquisition_mode="resume_existing_parsed",
+        requested_from_time="",
+        effective_from_time="",
+        effective_option=0,
+        fallback_reason=(
+            "Resumed from local parsed_history.csv; no JV-Link reacquisition "
+            "was performed."
+        ),
+        history_gap_days=gap_days,
+        base_end=str(base_end.date()),
+        parsed_rows=int(len(parsed)),
+        parsed_races=int(parsed["race_id"].nunique()),
+        supplemental_rows_after_base=int(len(supplement)),
+        supplemental_start=str(supplement_start.date()),
+        supplemental_end=str(supplement_end.date()),
+        current_history_rows=int(len(current)),
+        current_history_end=str(current_dates.max().date()),
+        output_dir=str(output_dir),
+        artifact_dir=str(artifact_dir),
+    )
+    artifact_dir.mkdir(parents=True, exist_ok=True)
     (artifact_dir / "pipeline_summary.json").write_text(
         json.dumps(
             asdict(summary),
