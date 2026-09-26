@@ -64,3 +64,28 @@ records can be matched and parsed structurally.
 Full historical acquisition remains strict: completed_only=True is retained,
 so rows without final finish position and valid final win odds are excluded
 before Current History Intake.
+
+
+## Free-trial setup authentication fallback
+
+Some free-trial environments allow current-week/normal data with
+JVInit("UNKNOWN") but return JVOpen=-301 for setup option 3/4.
+
+When the historical setup open returns exactly -301, the pipeline now retries
+with option 1 using a recent 365-day from_time. Other JVOpen errors are not
+hidden and still fail closed.
+
+The fallback is recorded explicitly:
+
+- acquisition_mode=recent_normal_fallback
+- effective_option=1
+- effective_from_time=<recent one-year timestamp>
+- fallback_reason=<the -301 setup authentication reason>
+- history_gap_days=<gap from the 2021 base>
+
+The merged file is therefore marked status=ready_recent_history_gap rather than
+ready. This is usable for forward research/Paper Trading data collection, but
+it is not treated as equivalent to a continuous 2021-2026 history.
+
+FREE-FIRST remains in force. A paid Data Lab subscription is not required just
+to continue the present research workflow.
