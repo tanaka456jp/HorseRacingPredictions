@@ -1,3 +1,6 @@
+import io
+import zipfile
+
 import pandas as pd
 
 from horse_racing_predictions.data_sources import (
@@ -51,6 +54,35 @@ def test_load_history_supports_cp932(tmp_path):
 
     loaded = load_jra_history_csv(path)
 
+    assert list(loaded["horse_name"]) == [
+        "テスト馬A",
+        "テスト馬B",
+    ]
+
+
+def test_load_history_supports_zip_wrapped_csv_named_as_csv(tmp_path):
+    path = tmp_path / "19860105-20210731_race_result.csv"
+
+    buffer = io.StringIO()
+    _history_frame().to_csv(
+        buffer,
+        index=False,
+    )
+    payload = buffer.getvalue().encode("utf-8-sig")
+
+    with zipfile.ZipFile(
+        path,
+        "w",
+        compression=zipfile.ZIP_DEFLATED,
+    ) as archive:
+        archive.writestr(
+            "19860105-20210731_race_result.csv",
+            payload,
+        )
+
+    loaded = load_jra_history_csv(path)
+
+    assert len(loaded) == 2
     assert list(loaded["horse_name"]) == [
         "テスト馬A",
         "テスト馬B",
