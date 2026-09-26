@@ -125,4 +125,5 @@ def test_doctor_reports_connected_without_ra_se():
     )
 
     assert report.status == "connected_no_ra_se"
+    assert report.ready
     assert report.sample_records == 2
