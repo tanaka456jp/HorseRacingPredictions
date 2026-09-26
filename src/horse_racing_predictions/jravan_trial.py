@@ -67,6 +67,20 @@ def resolve_approved_base_history(
 
 
 @dataclass(frozen=True)
+class WinnerConflictFilterReport:
+    total_races: int
+    total_rows: int
+    kept_races: int
+    kept_rows: int
+    zero_winner_races: int
+    multiple_winner_races: int
+    excluded_races: int
+    excluded_rows: int
+    zero_winner_race_ids: tuple[str, ...]
+    multiple_winner_race_ids: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class JraVanTrialPipelineSummary:
     status: str
     acquisition_mode: str
@@ -79,6 +93,10 @@ class JraVanTrialPipelineSummary:
     parsed_rows: int
     parsed_races: int
     supplemental_rows_after_base: int
+    winner_conflict_excluded_races: int
+    winner_conflict_excluded_rows: int
+    zero_winner_races: int
+    multiple_winner_races: int
     supplemental_start: str | None
     supplemental_end: str | None
     current_history_rows: int
@@ -201,6 +219,70 @@ def filter_after_base_history(
     return supplement, base_end
 
 
+
+
+def filter_single_winner_races(
+    frame: pd.DataFrame,
+) -> tuple[pd.DataFrame, WinnerConflictFilterReport]:
+    if frame.empty:
+        raise ValueError("supplemental history is empty")
+
+    finish = pd.to_numeric(
+        frame["finish_position"],
+        errors="coerce",
+    )
+    winner_counts = (
+        frame.assign(_winner=finish.eq(1).astype(int))
+        .groupby("race_id", dropna=False)["_winner"]
+        .sum()
+    )
+
+    zero_ids = tuple(
+        str(value)
+        for value in winner_counts.index[winner_counts.eq(0)].tolist()
+    )
+    multiple_ids = tuple(
+        str(value)
+        for value in winner_counts.index[winner_counts.gt(1)].tolist()
+    )
+    excluded_ids = set(zero_ids) | set(multiple_ids)
+
+    race_id_text = frame["race_id"].astype(str)
+    keep_mask = ~race_id_text.isin(excluded_ids)
+    kept = frame.loc[keep_mask].copy().reset_index(drop=True)
+
+    report = WinnerConflictFilterReport(
+        total_races=int(winner_counts.size),
+        total_rows=int(len(frame)),
+        kept_races=int(kept["race_id"].nunique()),
+        kept_rows=int(len(kept)),
+        zero_winner_races=len(zero_ids),
+        multiple_winner_races=len(multiple_ids),
+        excluded_races=len(excluded_ids),
+        excluded_rows=int((~keep_mask).sum()),
+        zero_winner_race_ids=zero_ids,
+        multiple_winner_race_ids=multiple_ids,
+    )
+    return kept, report
+
+
+def write_winner_conflict_report(
+    report: WinnerConflictFilterReport,
+    path: str | Path,
+) -> Path:
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(
+            asdict(report),
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    return path
+
+
 def run_jravan_trial_pipeline(
     *,
     base_path: str | Path | None = None,
@@ -274,6 +356,25 @@ def run_jravan_trial_pipeline(
         raise RuntimeError(
             "JRA-VAN data contains no completed races after "
             f"base history end {base_end.date()}."
+        )
+
+    supplement, winner_filter = filter_single_winner_races(
+        supplement
+    )
+    write_winner_conflict_report(
+        winner_filter,
+        artifact_dir / "winner_conflict_filter.json",
+    )
+    progress(
+        "winner_filter "
+        f"excluded_races={winner_filter.excluded_races} "
+        f"zero_winner={winner_filter.zero_winner_races} "
+        f"multiple_winner={winner_filter.multiple_winner_races} "
+        f"excluded_rows={winner_filter.excluded_rows}"
+    )
+    if supplement.empty:
+        raise RuntimeError(
+            "No single-winner races remain after winner-conflict filtering."
         )
 
     supplement_path = output_dir / "history_supplement.csv"
@@ -368,6 +469,10 @@ def run_jravan_trial_pipeline(
         parsed_rows=int(parse_report.output_rows),
         parsed_races=int(parse_report.output_races),
         supplemental_rows_after_base=int(len(supplement)),
+        winner_conflict_excluded_races=winner_filter.excluded_races,
+        winner_conflict_excluded_rows=winner_filter.excluded_rows,
+        zero_winner_races=winner_filter.zero_winner_races,
+        multiple_winner_races=winner_filter.multiple_winner_races,
         supplemental_start=str(supplement_start.date()),
         supplemental_end=str(supplement_end.date()),
         current_history_rows=int(len(current)),
@@ -430,6 +535,25 @@ def resume_current_history_from_parsed(
         raise RuntimeError(
             "Existing parsed JRA-VAN data contains no completed races after "
             f"base history end {base_end.date()}."
+        )
+
+    supplement, winner_filter = filter_single_winner_races(
+        supplement
+    )
+    write_winner_conflict_report(
+        winner_filter,
+        artifact_dir / "winner_conflict_filter.json",
+    )
+    progress(
+        "winner_filter "
+        f"excluded_races={winner_filter.excluded_races} "
+        f"zero_winner={winner_filter.zero_winner_races} "
+        f"multiple_winner={winner_filter.multiple_winner_races} "
+        f"excluded_rows={winner_filter.excluded_rows}"
+    )
+    if supplement.empty:
+        raise RuntimeError(
+            "No single-winner races remain after winner-conflict filtering."
         )
 
     supplement_path = output_dir / "history_supplement.csv"
