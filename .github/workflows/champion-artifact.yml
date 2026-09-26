@@ -41,14 +41,48 @@ jobs:
         run: |
           python scripts/train_champion_artifact.py             --start 2017-01-01             --end 2021-07-31             --output-dir artifacts/champion_v7
 
-      - name: Validate saved artifact
+      - name: Validate saved artifact and future inference
         run: |
           python - <<'PY'
+          import pandas as pd
+          import kagglehub
+          from pathlib import Path
+          from horse_racing_predictions.data_sources import load_jra_history_csv
+          from horse_racing_predictions.inference import predict_future_entries
           from horse_racing_predictions.model_artifact import load_champion_artifact
+
           loaded = load_champion_artifact("artifacts/champion_v7")
           print(loaded.manifest.model_version)
           print(loaded.manifest.experiment_id)
           print(len(loaded.manifest.feature_columns))
+
+          downloaded = kagglehub.dataset_download(
+              "takamotoki/jra-horse-racing-dataset",
+              path="19860105-20210731_race_result.csv",
+              output_dir="data/raw",
+          )
+          path = Path(downloaded)
+          if path.is_dir():
+              matches = list(path.rglob("19860105-20210731_race_result.csv"))
+              path = matches[0]
+          history = load_jra_history_csv(path)
+          history = history[
+              (history["race_date"] >= pd.Timestamp("2017-01-01"))
+              & (history["race_date"] <= pd.Timestamp("2021-07-31"))
+          ].copy()
+          history = history.dropna(subset=["finish_position", "win_odds"])
+          history = history[history["win_odds"] > 1.0].copy()
+
+          last_race = history.sort_values("race_date").groupby("race_id").tail(20)
+          entries = last_race.head(6).copy()
+          entries["race_id"] = "FUTURE-SMOKE"
+          entries["race_date"] = pd.Timestamp("2021-08-01")
+          entries["finish_position"] = pd.NA
+          entries["win_odds"] = pd.NA
+          prediction = predict_future_entries(loaded, history, entries)
+          assert len(prediction) == len(entries)
+          assert abs(prediction["predicted_win_probability"].sum() - 1.0) < 1e-9
+          print(prediction[["horse_name", "predicted_win_probability"]])
           PY
 
       - name: Publish Champion artifact
