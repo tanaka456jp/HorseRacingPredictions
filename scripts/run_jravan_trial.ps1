@@ -8,7 +8,6 @@ $ErrorActionPreference = "Stop"
 
 Write-Host "=== HorseRacingPredictions JRA-VAN Trial ==="
 & $Python --version
-& $Python -c 'import struct; print("Python bits=%d" % (struct.calcsize("P")*8))'
 
 Write-Host "[setup] Installing JRA-VAN trial dependencies"
 & $Python -m pip install -r requirements-jravan.txt
@@ -16,13 +15,13 @@ if ($LASTEXITCODE -ne 0) {
     throw "Failed to install requirements-jravan.txt"
 }
 
-Write-Host "[1/3] JV-Link doctor"
-& $Python scripts/jravan_doctor.py
+Write-Host "[preflight] Verifying JV-Link COM runtime"
+& $Python scripts/check_jravan_runtime.py --output artifacts/jravan_runtime.json
 if ($LASTEXITCODE -ne 0) {
-    throw "JV-Link doctor failed. See artifacts/jravan_doctor.json"
+    throw "JV-Link runtime check failed. See artifacts/jravan_runtime.json"
 }
 
-Write-Host "[2/3] Bounded RA/SE smoke"
+Write-Host "[1/2] Bounded current-week RA/SE smoke"
 & $Python scripts/jravan_trial_smoke.py
 if ($LASTEXITCODE -ne 0) {
     throw "JRA-VAN smoke failed. See artifacts/jravan_smoke/"
@@ -33,7 +32,7 @@ if (-not $Full) {
     exit 0
 }
 
-Write-Host "[3/3] Full setup acquisition + Current History Intake"
+Write-Host "[2/2] Full setup acquisition + Current History Intake"
 $fullArgs = @("scripts/jravan_trial_full.py")
 if (-not [string]::IsNullOrWhiteSpace($BaseHistory)) {
     $fullArgs += @("--base", $BaseHistory)
