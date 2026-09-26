@@ -200,6 +200,39 @@ class JvLinkClient:
         self.opened = True
         return result
 
+    def wait_for_downloads(
+        self,
+        open_result: JvOpenResult,
+        *,
+        max_polls: int = 7200,
+        poll_seconds: float = 0.5,
+    ) -> int | None:
+        if open_result.download_count <= 0:
+            return 0
+        if max_polls < 1:
+            raise ValueError("max_polls must be positive")
+
+        for _ in range(max_polls):
+            status = self.status()
+            if status is None:
+                return None
+            if status >= open_result.download_count:
+                return status
+            if status == -502:
+                raise JraVanApiError(
+                    "JVStatus reported download failure (-502)"
+                )
+            if status < 0 and status != -203:
+                raise JraVanApiError(
+                    f"JVStatus failed with return code {status}"
+                )
+            self.sleep_fn(poll_seconds)
+
+        raise JraVanApiError(
+            "JV-Link download did not finish before the wait limit: "
+            f"expected={open_result.download_count}"
+        )
+
     def iter_records(
         self,
         *,
@@ -291,6 +324,8 @@ def export_race_raw(
     record_types: set[str] | None = None,
     max_records: int | None = None,
     client: JvLinkClient | None = None,
+    download_wait_polls: int = 7200,
+    download_poll_seconds: float = 0.5,
 ) -> JvExportSummary:
     if max_records is not None and max_records < 1:
         raise ValueError("max_records must be positive")
@@ -312,6 +347,11 @@ def export_race_raw(
         open_result = client.open_race(
             from_time=from_time,
             option=option,
+        )
+        client.wait_for_downloads(
+            open_result,
+            max_polls=download_wait_polls,
+            poll_seconds=download_poll_seconds,
         )
 
         with output_path.open(
