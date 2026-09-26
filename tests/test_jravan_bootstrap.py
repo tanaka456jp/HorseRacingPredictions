@@ -58,10 +58,15 @@ def test_bootstrap_uses_script_for_runtime_check():
     assert 'Dispatch("JVDTLab.JVLink")' not in text
 
 
-def test_runtime_check_contains_python_and_com_checks():
+def test_runtime_check_delegates_to_registration_doctor():
     text = Path(
         "scripts/check_jravan_runtime.py"
     ).read_text(encoding="utf-8")
+    runtime = Path(
+        "src/horse_racing_predictions/jravan_runtime.py"
+    ).read_text(encoding="utf-8")
 
-    assert "struct.calcsize" in text
-    assert 'Dispatch("JVDTLab.JVLink")' in text
+    assert "inspect_jravan_runtime" in text
+    assert "write_runtime_report" in text
+    assert "struct.calcsize" in runtime
+    assert 'Dispatch(PROGID)' in runtime
