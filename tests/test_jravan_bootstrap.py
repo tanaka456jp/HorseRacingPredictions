@@ -46,3 +46,22 @@ def test_jravan_requirements_use_real_lines():
         "pywin32>=311",
         "kagglehub",
     ]
+
+
+def test_bootstrap_uses_script_for_runtime_check():
+    text = Path(
+        "scripts/bootstrap_jravan_trial.ps1"
+    ).read_text(encoding="utf-8")
+
+    assert "check_jravan_runtime.py" in text
+    assert "struct.calcsize" not in text
+    assert 'Dispatch("JVDTLab.JVLink")' not in text
+
+
+def test_runtime_check_contains_python_and_com_checks():
+    text = Path(
+        "scripts/check_jravan_runtime.py"
+    ).read_text(encoding="utf-8")
+
+    assert "struct.calcsize" in text
+    assert 'Dispatch("JVDTLab.JVLink")' in text
