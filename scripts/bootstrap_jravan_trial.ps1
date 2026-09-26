@@ -90,7 +90,6 @@ function Write-SupportBundle {
 
     $candidates = @(
         "artifacts\jravan_runtime.json",
-        "artifacts\jravan_doctor.json",
         "artifacts\jravan_smoke",
         "artifacts\jravan_full",
         "artifacts\jravan_race_raw_summary.json"
