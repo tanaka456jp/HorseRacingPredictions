@@ -3,6 +3,7 @@ import pytest
 
 from horse_racing_predictions.jravan_trial import (
     filter_after_base_history,
+    resolve_approved_base_history,
 )
 
 
@@ -63,3 +64,38 @@ def test_filter_after_base_history_rejects_empty_frames():
             }]),
             pd.DataFrame(),
         )
+
+
+def test_resolve_approved_base_history_uses_explicit_path(tmp_path):
+    path = tmp_path / "base.csv"
+    path.write_text("x\n", encoding="utf-8")
+    assert resolve_approved_base_history(path) == path
+
+
+def test_resolve_approved_base_history_uses_kagglehub_when_missing(
+    tmp_path,
+    monkeypatch,
+):
+    dataset_dir = tmp_path / "download"
+    dataset_dir.mkdir()
+    expected = dataset_dir / "19860105-20210731_race_result.csv"
+    expected.write_text("x\n", encoding="utf-8")
+
+    class FakeKaggleHub:
+        @staticmethod
+        def dataset_download(handle, path, output_dir):
+            assert handle == "takamotoki/jra-horse-racing-dataset"
+            assert path == "19860105-20210731_race_result.csv"
+            return str(dataset_dir)
+
+    monkeypatch.setitem(
+        __import__("sys").modules,
+        "kagglehub",
+        FakeKaggleHub,
+    )
+
+    resolved = resolve_approved_base_history(
+        None,
+        cache_dir=tmp_path / "cache",
+    )
+    assert resolved == expected
