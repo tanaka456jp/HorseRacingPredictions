@@ -19,6 +19,7 @@ Market benchmark: Brier 0.058098, Log loss 0.206064.
 | v5 | CatBoost nonlinear model | 0.062190 | 0.227285 | -19.61% |
 | v7 | recent form / pace history | **0.061549** | **0.223565** | **-1.90%** |
 | v8 | forward isotonic calibration | 0.061828 | 0.226416 | -10.58% |
+| v10 | lagged market history | **0.061533** | **0.223363** | -32.83% |
 
 ## v6 — OOS loss-structure diagnostics
 
@@ -140,3 +141,35 @@ a reusable EV threshold.
 
 **Decision: KEEP the forward-selection framework. Do not tune thresholds.
 Improve probability estimation before betting.**
+
+
+## v10 result — lagged market history
+
+Run: `36201063827`.
+Commit: `cbe15bb41ca38b9fd764ad3bbf9b2c6423e027dd`.
+
+Added only prior-race market history:
+
+- last-race win odds and popularity
+- rolling 3/5-race mean log odds and popularity
+- last-race distance, surface and racecourse
+
+The target race's current odds were not used as model features.
+
+### Result
+
+- Brier: **0.061533**
+- Log loss: **0.223363**
+- research-only bets: 1,185
+- stake: ¥289,400
+- payout: ¥194,380
+- profit: -¥95,020
+- research-only ROI: **-32.83%**
+- max drawdown: 95.02%
+
+Compared with v7, the probability metrics improve only marginally, while
+EV-based selection becomes materially worse. At EV >= 1.15 the flat-bet
+research ROI is about -30.45%, and the model remains substantially
+overconfident on apparent longshots.
+
+**Decision: REJECT v10 AS CHAMPION. Keep v7 as the frozen Champion.**
