@@ -218,3 +218,44 @@ def test_non_jra_and_incomplete_rows_are_fail_safe_filtered(tmp_path):
     assert frame.empty
     assert report.skipped_non_jra_ra == 1
     assert report.skipped_incomplete_se == 1
+
+
+def test_incomplete_current_week_records_can_be_parsed_for_smoke(tmp_path):
+    path = tmp_path / "raw.jsonl"
+    rows = [
+        {"record_type": "RA", "text": _ra(data_division="3")},
+        {
+            "record_type": "SE",
+            "text": _se(
+                1,
+                "未確定馬",
+                0,
+                0,
+                data_division="3",
+                blood_no="2023100099",
+            ),
+        },
+    ]
+    path.write_text(
+        "\n".join(
+            json.dumps(row, ensure_ascii=False)
+            for row in rows
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    strict_frame, strict_report = parse_raw_jsonl(
+        path,
+        completed_only=True,
+    )
+    smoke_frame, smoke_report = parse_raw_jsonl(
+        path,
+        completed_only=False,
+    )
+
+    assert strict_frame.empty
+    assert strict_report.skipped_incomplete_se == 1
+    assert len(smoke_frame) == 1
+    assert smoke_report.output_races == 1
+    assert smoke_frame.iloc[0]["horse_name"] == "未確定馬"
