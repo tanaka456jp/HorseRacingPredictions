@@ -206,12 +206,21 @@ def run_jravan_trial_pipeline(
     from_time: str = "20210801000000",
     option: int = 4,
 ) -> JraVanTrialPipelineSummary:
+    def progress(message: str) -> None:
+        print(message, flush=True)
+
+    progress("phase=resolve_base_history start")
     base_path = resolve_approved_base_history(base_path)
+    progress(
+        "phase=resolve_base_history complete "
+        f"path={base_path}"
+    )
     output_dir = Path(output_dir)
     artifact_dir = Path(artifact_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     artifact_dir.mkdir(parents=True, exist_ok=True)
 
+    progress("phase=acquire_jravan start")
     raw_path = output_dir / "race_raw.jsonl"
     (
         _raw_summary,
@@ -224,12 +233,14 @@ def run_jravan_trial_pipeline(
         summary_path=artifact_dir / "raw_summary.json",
         setup_from_time=from_time,
         setup_option=option,
-        progress_callback=lambda message: print(
-            message,
-            flush=True,
-        ),
+        progress_callback=progress,
+    )
+    progress(
+        "phase=acquire_jravan complete "
+        f"mode={acquisition_mode}"
     )
 
+    progress("phase=parse_history start")
     parsed_path = output_dir / "parsed_history.csv"
     parse_report = convert_raw_jsonl(
         input_path=raw_path,
@@ -240,7 +251,13 @@ def run_jravan_trial_pipeline(
         raise RuntimeError(
             "No completed RA/SE history rows were parsed."
         )
+    progress(
+        "phase=parse_history complete "
+        f"rows={parse_report.output_rows} "
+        f"races={parse_report.output_races}"
+    )
 
+    progress("phase=current_history_intake start")
     base = load_jra_history_csv(base_path)
     parsed = pd.read_csv(
         parsed_path,
@@ -303,6 +320,10 @@ def run_jravan_trial_pipeline(
             "Current History Intake blocked the JRA-VAN supplement: "
             + "; ".join(intake.errors)
         )
+    progress(
+        "phase=current_history_intake complete "
+        f"merged_rows={intake.merged_rows}"
+    )
 
     current = pd.read_csv(
         current_history_path,
