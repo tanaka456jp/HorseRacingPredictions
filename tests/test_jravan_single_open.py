@@ -10,6 +10,8 @@ def test_smoke_uses_single_current_week_jvopen_without_doctor():
     assert "default=2" in text
     assert "run_jravan_doctor" not in text
     assert "write_doctor_report" not in text
+    assert "completed_only=False" in text
+    assert "parsed_sample.csv" in text
 
 
 def test_full_pipeline_does_not_repeat_doctor():
