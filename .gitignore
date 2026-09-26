@@ -1,4 +1,5 @@
 .venv/
+.venv-jravan/
 __pycache__/
 .pytest_cache/
 *.pyc
