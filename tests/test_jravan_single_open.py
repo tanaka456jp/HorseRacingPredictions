@@ -39,7 +39,6 @@ def test_bootstrap_clears_stale_jravan_reports():
 
     assert "Reset-JraVanArtifacts" in text
     assert "jravan_support_bundle.zip" in text
-    assert '"artifacts\\jravan_doctor.json"' in text
-    assert '"artifacts\\jravan_doctor.json",' not in text.split(
-        "function Write-SupportBundle", 1
-    )[1].split("foreach", 1)[0]
+    assert '"artifacts\\jravan_doctor.json"' not in text
+    assert '"artifacts\\jravan_runtime.json"' in text
+    assert '"artifacts\\jravan_smoke"' in text
