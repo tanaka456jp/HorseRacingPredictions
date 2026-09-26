@@ -30,7 +30,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description=(
             "Capture one bounded current-week RA/SE sample and "
-            "parse it to canonical history."
+            "verify official-spec parsing, even when races are not final."
         )
     )
     parser.add_argument(
@@ -75,20 +75,21 @@ def main() -> None:
 
         parse_report = convert_raw_jsonl(
             input_path=output_dir / "race_raw.jsonl",
-            output_path=output_dir / "canonical_history.csv",
+            output_path=output_dir / "parsed_sample.csv",
             report_path=artifact_dir / "parse_report.json",
+            completed_only=False,
         )
 
         result = {
             "status": (
                 "ready"
                 if parse_report.output_rows > 0
-                else "blocked_no_completed_rows"
+                else "blocked_no_matched_rows"
             ),
             "raw": asdict(raw_summary),
             "parse": asdict(parse_report),
-            "canonical_history": str(
-                output_dir / "canonical_history.csv"
+            "parsed_sample": str(
+                output_dir / "parsed_sample.csv"
             ),
         }
         (artifact_dir / "smoke_summary.json").write_text(
@@ -102,11 +103,19 @@ def main() -> None:
 
         print(f"status={result['status']}")
         print(f"raw_records={raw_summary.records_written}")
-        print(f"history_rows={parse_report.output_rows}")
-        print(f"history_races={parse_report.output_races}")
+        print(f"parsed_rows={parse_report.output_rows}")
+        print(f"parsed_races={parse_report.output_races}")
+        print(
+            "selected_ra_records="
+            f"{parse_report.selected_ra_records}"
+        )
+        print(
+            "selected_se_records="
+            f"{parse_report.selected_se_records}"
+        )
         if result["status"] != "ready":
             raise RuntimeError(
-                "RA/SE smoke produced no completed canonical history rows"
+                "RA/SE smoke produced no matched parsable rows"
             )
     except Exception as exc:
         _write_smoke_error(artifact_dir, exc)
