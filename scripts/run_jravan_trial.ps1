@@ -32,14 +32,14 @@ if (-not $Full) {
     exit 0
 }
 
-Write-Host "[2/2] Full setup acquisition + Current History Intake"
+Write-Host "[2/2] History acquisition + Current History Intake"
 $fullArgs = @("scripts/jravan_trial_full.py")
 if (-not [string]::IsNullOrWhiteSpace($BaseHistory)) {
     $fullArgs += @("--base", $BaseHistory)
 }
 & $Python @fullArgs
 if ($LASTEXITCODE -ne 0) {
-    throw "Full JRA-VAN trial pipeline failed. See artifacts/jravan_full/"
+    throw "JRA-VAN history pipeline failed. See artifacts/jravan_full/"
 }
 
 Write-Host "JRA-VAN trial pipeline PASS."
