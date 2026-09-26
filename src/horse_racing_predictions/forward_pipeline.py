@@ -78,7 +78,10 @@ def run_forward_paper_pipeline(
         "mode": "forward_paper_only",
         "model_version": champion.manifest.model_version,
         "experiment_id": champion.manifest.experiment_id,
-        "history_cutoff": champion.manifest.train_end,
+        "history_cutoff": str(
+            predictions["history_cutoff"].iloc[0]
+        ),
+        "model_train_end": champion.manifest.train_end,
         "decision_time": decision_time.isoformat(),
         "predictions_file": str(predictions_path),
         "paper_input_file": str(paper_input_path),
