@@ -113,3 +113,28 @@ columns can be normalized.
 Successful resume output:
 
     data/jravan/full/current_history.csv
+
+
+## Winner-conflict quarantine
+
+The raw/parsed JRA-VAN files are preserved exactly as acquired/parsed.
+
+Before Current History Intake, supplemental races are classified by the number
+of rows with finish_position=1:
+
+- exactly one winner: kept for the single-winner probability model
+- zero winners: quarantined from current_history
+- multiple winners: quarantined from current_history
+
+This protects the race-softmax single-winner model invariant without deleting
+source evidence. Multiple-winner cases may represent dead heats; zero-winner
+cases may indicate incomplete/unsupported race records. The pipeline does not
+guess which explanation applies.
+
+Audit output:
+
+    artifacts/jravan_full/winner_conflict_filter.json
+
+The report records counts, excluded row counts, and exact race IDs. Full and
+Resume console output also shows zero_winner_races and
+multiple_winner_races.
