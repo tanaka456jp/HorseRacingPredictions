@@ -1,0 +1,65 @@
+name: JRA-VAN Forward Paper (Self-hosted)
+
+on:
+  workflow_dispatch:
+    inputs:
+      bankroll_yen:
+        description: "Paper Trading bankroll in JPY"
+        required: false
+        default: "100000"
+        type: string
+      min_lead_minutes:
+        description: "Minimum minutes before scheduled post time"
+        required: false
+        default: "10"
+        type: string
+  push:
+    branches:
+      - main
+    paths:
+      - "research/jravan_forward_paper_request.txt"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: jravan-forward-paper-self-hosted
+  cancel-in-progress: true
+
+jobs:
+  forward-paper:
+    name: FREE-FIRST forward Paper on Windows runner
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout without deleting local ignored data
+        uses: actions/checkout@v4
+        with:
+          clean: false
+          persist-credentials: false
+
+      - name: Prepare JRA-VAN inputs and run PaperBroker only
+        shell: powershell
+        env:
+          INPUT_BANKROLL_YEN: ${{ inputs.bankroll_yen }}
+          INPUT_MIN_LEAD_MINUTES: ${{ inputs.min_lead_minutes }}
+        run: |
+          $bankroll = 100000
+          if (-not [string]::IsNullOrWhiteSpace($env:INPUT_BANKROLL_YEN)) {
+            $bankroll = [int]$env:INPUT_BANKROLL_YEN
+          }
+          $lead = 10
+          if (-not [string]::IsNullOrWhiteSpace($env:INPUT_MIN_LEAD_MINUTES)) {
+            $lead = [int]$env:INPUT_MIN_LEAD_MINUTES
+          }
+          & .\scripts\run_jravan_forward_runner.ps1 -BankrollYen $bankroll -MinLeadMinutes $lead
+
+      - name: Publish sanitized validation only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jravan-forward-paper-validation
+          path: artifacts/jravan_forward_runner_validation.json
+          if-no-files-found: warn
+          retention-days: 14

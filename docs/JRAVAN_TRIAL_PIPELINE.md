@@ -143,3 +143,18 @@ multiple_winner_races.
 Quarantine changes only the modeling/intake copy (history_supplement.csv and
 current_history.csv). The original parsed_history.csv remains unchanged for
 audit/reprocessing.
+
+
+## FREE-FIRST Forward Paper during the local trial
+
+After Resume creates `data/jravan/full/current_history.csv`, the self-hosted
+Forward Paper workflow can reuse the same logged-in Windows/JV-Link runtime.
+
+The forward input stage performs one current-week RACE open (option 2), derives
+future entries from RA/SE, then obtains race-unit realtime win odds via
+`JVRTOpen("0B31", race_key)`. Only races with a future scheduled post time,
+normal starters and complete valid win odds are eligible. A minimum pre-race
+lead-time check is applied before PaperBroker execution.
+
+This is a temporary zero-cost trial path. It does not enable the reserved paid
+provider adapter and must not purchase or renew JRA-VAN automatically.

@@ -201,6 +201,31 @@ class JvLinkClient:
         self.opened = True
         return result
 
+    def open_realtime(
+        self,
+        *,
+        dataspec: str,
+        key: str,
+    ) -> int:
+        if not self.initialized:
+            self.initialize()
+        if len(dataspec) != 4:
+            raise ValueError("realtime dataspec must be exactly 4 characters")
+        if len(key) not in (8, 12, 16) or not key.isdigit():
+            raise ValueError(
+                "realtime key must be YYYYMMDD, YYYYMMDDJJRR, "
+                "or YYYYMMDDJJKKHHRR digits"
+            )
+
+        result = int(self.jvlink.JVRTOpen(dataspec, key))
+        if result < 0:
+            raise JraVanApiError(
+                "JVRTOpen failed with return code "
+                f"{result} for dataspec={dataspec} key={key}"
+            )
+        self.opened = True
+        return result
+
     def wait_for_downloads(
         self,
         open_result: JvOpenResult,

@@ -49,3 +49,21 @@ A paid provider may be implemented only after forward paper trading establishes
 stable evidence that the system is worth advancing. After implementation, the
 paid source itself must demonstrate reproducible incremental value exceeding
 its full cost.
+
+
+## Free-trial Forward Paper path
+
+While the local JRA-VAN Data Lab free trial is active, the project may use the
+already-installed JV-Link runtime as a zero-cost local input for Forward Paper.
+
+This path is intentionally separate from the reserved paid provider adapter:
+
+- current-week RA/SE is captured locally for future entries,
+- realtime `0B31` is read locally for win-odds snapshots,
+- races with missing/incomplete odds or insufficient lead time are skipped,
+- raw records, horse-level odds and predictions stay on the runner PC,
+- GitHub receives only sanitized aggregate validation metadata,
+- PaperBroker is the only execution broker,
+- expiry of the free trial must not automatically trigger a paid subscription.
+
+A paid JRA-VAN contract remains behind the existing paid-data gate.
