@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
 from typing import Callable
-from zoneinfo import ZoneInfo
 
 import pandas as pd
 
@@ -18,7 +17,7 @@ from .jravan_parser import (
 )
 
 
-JST = ZoneInfo("Asia/Tokyo")
+JST = timezone(timedelta(hours=9), name="JST")
 REALTIME_WIN_ODDS_DATASPEC = "0B31"
 
 
