@@ -51,3 +51,16 @@ therefore does not invoke the Doctor internally.
 The bootstrap performs COM/runtime validation first, then the smoke performs
 exactly one current-week RACE open with fromtime 00000000000000 and option 2.
 Full mode performs the historical setup open only after the smoke succeeds.
+
+
+## Smoke acceptance vs full-history acceptance
+
+The current-week smoke is a transport/parser test, not a completed-history
+quality gate. Current-week RACE data may contain future or not-yet-final races.
+
+Therefore smoke parsing uses completed_only=False and succeeds when RA/SE
+records can be matched and parsed structurally.
+
+Full historical acquisition remains strict: completed_only=True is retained,
+so rows without final finish position and valid final win odds are excluded
+before Current History Intake.
