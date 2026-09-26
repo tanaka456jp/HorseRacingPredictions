@@ -1,8 +1,13 @@
+from datetime import datetime, timezone
+
 import pandas as pd
 import pytest
 
+from horse_racing_predictions.jravan import JraVanApiError
 from horse_racing_predictions.jravan_trial import (
+    acquire_trial_race_raw,
     filter_after_base_history,
+    recent_normal_from_time,
     resolve_approved_base_history,
 )
 
@@ -99,3 +104,80 @@ def test_resolve_approved_base_history_uses_kagglehub_when_missing(
         cache_dir=tmp_path / "cache",
     )
     assert resolved == expected
+
+
+def test_recent_normal_from_time_uses_recent_year():
+    value = recent_normal_from_time(
+        now=datetime(
+            2026, 9, 26, 12, 0,
+            tzinfo=timezone.utc,
+        )
+    )
+    assert value == "20250926000000"
+
+
+def test_trial_acquisition_falls_back_to_option1_on_301(tmp_path):
+    calls = []
+
+    def exporter(**kwargs):
+        calls.append({
+            "from_time": kwargs["from_time"],
+            "option": kwargs["option"],
+        })
+        if len(calls) == 1:
+            raise JraVanApiError(
+                "JVOpen failed with return code -301"
+            )
+        return object()
+
+    (
+        _summary,
+        mode,
+        effective_from,
+        effective_option,
+        reason,
+    ) = acquire_trial_race_raw(
+        output_path=tmp_path / "raw.jsonl",
+        summary_path=tmp_path / "summary.json",
+        setup_from_time="20210801000000",
+        setup_option=4,
+        recent_days=365,
+        now=datetime(
+            2026, 9, 26, 12, 0,
+            tzinfo=timezone.utc,
+        ),
+        exporter=exporter,
+    )
+
+    assert calls == [
+        {
+            "from_time": "20210801000000",
+            "option": 4,
+        },
+        {
+            "from_time": "20250926000000",
+            "option": 1,
+        },
+    ]
+    assert mode == "recent_normal_fallback"
+    assert effective_from == "20250926000000"
+    assert effective_option == 1
+    assert "-301" in reason
+
+
+def test_trial_acquisition_does_not_hide_non_auth_errors(tmp_path):
+    def exporter(**kwargs):
+        raise JraVanApiError(
+            "JVOpen failed with return code -305"
+        )
+
+    with pytest.raises(
+        JraVanApiError,
+        match="return code -305",
+    ):
+        acquire_trial_race_raw(
+            output_path=tmp_path / "raw.jsonl",
+            summary_path=tmp_path / "summary.json",
+            setup_from_time="20210801000000",
+            exporter=exporter,
+        )
