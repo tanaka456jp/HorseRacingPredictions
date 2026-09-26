@@ -95,8 +95,8 @@ def _guidance_for_code(code: int | None) -> str | None:
 
 def run_jravan_doctor(
     *,
-    from_time: str = "20210801000000",
-    option: int = 4,
+    from_time: str = "00000000000000",
+    option: int = 2,
     sid: str = "UNKNOWN",
     max_records: int = 1000,
     client: JvLinkClient | None = None,
@@ -137,6 +137,11 @@ def run_jravan_doctor(
         opened = client.open_race(
             from_time=from_time,
             option=option,
+        )
+        client.wait_for_downloads(
+            opened,
+            max_polls=600,
+            poll_seconds=0.2,
         )
         open_code = opened.return_code
         read_count = opened.read_count
