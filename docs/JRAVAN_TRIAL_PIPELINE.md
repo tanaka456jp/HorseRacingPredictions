@@ -4,11 +4,16 @@ For the local Windows PC with JV-Link installed:
 
 Smoke only:
 
-    powershell -ExecutionPolicy Bypass -File scripts/run_jravan_trial.ps1 -BaseHistory data/raw/19860105-20210731_race_result.csv
+    powershell -ExecutionPolicy Bypass -File scripts/run_jravan_trial.ps1
 
 After the smoke passes, run the full setup acquisition:
 
-    powershell -ExecutionPolicy Bypass -File scripts/run_jravan_trial.ps1 -BaseHistory data/raw/19860105-20210731_race_result.csv -Full
+    powershell -ExecutionPolicy Bypass -File scripts/run_jravan_trial.ps1 -Full
+
+The script installs pywin32 and kagglehub automatically. During the full run,
+the approved 1986-2021 Kaggle base history is downloaded automatically. An
+explicit -BaseHistory path can still be supplied when an existing local copy
+should be used.
 
 The full flow is:
 
