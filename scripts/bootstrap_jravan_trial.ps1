@@ -131,14 +131,9 @@ try {
     }
 
     Write-Host "[3/5] Verifying Python and JV-Link COM"
-    & $venvPython -c 'import struct,sys; print("Python=%s bits=%d" % (sys.version.split()[0], struct.calcsize("P")*8))'
+    & $venvPython (Join-Path $ProjectRoot "scripts\check_jravan_runtime.py")
     if ($LASTEXITCODE -ne 0) {
-        throw "Python architecture check failed"
-    }
-
-    & $venvPython -c 'import win32com.client.dynamic as d; x=d.Dispatch("JVDTLab.JVLink"); print("JV-Link COM=OK")'
-    if ($LASTEXITCODE -ne 0) {
-        throw "JV-Link COM is not registered. Install/open JV-Link and retry."
+        throw "Python/JV-Link runtime check failed"
     }
 
     Write-Host "[4/5] Running Doctor + RA/SE smoke"
