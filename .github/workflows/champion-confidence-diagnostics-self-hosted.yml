@@ -1,0 +1,43 @@
+name: Champion Confidence Diagnostics (Self-hosted)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "research/champion_confidence_diagnostics_request.txt"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: champion-confidence-diagnostics-self-hosted
+  cancel-in-progress: true
+
+jobs:
+  diagnostics:
+    name: Frozen Champion post-training diagnostics
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout without deleting local ignored data
+        uses: actions/checkout@v4
+        with:
+          clean: false
+          persist-credentials: false
+
+      - name: Run frozen Champion diagnostics
+        shell: powershell
+        run: |
+          & .\scripts\run_champion_confidence_diagnostics_runner.ps1
+
+      - name: Publish sanitized validation only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: champion-confidence-diagnostics-validation
+          path: artifacts/champion_diagnostics_runner_validation.json
+          if-no-files-found: warn
+          retention-days: 14
