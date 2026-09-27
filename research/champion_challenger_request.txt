@@ -1,0 +1,4 @@
+FREE-FIRST Champion challenger research request marker.
+Update this file on main to compare the frozen Balanced Champion against
+an otherwise matched unweighted CatBoost challenger. Horse-level predictions,
+raw racing data, model files, and local ledgers must remain local.
