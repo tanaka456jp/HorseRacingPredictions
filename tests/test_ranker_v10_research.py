@@ -5,6 +5,7 @@ import pytest
 
 from horse_racing_predictions.ranker_v10_research import (
     evaluate_ranker_v10_development,
+    evaluate_ranker_v10_holdout_confirmation,
 )
 
 
@@ -85,4 +86,33 @@ def test_ranker_v10_development_excludes_2025_plus_before_selection():
     assert (
         "development_gate_passed"
         in result["selection_2024"]
+    )
+
+
+
+def test_ranker_v10_holdout_confirmation_uses_2025_plus_only():
+    pytest.importorskip("catboost")
+    result = evaluate_ranker_v10_holdout_confirmation(
+        _history(),
+        _champion(),
+        challenger_iterations=5,
+    )
+
+    holdout = result["holdout_2025_2026"]
+    assert result["calibration"]["period_end"] == "2023-01-05"
+    assert holdout["period_start"] == "2025-01-05"
+    assert holdout["period_end"] == "2025-01-05"
+    assert holdout["rows"] == 3
+    assert holdout["races"] == 1
+    assert (
+        "holdout_confirmation_passed"
+        in holdout
+    )
+    assert (
+        holdout["v9_ev15_research"]["ev_threshold"]
+        == 1.15
+    )
+    assert (
+        holdout["v10_ev15_research"]["ev_threshold"]
+        == 1.15
     )
