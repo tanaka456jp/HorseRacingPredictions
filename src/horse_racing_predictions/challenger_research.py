@@ -112,6 +112,7 @@ def evaluate_unweighted_catboost_challenger(
     champion: LoadedChampion,
     *,
     config: StrategyConfig | None = None,
+    challenger_iterations: int = 350,
 ) -> dict:
     config = config or StrategyConfig()
     data = align_history_to_training_start(
@@ -171,8 +172,13 @@ def evaluate_unweighted_catboost_challenger(
             "challenger research requires both train and evaluation rows"
         )
 
+    if challenger_iterations < 1:
+        raise ValueError(
+            "challenger_iterations must be positive"
+        )
     challenger_model = CatBoostProbabilityModel(
         list(required_features),
+        iterations=challenger_iterations,
         auto_class_weights=None,
     ).fit(
         train,
