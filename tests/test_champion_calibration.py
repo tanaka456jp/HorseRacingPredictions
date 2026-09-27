@@ -100,3 +100,31 @@ def test_calibration_reports_holdout_ev_sweeps_without_changing_config():
     assert 1.15 in {
         row["ev_threshold"] for row in calibrated
     }
+
+
+def test_calibrated_candidate_policy_sweep_is_reported():
+    result = evaluate_temperature_calibration_predictions(
+        _predictions(),
+        _champion(),
+        config=StrategyConfig(
+            min_ev=1.15,
+            min_probability=0.03,
+            min_confidence=0.55,
+        ),
+    )
+
+    rows = result[
+        "calibrated_candidate_selection_policy_sweep_by_period"
+    ]
+    assert rows
+    holdout = [
+        row for row in rows
+        if row["period"] == "holdout_2025_2026"
+        and row["confidence_threshold"] == 0.0
+    ]
+    policies = {row["policy"] for row in holdout}
+    assert policies == {
+        "all_candidates",
+        "top1_ev_per_race",
+        "top1_probability_per_race",
+    }
