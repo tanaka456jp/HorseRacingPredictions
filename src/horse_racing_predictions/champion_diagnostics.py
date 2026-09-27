@@ -216,6 +216,179 @@ def _confidence_threshold_sweep_by_period(
     return rows
 
 
+def _select_policy_candidates(
+    frame: pd.DataFrame,
+    *,
+    confidence_threshold: float,
+    config: StrategyConfig,
+    policy: str,
+) -> pd.DataFrame:
+    probability = pd.to_numeric(
+        frame["predicted_win_probability"],
+        errors="coerce",
+    )
+    confidence = pd.to_numeric(
+        frame["confidence"],
+        errors="coerce",
+    )
+    odds = pd.to_numeric(
+        frame["decimal_odds"],
+        errors="coerce",
+    )
+    eligible = frame.loc[
+        probability.ge(config.min_probability)
+        & confidence.ge(confidence_threshold)
+        & (probability * odds).ge(config.min_ev)
+    ].copy()
+    if eligible.empty or policy == "all_candidates":
+        return eligible
+
+    eligible["_ev"] = (
+        pd.to_numeric(
+            eligible["predicted_win_probability"],
+            errors="coerce",
+        )
+        * pd.to_numeric(
+            eligible["decimal_odds"],
+            errors="coerce",
+        )
+    )
+    eligible["_p"] = pd.to_numeric(
+        eligible["predicted_win_probability"],
+        errors="coerce",
+    )
+
+    if policy == "top1_ev_per_race":
+        ordered = eligible.sort_values(
+            ["race_id", "_ev", "_p", "horse_id"],
+            ascending=[True, False, False, True],
+            kind="stable",
+        )
+    elif policy == "top1_probability_per_race":
+        ordered = eligible.sort_values(
+            ["race_id", "_p", "_ev", "horse_id"],
+            ascending=[True, False, False, True],
+            kind="stable",
+        )
+    else:
+        raise ValueError(
+            f"unknown candidate selection policy: {policy}"
+        )
+
+    return (
+        ordered.groupby("race_id", sort=False, as_index=False)
+        .head(1)
+        .drop(columns=["_ev", "_p"])
+    )
+
+
+def _policy_result(
+    selected: pd.DataFrame,
+    *,
+    period: str,
+    threshold: float,
+    policy: str,
+) -> dict:
+    if selected.empty:
+        return {
+            "period": period,
+            "confidence_threshold": threshold,
+            "policy": policy,
+            "rows": 0,
+            "races": 0,
+            "wins": 0,
+            "hit_rate": None,
+            "flat_bet_roi_final_odds": None,
+        }
+
+    finish = pd.to_numeric(
+        selected["finish_position"],
+        errors="coerce",
+    )
+    odds = pd.to_numeric(
+        selected["decimal_odds"],
+        errors="coerce",
+    )
+    wins_mask = finish.eq(1)
+    wins = int(wins_mask.sum())
+    flat_return = float(
+        odds.where(wins_mask, 0.0).mean()
+    )
+    return {
+        "period": period,
+        "confidence_threshold": threshold,
+        "policy": policy,
+        "rows": int(len(selected)),
+        "races": int(selected["race_id"].nunique()),
+        "wins": wins,
+        "hit_rate": _safe_float(wins / len(selected)),
+        "flat_bet_roi_final_odds": _safe_float(
+            flat_return - 1.0
+        ),
+    }
+
+
+def _candidate_selection_policy_sweep_by_period(
+    frame: pd.DataFrame,
+    config: StrategyConfig,
+    thresholds: tuple[float, ...] = (
+        0.0,
+        0.10,
+        0.20,
+        0.35,
+        0.55,
+    ),
+) -> list[dict]:
+    periods = (
+        (
+            "development_2021_2024",
+            pd.Timestamp("2021-08-01"),
+            pd.Timestamp("2024-12-31"),
+        ),
+        (
+            "holdout_2025_2026",
+            pd.Timestamp("2025-01-01"),
+            pd.Timestamp("2026-12-31"),
+        ),
+    )
+    policies = (
+        "all_candidates",
+        "top1_ev_per_race",
+        "top1_probability_per_race",
+    )
+    results: list[dict] = []
+
+    for label, start, end in periods:
+        subset = frame.loc[
+            frame["race_date"].between(
+                start,
+                end,
+                inclusive="both",
+            )
+        ].copy()
+        if subset.empty:
+            continue
+
+        for threshold in thresholds:
+            for policy in policies:
+                selected = _select_policy_candidates(
+                    subset,
+                    confidence_threshold=threshold,
+                    config=config,
+                    policy=policy,
+                )
+                results.append(
+                    _policy_result(
+                        selected,
+                        period=label,
+                        threshold=threshold,
+                        policy=policy,
+                    )
+                )
+
+    return results
+
+
 def summarize_prediction_diagnostics(
     predictions: pd.DataFrame,
     *,
@@ -331,6 +504,12 @@ def summarize_prediction_diagnostics(
         ),
         "confidence_threshold_sweep_by_period": (
             _confidence_threshold_sweep_by_period(
+                frame,
+                config,
+            )
+        ),
+        "candidate_selection_policy_sweep_by_period": (
+            _candidate_selection_policy_sweep_by_period(
                 frame,
                 config,
             )
