@@ -1,0 +1,5 @@
+Research-only fixed Ranker v10 holdout confirmation marker.
+The context feature set passed the pre-specified 2024 development gate before
+this request was created. Do not change features, Ranker settings, calibration
+period, or thresholds based on 2025-2026 results.
+Only sanitized aggregate validation may be uploaded.
