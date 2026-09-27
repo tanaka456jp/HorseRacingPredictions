@@ -140,3 +140,76 @@ def test_confidence_sweep_is_split_into_development_and_holdout():
     ]
     assert len(holdout) == 1
     assert holdout[0]["rows"] == 2
+
+
+def test_candidate_selection_policy_sweep_limits_to_one_per_race():
+    frame = pd.DataFrame([
+        {
+            "race_id": "R1",
+            "race_date": "2025-01-01",
+            "horse_id": "R1-1",
+            "horse_name": "A",
+            "finish_position": 2,
+            "decimal_odds": 4.0,
+            "predicted_win_probability": 0.40,
+            "confidence": 0.30,
+            "model_version": "champion-v7",
+        },
+        {
+            "race_id": "R1",
+            "race_date": "2025-01-01",
+            "horse_id": "R1-2",
+            "horse_name": "B",
+            "finish_position": 1,
+            "decimal_odds": 8.0,
+            "predicted_win_probability": 0.20,
+            "confidence": 0.30,
+            "model_version": "champion-v7",
+        },
+        {
+            "race_id": "R2",
+            "race_date": "2025-01-02",
+            "horse_id": "R2-1",
+            "horse_name": "C",
+            "finish_position": 1,
+            "decimal_odds": 3.0,
+            "predicted_win_probability": 0.50,
+            "confidence": 0.30,
+            "model_version": "champion-v7",
+        },
+        {
+            "race_id": "R2",
+            "race_date": "2025-01-02",
+            "horse_id": "R2-2",
+            "horse_name": "D",
+            "finish_position": 2,
+            "decimal_odds": 10.0,
+            "predicted_win_probability": 0.15,
+            "confidence": 0.30,
+            "model_version": "champion-v7",
+        },
+    ])
+
+    summary = summarize_prediction_diagnostics(
+        frame,
+        config=StrategyConfig(
+            min_ev=1.15,
+            min_probability=0.03,
+            min_confidence=0.55,
+        ),
+    )
+
+    rows = summary["candidate_selection_policy_sweep_by_period"]
+    holdout = [
+        row for row in rows
+        if row["period"] == "holdout_2025_2026"
+        and row["confidence_threshold"] == 0.0
+    ]
+    by_policy = {row["policy"]: row for row in holdout}
+
+    assert by_policy["all_candidates"]["rows"] == 4
+    assert by_policy["all_candidates"]["races"] == 2
+    assert by_policy["top1_ev_per_race"]["rows"] == 2
+    assert by_policy["top1_ev_per_race"]["races"] == 2
+    assert by_policy["top1_probability_per_race"]["rows"] == 2
+    assert by_policy["top1_probability_per_race"]["races"] == 2
