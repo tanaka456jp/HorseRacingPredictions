@@ -4,6 +4,7 @@ import math
 import numpy as np
 import pandas as pd
 
+from .feature_window import align_history_to_training_start
 from .features import build_pre_race_features
 from .model_artifact import LoadedChampion
 
@@ -98,8 +99,12 @@ def predict_future_entries(
     max_history_gap_days: int = 14,
     allow_stale_history: bool = False,
 ) -> pd.DataFrame:
-    future = build_future_feature_frame(
+    aligned_history = align_history_to_training_start(
         history,
+        train_start=champion.manifest.train_start,
+    )
+    future = build_future_feature_frame(
+        aligned_history,
         entries,
         champion.manifest.feature_columns,
         max_history_gap_days=max_history_gap_days,
@@ -133,7 +138,7 @@ def predict_future_entries(
     output["model_version"] = champion.manifest.model_version
     output["experiment_id"] = champion.manifest.experiment_id
     output["history_cutoff"] = str(
-        pd.to_datetime(history["race_date"], errors="raise")
+        pd.to_datetime(aligned_history["race_date"], errors="raise")
         .max()
         .date()
     )
