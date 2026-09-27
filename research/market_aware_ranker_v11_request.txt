@@ -1,0 +1,6 @@
+Research-only market-aware Ranker v11 development request marker.
+Update this file on main to evaluate whether context features can improve on
+the market baseline using development history through 2024 only.
+Historical final odds are a research proxy. The 2025-2026 holdout must remain
+untouched until the development gate beats market log-loss and Brier.
+Only sanitized aggregate validation may be uploaded.
