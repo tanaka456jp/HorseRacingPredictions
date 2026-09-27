@@ -1,0 +1,43 @@
+name: Market-aware Ranker v11 Development (Self-hosted)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "research/market_aware_ranker_v11_request.txt"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: market-aware-ranker-v11-development-self-hosted
+  cancel-in-progress: true
+
+jobs:
+  market-aware-ranker-v11:
+    name: Market-aware Ranker v11 development gate
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 150
+
+    steps:
+      - name: Checkout without deleting local ignored data
+        uses: actions/checkout@v4
+        with:
+          clean: false
+          persist-credentials: false
+
+      - name: Run development-only market-aware Ranker v11 research
+        shell: powershell
+        run: |
+          & .\scripts\run_market_aware_ranker_v11_runner.ps1
+
+      - name: Publish sanitized validation only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: market-aware-ranker-v11-development-validation
+          path: artifacts/market_aware_ranker_v11_runner_validation.json
+          if-no-files-found: warn
+          retention-days: 14
