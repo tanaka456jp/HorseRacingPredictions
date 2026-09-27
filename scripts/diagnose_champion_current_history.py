@@ -2,8 +2,12 @@ import argparse
 import json
 from pathlib import Path
 
+from horse_racing_predictions.champion_calibration import (
+    evaluate_temperature_calibration_predictions,
+)
 from horse_racing_predictions.champion_diagnostics import (
-    evaluate_frozen_champion_history,
+    build_frozen_champion_predictions,
+    summarize_prediction_diagnostics,
 )
 from horse_racing_predictions.config import StrategyConfig
 from horse_racing_predictions.data_sources import (
@@ -47,13 +51,33 @@ def main() -> None:
         low_memory=False,
     )
     champion = load_champion_artifact(args.champion)
-    summary = evaluate_frozen_champion_history(
+    config = StrategyConfig()
+    predictions = build_frozen_champion_predictions(
         history,
         champion,
-        config=StrategyConfig(),
         start_date=args.start.strip() or None,
         end_date=args.end.strip() or None,
+    )
+    summary = summarize_prediction_diagnostics(
+        predictions,
+        config=config,
         starting_bankroll_yen=args.bankroll_yen,
+    )
+    summary["champion"] = {
+        "model_version": champion.manifest.model_version,
+        "experiment_id": champion.manifest.experiment_id,
+        "train_start": champion.manifest.train_start,
+        "train_end": champion.manifest.train_end,
+        "validation_research_roi": (
+            champion.manifest.validation_research_roi
+        ),
+    }
+    summary["temperature_calibration"] = (
+        evaluate_temperature_calibration_predictions(
+            predictions,
+            champion,
+            config=config,
+        )
     )
 
     output = Path(args.output)
@@ -76,6 +100,17 @@ def main() -> None:
         "current_config_backtest_final_odds": (
             summary["current_config_backtest_final_odds"]
         ),
+        "temperature_calibration": {
+            "temperature": summary[
+                "temperature_calibration"
+            ]["temperature"],
+            "development_quality": summary[
+                "temperature_calibration"
+            ]["development"],
+            "holdout_quality": summary[
+                "temperature_calibration"
+            ]["holdout"],
+        },
     }, ensure_ascii=False, indent=2))
 
 

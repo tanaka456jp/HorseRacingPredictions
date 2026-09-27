@@ -340,15 +340,13 @@ def summarize_prediction_diagnostics(
     }
 
 
-def evaluate_frozen_champion_history(
+def build_frozen_champion_predictions(
     history: pd.DataFrame,
     champion: LoadedChampion,
     *,
-    config: StrategyConfig | None = None,
     start_date: str | pd.Timestamp | None = None,
     end_date: str | pd.Timestamp | None = None,
-    starting_bankroll_yen: int = 100_000,
-) -> dict:
+) -> pd.DataFrame:
     if history.empty:
         raise ValueError("history is empty")
 
@@ -457,7 +455,24 @@ def evaluate_frozen_champion_history(
     predictions["model_version"] = (
         champion.manifest.model_version
     )
+    return predictions.reset_index(drop=True)
 
+
+def evaluate_frozen_champion_history(
+    history: pd.DataFrame,
+    champion: LoadedChampion,
+    *,
+    config: StrategyConfig | None = None,
+    start_date: str | pd.Timestamp | None = None,
+    end_date: str | pd.Timestamp | None = None,
+    starting_bankroll_yen: int = 100_000,
+) -> dict:
+    predictions = build_frozen_champion_predictions(
+        history,
+        champion,
+        start_date=start_date,
+        end_date=end_date,
+    )
     summary = summarize_prediction_diagnostics(
         predictions,
         config=config,
@@ -473,3 +488,4 @@ def evaluate_frozen_champion_history(
         ),
     }
     return summary
+
