@@ -10,6 +10,7 @@ from .calibration import (
     winner_log_loss,
 )
 from .champion_diagnostics import (
+    _candidate_selection_policy_sweep_by_period,
     build_frozen_champion_predictions,
     race_certainty,
 )
@@ -263,6 +264,37 @@ def evaluate_temperature_calibration_predictions(
         ).transform(race_certainty)
     )
 
+    calibrated_development_frame = development.copy()
+    calibrated_development_frame[
+        "predicted_win_probability"
+    ] = calibrated_development
+    calibrated_development_frame[
+        "confidence"
+    ] = development_confidence
+
+    calibrated_holdout_frame = holdout.copy()
+    calibrated_holdout_frame[
+        "predicted_win_probability"
+    ] = calibrated_holdout
+    calibrated_holdout_frame[
+        "confidence"
+    ] = holdout_confidence
+
+    calibrated_policy_frame = pd.concat(
+        [
+            calibrated_development_frame,
+            calibrated_holdout_frame,
+        ],
+        ignore_index=True,
+        sort=False,
+    )
+    calibrated_policy_sweep = (
+        _candidate_selection_policy_sweep_by_period(
+            calibrated_policy_frame,
+            config,
+        )
+    )
+
     return {
         "status": (
             "research_only_post_training_temperature_calibration"
@@ -279,6 +311,9 @@ def evaluate_temperature_calibration_predictions(
             "train_end": champion.manifest.train_end,
         },
         "temperature": _safe_float(temperature),
+        "calibrated_candidate_selection_policy_sweep_by_period": (
+            calibrated_policy_sweep
+        ),
         "development": {
             "period_start": str(
                 pd.to_datetime(
