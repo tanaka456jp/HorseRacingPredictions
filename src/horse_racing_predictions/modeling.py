@@ -173,3 +173,106 @@ class CatBoostProbabilityModel:
             prediction_type="RawFormulaVal",
         )
         return _race_softmax(scores, frame[race_col], frame.index)
+
+
+@dataclass
+class CatBoostRankingProbabilityModel:
+    feature_columns: list[str]
+    iterations: int = 350
+    depth: int = 7
+    learning_rate: float = 0.05
+    random_seed: int = 42
+    loss_function: str = "YetiRankPairwise"
+
+    def __post_init__(self):
+        self.model = None
+        self.categorical_columns: list[str] = []
+
+    def _prepare(self, frame: pd.DataFrame) -> pd.DataFrame:
+        out = frame[self.feature_columns].copy()
+        for column in self.feature_columns:
+            if pd.api.types.is_numeric_dtype(out[column]):
+                out[column] = pd.to_numeric(
+                    out[column],
+                    errors="coerce",
+                )
+            else:
+                out[column] = (
+                    out[column]
+                    .astype("string")
+                    .fillna("UNKNOWN")
+                    .astype(str)
+                )
+        return out
+
+    def fit(
+        self,
+        frame: pd.DataFrame,
+        target_col: str = "is_winner",
+        race_col: str = "race_id",
+    ):
+        try:
+            from catboost import CatBoostRanker
+        except ImportError as exc:
+            raise RuntimeError(
+                "CatBoost ranker requires the research extra: "
+                "pip install -e '.[research]'"
+            ) from exc
+
+        if race_col not in frame.columns:
+            raise ValueError(
+                f"ranker training frame lacks {race_col}"
+            )
+        if target_col not in frame.columns:
+            raise ValueError(
+                f"ranker training frame lacks {target_col}"
+            )
+
+        train = frame.copy()
+        train["_ranker_row_order"] = np.arange(len(train))
+        train = train.sort_values(
+            [race_col, "_ranker_row_order"],
+            kind="stable",
+        )
+        x = self._prepare(train)
+        self.categorical_columns = [
+            column for column in self.feature_columns
+            if not pd.api.types.is_numeric_dtype(x[column])
+        ]
+
+        self.model = CatBoostRanker(
+            iterations=self.iterations,
+            depth=self.depth,
+            learning_rate=self.learning_rate,
+            loss_function=self.loss_function,
+            random_seed=self.random_seed,
+            verbose=False,
+            allow_writing_files=False,
+            thread_count=-1,
+            l2_leaf_reg=5.0,
+        )
+        self.model.fit(
+            x,
+            pd.to_numeric(
+                train[target_col],
+                errors="raise",
+            ).astype(float),
+            group_id=train[race_col].astype(str),
+            cat_features=self.categorical_columns,
+        )
+        return self
+
+    def predict_win_probability(
+        self,
+        frame: pd.DataFrame,
+        race_col: str = "race_id",
+    ) -> pd.Series:
+        if self.model is None:
+            raise RuntimeError("ranker model is not fitted")
+        x = self._prepare(frame)
+        scores = self.model.predict(x)
+        return _race_softmax(
+            scores,
+            frame[race_col],
+            frame.index,
+        )

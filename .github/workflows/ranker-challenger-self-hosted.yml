@@ -1,0 +1,43 @@
+name: Ranker Challenger Research (Self-hosted)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "research/ranker_challenger_request.txt"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ranker-challenger-research-self-hosted
+  cancel-in-progress: true
+
+jobs:
+  ranker-challenger:
+    name: Compare Champion with CatBoostRanker challenger
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout without deleting local ignored data
+        uses: actions/checkout@v4
+        with:
+          clean: false
+          persist-credentials: false
+
+      - name: Run CatBoostRanker challenger research
+        shell: powershell
+        run: |
+          & .\scripts\run_ranker_challenger_runner.ps1
+
+      - name: Publish sanitized validation only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ranker-challenger-validation
+          path: artifacts/ranker_challenger_runner_validation.json
+          if-no-files-found: warn
+          retention-days: 14

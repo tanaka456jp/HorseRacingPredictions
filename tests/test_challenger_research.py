@@ -7,8 +7,12 @@ import pytest
 from horse_racing_predictions.challenger_research import (
     evaluate_unweighted_catboost_challenger,
 )
+from horse_racing_predictions.ranker_challenger_research import (
+    evaluate_catboost_ranker_challenger,
+)
 from horse_racing_predictions.modeling import (
     CatBoostProbabilityModel,
+    CatBoostRankingProbabilityModel,
 )
 
 
@@ -119,3 +123,66 @@ def test_unweighted_challenger_uses_same_train_end_and_holdout():
     assert comparison[
         "challenger_calibrated_winner_log_loss"
     ] is not None
+
+
+def test_catboost_ranker_probabilities_sum_to_one():
+    pytest.importorskip("catboost")
+    train = pd.DataFrame({
+        "race_id": [
+            "R1", "R1", "R1",
+            "R2", "R2", "R2",
+            "R3", "R3", "R3",
+        ],
+        "post_position": [
+            1, 2, 3,
+            1, 2, 3,
+            1, 2, 3,
+        ],
+        "is_winner": [
+            1, 0, 0,
+            0, 1, 0,
+            0, 0, 1,
+        ],
+    })
+    model = CatBoostRankingProbabilityModel(
+        ["post_position"],
+        iterations=5,
+        depth=2,
+    ).fit(train)
+
+    p = model.predict_win_probability(train)
+    sums = p.groupby(train["race_id"]).sum()
+
+    assert np.allclose(
+        sums.to_numpy(),
+        [1.0, 1.0, 1.0],
+    )
+    assert ((p >= 0) & (p <= 1)).all()
+
+
+def test_ranker_challenger_uses_same_train_end_and_holdout():
+    pytest.importorskip("catboost")
+    result = evaluate_catboost_ranker_challenger(
+        _history(),
+        _champion(),
+        challenger_iterations=5,
+    )
+
+    assert result["training"]["train_end"] == "2021-07-31"
+    assert result["training"]["races"] == 5
+    assert result["evaluation"]["races"] == 5
+    assert (
+        result["challenger"]["model_version"]
+        == "challenger-v9-catboost-ranker"
+    )
+    comparison = result["holdout_comparison"]
+    assert comparison[
+        "baseline_calibrated_winner_log_loss"
+    ] is not None
+    assert comparison[
+        "challenger_calibrated_winner_log_loss"
+    ] is not None
+    assert (
+        "challenger_beats_baseline_winner_log_loss"
+        in comparison
+    )
