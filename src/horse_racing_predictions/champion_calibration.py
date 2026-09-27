@@ -182,6 +182,143 @@ def _ev_threshold_sweep(
     return rows
 
 
+def _market_consensus_sweep(
+    frame: pd.DataFrame,
+    probability: pd.Series,
+    confidence: pd.Series,
+    *,
+    period: str,
+    config: StrategyConfig,
+    confidence_thresholds: tuple[float, ...] = (
+        0.0,
+        0.10,
+        0.20,
+        0.35,
+    ),
+    market_rank_caps: tuple[int, ...] = (
+        1,
+        3,
+        5,
+    ),
+) -> list[dict]:
+    work = frame.copy()
+    work["_p"] = pd.to_numeric(
+        probability,
+        errors="coerce",
+    )
+    work["_confidence"] = pd.to_numeric(
+        confidence,
+        errors="coerce",
+    )
+    work["_odds"] = pd.to_numeric(
+        work["decimal_odds"],
+        errors="coerce",
+    )
+    work["_ev"] = work["_p"] * work["_odds"]
+    work["_market_rank"] = (
+        work.groupby("race_id")["_odds"]
+        .rank(method="min", ascending=True)
+    )
+
+    rows: list[dict] = []
+    for threshold in confidence_thresholds:
+        eligible = work.loc[
+            work["_p"].ge(config.min_probability)
+            & work["_confidence"].ge(threshold)
+            & work["_ev"].ge(config.min_ev)
+        ].copy()
+
+        if eligible.empty:
+            for cap in market_rank_caps:
+                rows.append({
+                    "period": period,
+                    "confidence_threshold": threshold,
+                    "market_rank_cap": cap,
+                    "rows": 0,
+                    "races": 0,
+                    "wins": 0,
+                    "hit_rate": None,
+                    "average_market_rank": None,
+                    "flat_bet_roi_final_odds": None,
+                })
+            continue
+
+        top1 = (
+            eligible.sort_values(
+                [
+                    "race_id",
+                    "_p",
+                    "_ev",
+                    "horse_id",
+                ],
+                ascending=[
+                    True,
+                    False,
+                    False,
+                    True,
+                ],
+                kind="stable",
+            )
+            .groupby(
+                "race_id",
+                sort=False,
+                as_index=False,
+            )
+            .head(1)
+        )
+
+        for cap in market_rank_caps:
+            selected = top1.loc[
+                top1["_market_rank"].le(cap)
+            ].copy()
+            if selected.empty:
+                rows.append({
+                    "period": period,
+                    "confidence_threshold": threshold,
+                    "market_rank_cap": cap,
+                    "rows": 0,
+                    "races": 0,
+                    "wins": 0,
+                    "hit_rate": None,
+                    "average_market_rank": None,
+                    "flat_bet_roi_final_odds": None,
+                })
+                continue
+
+            finish = pd.to_numeric(
+                selected["finish_position"],
+                errors="coerce",
+            )
+            wins_mask = finish.eq(1)
+            wins = int(wins_mask.sum())
+            flat_return = float(
+                selected["_odds"].where(
+                    wins_mask,
+                    0.0,
+                ).mean()
+            )
+            rows.append({
+                "period": period,
+                "confidence_threshold": threshold,
+                "market_rank_cap": cap,
+                "rows": int(len(selected)),
+                "races": int(
+                    selected["race_id"].nunique()
+                ),
+                "wins": wins,
+                "hit_rate": _safe_float(
+                    wins / len(selected)
+                ),
+                "average_market_rank": _safe_float(
+                    selected["_market_rank"].mean()
+                ),
+                "flat_bet_roi_final_odds": _safe_float(
+                    flat_return - 1.0
+                ),
+            })
+    return rows
+
+
 def evaluate_temperature_calibration_predictions(
     predictions: pd.DataFrame,
     champion: LoadedChampion,
@@ -294,6 +431,22 @@ def evaluate_temperature_calibration_predictions(
             config,
         )
     )
+    calibrated_market_consensus_sweep = (
+        _market_consensus_sweep(
+            calibrated_development_frame,
+            calibrated_development,
+            development_confidence,
+            period="development_2021_2024",
+            config=config,
+        )
+        + _market_consensus_sweep(
+            calibrated_holdout_frame,
+            calibrated_holdout,
+            holdout_confidence,
+            period="holdout_2025_2026",
+            config=config,
+        )
+    )
 
     return {
         "status": (
@@ -313,6 +466,9 @@ def evaluate_temperature_calibration_predictions(
         "temperature": _safe_float(temperature),
         "calibrated_candidate_selection_policy_sweep_by_period": (
             calibrated_policy_sweep
+        ),
+        "calibrated_market_consensus_sweep": (
+            calibrated_market_consensus_sweep
         ),
         "development": {
             "period_start": str(
