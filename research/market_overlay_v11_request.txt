@@ -1,0 +1,5 @@
+Research-only market overlay v11 development request marker.
+Fit the overlay rule on 2023 and validate it unchanged on 2024.
+Rows from 2025 onward must remain untouched until this gate passes.
+Historical final odds are a research proxy only; pre-race 0B31 snapshots are
+required before any Forward Paper use. Only sanitized aggregates may upload.

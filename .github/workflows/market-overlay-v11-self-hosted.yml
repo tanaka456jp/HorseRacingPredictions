@@ -1,0 +1,43 @@
+name: Market Overlay v11 Development (Self-hosted)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "research/market_overlay_v11_request.txt"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: market-overlay-v11-development-self-hosted
+  cancel-in-progress: true
+
+jobs:
+  market-overlay-v11:
+    name: Fit 2023 overlay and validate on 2024
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 150
+
+    steps:
+      - name: Checkout without deleting local ignored data
+        uses: actions/checkout@v4
+        with:
+          clean: false
+          persist-credentials: false
+
+      - name: Run market overlay development gate
+        shell: powershell
+        run: |
+          & .\scripts\run_market_overlay_v11_runner.ps1
+
+      - name: Publish sanitized validation only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: market-overlay-v11-development-validation
+          path: artifacts/market_overlay_v11_runner_validation.json
+          if-no-files-found: warn
+          retention-days: 14
