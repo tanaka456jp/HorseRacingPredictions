@@ -72,6 +72,8 @@ $validation = @{
     research_max_drawdown = [double]$backtest.max_drawdown
     odds_evidence = [string]$backtest.odds_evidence
     roi_verified = [bool]$backtest.roi_verified
+    confidence_threshold_sweep = $summary.confidence_threshold_sweep
+    confidence_threshold_sweep_by_period = $summary.confidence_threshold_sweep_by_period
 }
 $validationPath = Join-Path $ProjectRoot $ValidationOutput
 $validationDir = Split-Path -Parent $validationPath
@@ -90,7 +92,9 @@ if (-not [string]::IsNullOrWhiteSpace($env:GITHUB_STEP_SUMMARY)) {
         "- confidence rejects: $($reasons.confidence_below_threshold)",
         "- eligible: $($reasons.eligible)",
         "- confidence q95/max: $($quantiles."0.95") / $($quantiles."1.0")",
-        "- research ROI (final odds; not verified live): $($backtest.roi)"
+        "- research ROI (final odds; not verified live): $($backtest.roi)",
+        "- threshold rows exported: $($summary.confidence_threshold_sweep.Count)",
+        "- period-threshold rows exported: $($summary.confidence_threshold_sweep_by_period.Count)"
     ) | Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Encoding UTF8
 }
 
