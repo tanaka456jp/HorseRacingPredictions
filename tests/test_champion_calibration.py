@@ -128,3 +128,31 @@ def test_calibrated_candidate_policy_sweep_is_reported():
         "top1_ev_per_race",
         "top1_probability_per_race",
     }
+
+
+def test_market_consensus_sweep_reports_rank_caps():
+    result = evaluate_temperature_calibration_predictions(
+        _predictions(),
+        _champion(),
+        config=StrategyConfig(
+            min_ev=1.15,
+            min_probability=0.03,
+            min_confidence=0.55,
+        ),
+    )
+
+    rows = result["calibrated_market_consensus_sweep"]
+    holdout = [
+        row for row in rows
+        if row["period"] == "holdout_2025_2026"
+        and row["confidence_threshold"] == 0.0
+    ]
+    assert {row["market_rank_cap"] for row in holdout} == {
+        1,
+        3,
+        5,
+    }
+    assert all(
+        row["rows"] <= row["races"]
+        for row in holdout
+    )
