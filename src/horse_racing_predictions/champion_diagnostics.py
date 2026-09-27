@@ -145,6 +145,77 @@ def _confidence_threshold_sweep(
     return rows
 
 
+def _confidence_threshold_sweep_by_period(
+    frame: pd.DataFrame,
+    config: StrategyConfig,
+) -> list[dict]:
+    periods = (
+        (
+            "development_2021_2024",
+            pd.Timestamp("2021-08-01"),
+            pd.Timestamp("2024-12-31"),
+        ),
+        (
+            "holdout_2025_2026",
+            pd.Timestamp("2025-01-01"),
+            pd.Timestamp("2026-12-31"),
+        ),
+    )
+    year_values = sorted(
+        int(value)
+        for value in frame["race_date"].dt.year.unique()
+    )
+    rows: list[dict] = []
+
+    for label, start, end in periods:
+        subset = frame.loc[
+            frame["race_date"].between(
+                start,
+                end,
+                inclusive="both",
+            )
+        ].copy()
+        if subset.empty:
+            continue
+        for result in _confidence_threshold_sweep(
+            subset,
+            config,
+        ):
+            rows.append({
+                "period": label,
+                "period_start": str(
+                    subset["race_date"].min().date()
+                ),
+                "period_end": str(
+                    subset["race_date"].max().date()
+                ),
+                **result,
+            })
+
+    for year in year_values:
+        subset = frame.loc[
+            frame["race_date"].dt.year.eq(year)
+        ].copy()
+        if subset.empty:
+            continue
+        for result in _confidence_threshold_sweep(
+            subset,
+            config,
+        ):
+            rows.append({
+                "period": f"year_{year}",
+                "period_start": str(
+                    subset["race_date"].min().date()
+                ),
+                "period_end": str(
+                    subset["race_date"].max().date()
+                ),
+                **result,
+            })
+
+    return rows
+
+
 def summarize_prediction_diagnostics(
     predictions: pd.DataFrame,
     *,
@@ -257,6 +328,12 @@ def summarize_prediction_diagnostics(
         "race_confidence_quantiles": confidence_quantiles,
         "confidence_threshold_sweep": (
             _confidence_threshold_sweep(frame, config)
+        ),
+        "confidence_threshold_sweep_by_period": (
+            _confidence_threshold_sweep_by_period(
+                frame,
+                config,
+            )
         ),
         "current_config_backtest_final_odds": asdict(backtest),
         "oos_style_diagnostics": build_oos_diagnostics(frame),

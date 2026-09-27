@@ -98,3 +98,45 @@ def test_confidence_sweep_includes_current_threshold():
     assert 0.55 in thresholds
     assert thresholds[0.55]["rows"] == 2
     assert thresholds[0.55]["races"] == 1
+
+
+def test_confidence_sweep_is_split_into_development_and_holdout():
+    frame = pd.concat([
+        _predictions().assign(race_date=[
+            "2024-12-30",
+            "2024-12-30",
+            "2024-12-31",
+            "2024-12-31",
+        ]),
+        _predictions().assign(
+            race_id=["R3", "R3", "R4", "R4"],
+            horse_id=["R3-1", "R3-2", "R4-1", "R4-2"],
+            race_date=[
+                "2025-01-01",
+                "2025-01-01",
+                "2026-01-02",
+                "2026-01-02",
+            ],
+        ),
+    ], ignore_index=True)
+
+    summary = summarize_prediction_diagnostics(
+        frame,
+        config=StrategyConfig(),
+    )
+
+    rows = summary["confidence_threshold_sweep_by_period"]
+    periods = {row["period"] for row in rows}
+    assert "development_2021_2024" in periods
+    assert "holdout_2025_2026" in periods
+    assert "year_2024" in periods
+    assert "year_2025" in periods
+    assert "year_2026" in periods
+
+    holdout = [
+        row for row in rows
+        if row["period"] == "holdout_2025_2026"
+        and row["confidence_threshold"] == 0.55
+    ]
+    assert len(holdout) == 1
+    assert holdout[0]["rows"] == 2
