@@ -49,6 +49,17 @@ def _add_group_history(
     )
     work["_finish_valid"] = work["_finish"].notna().astype(int)
     work["_finish_sum"] = work["_finish"].fillna(0.0)
+    if "_finish_percentile" in df.columns:
+        work["_finish_percentile"] = pd.to_numeric(
+            df["_finish_percentile"],
+            errors="coerce",
+        )
+        work["_finish_percentile_valid"] = (
+            work["_finish_percentile"].notna().astype(int)
+        )
+        work["_finish_percentile_sum"] = (
+            work["_finish_percentile"].fillna(0.0)
+        )
 
     daily = (
         work.groupby(
@@ -57,10 +68,26 @@ def _add_group_history(
             as_index=False,
         )
         .agg(
-            daily_starts=("_starts", "sum"),
-            daily_wins=("_wins", "sum"),
-            daily_finish_sum=("_finish_sum", "sum"),
-            daily_finish_count=("_finish_valid", "sum"),
+            **({
+                "daily_starts": ("_starts", "sum"),
+                "daily_wins": ("_wins", "sum"),
+                "daily_finish_sum": ("_finish_sum", "sum"),
+                "daily_finish_count": ("_finish_valid", "sum"),
+                **(
+                    {
+                        "daily_finish_percentile_sum": (
+                            "_finish_percentile_sum",
+                            "sum",
+                        ),
+                        "daily_finish_percentile_count": (
+                            "_finish_percentile_valid",
+                            "sum",
+                        ),
+                    }
+                    if "_finish_percentile" in work.columns
+                    else {}
+                ),
+            })
         )
         .sort_values(group_cols + ["_race_day"])
     )
@@ -89,6 +116,22 @@ def _add_group_history(
     daily[f"{prefix}_past_avg_finish"] = (
         daily["_past_finish_sum"] / finish_count
     )
+    if "daily_finish_percentile_sum" in daily.columns:
+        daily["_past_finish_percentile_sum"] = (
+            grouped["daily_finish_percentile_sum"].cumsum()
+            - daily["daily_finish_percentile_sum"]
+        )
+        daily["_past_finish_percentile_count"] = (
+            grouped["daily_finish_percentile_count"].cumsum()
+            - daily["daily_finish_percentile_count"]
+        )
+        percentile_count = daily[
+            "_past_finish_percentile_count"
+        ].replace(0, np.nan)
+        daily[f"{prefix}_past_avg_finish_percentile"] = (
+            daily["_past_finish_percentile_sum"]
+            / percentile_count
+        )
     previous_day = grouped["_race_day"].shift(1)
     daily[f"{prefix}_days_since_seen"] = (
         daily["_race_day"] - previous_day
@@ -100,6 +143,10 @@ def _add_group_history(
         f"{prefix}_past_avg_finish",
         f"{prefix}_days_since_seen",
     ]
+    if "daily_finish_percentile_sum" in daily.columns:
+        generated.append(
+            f"{prefix}_past_avg_finish_percentile"
+        )
     keep = group_cols + ["_race_day"] + generated
     return (
         df.merge(
