@@ -9,6 +9,7 @@ import pandas as pd
 from .backtest import simulate_win_strategy
 from .config import StrategyConfig
 from .diagnostics import build_oos_diagnostics
+from .feature_window import align_history_to_training_start
 from .features import build_pre_race_features
 from .model_artifact import LoadedChampion
 from .validation import FINAL_WIN_ODDS
@@ -274,10 +275,9 @@ def evaluate_frozen_champion_history(
     if history.empty:
         raise ValueError("history is empty")
 
-    data = history.copy()
-    data["race_date"] = pd.to_datetime(
-        data["race_date"],
-        errors="raise",
+    data = align_history_to_training_start(
+        history,
+        train_start=champion.manifest.train_start,
     )
     built = build_pre_race_features(data)
 
