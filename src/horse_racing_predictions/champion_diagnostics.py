@@ -351,6 +351,12 @@ def _candidate_selection_policy_sweep_by_period(
             pd.Timestamp("2026-12-31"),
         ),
     )
+    frame = frame.copy()
+    frame["race_date"] = pd.to_datetime(
+        frame["race_date"],
+        errors="raise",
+    )
+
     policies = (
         "all_candidates",
         "top1_ev_per_race",
