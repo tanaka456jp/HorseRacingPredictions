@@ -43,6 +43,7 @@ $summary = Get-Content -LiteralPath $summaryPath -Raw -Encoding UTF8 | ConvertFr
 $reasons = $summary.selection_reason_counts
 $quantiles = $summary.race_confidence_quantiles
 $backtest = $summary.current_config_backtest_final_odds
+$calibration = $summary.temperature_calibration
 $validation = @{
     validated_at_utc = [DateTimeOffset]::UtcNow.ToString("o")
     commit_sha = (& git rev-parse HEAD).Trim()
@@ -74,13 +75,14 @@ $validation = @{
     roi_verified = [bool]$backtest.roi_verified
     confidence_threshold_sweep = $summary.confidence_threshold_sweep
     confidence_threshold_sweep_by_period = $summary.confidence_threshold_sweep_by_period
+    temperature_calibration = $calibration
 }
 $validationPath = Join-Path $ProjectRoot $ValidationOutput
 $validationDir = Split-Path -Parent $validationPath
 if (-not [string]::IsNullOrWhiteSpace($validationDir)) {
     New-Item -ItemType Directory -Force -Path $validationDir | Out-Null
 }
-$validation | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $validationPath -Encoding UTF8
+$validation | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $validationPath -Encoding UTF8
 
 if (-not [string]::IsNullOrWhiteSpace($env:GITHUB_STEP_SUMMARY)) {
     @(
@@ -94,7 +96,9 @@ if (-not [string]::IsNullOrWhiteSpace($env:GITHUB_STEP_SUMMARY)) {
         "- confidence q95/max: $($quantiles."0.95") / $($quantiles."1.0")",
         "- research ROI (final odds; not verified live): $($backtest.roi)",
         "- threshold rows exported: $($summary.confidence_threshold_sweep.Count)",
-        "- period-threshold rows exported: $($summary.confidence_threshold_sweep_by_period.Count)"
+        "- period-threshold rows exported: $($summary.confidence_threshold_sweep_by_period.Count)",
+        "- fitted temperature: $($calibration.temperature)",
+        "- holdout raw/calibrated winner log-loss: $($calibration.holdout.raw_quality.winner_log_loss) / $($calibration.holdout.calibrated_quality.winner_log_loss)"
     ) | Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Encoding UTF8
 }
 
