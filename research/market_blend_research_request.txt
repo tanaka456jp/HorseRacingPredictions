@@ -1,0 +1,5 @@
+Research-only Champion + market blend holdout request marker.
+Update this file on main to fit the blend weight on development history
+and evaluate it on untouched holdout history using local data.
+Only sanitized aggregate validation may be uploaded. Historical final odds
+remain research-only and must not be treated as verified live profitability.

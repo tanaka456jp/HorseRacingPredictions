@@ -1,0 +1,43 @@
+name: Market Blend Research (Self-hosted)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "research/market_blend_research_request.txt"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: market-blend-research-self-hosted
+  cancel-in-progress: true
+
+jobs:
+  market-blend:
+    name: Champion market blend holdout research
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout without deleting local ignored data
+        uses: actions/checkout@v4
+        with:
+          clean: false
+          persist-credentials: false
+
+      - name: Run development-fitted market blend research
+        shell: powershell
+        run: |
+          & .\scripts\run_market_blend_research_runner.ps1
+
+      - name: Publish sanitized validation only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: market-blend-research-validation
+          path: artifacts/market_blend_research_runner_validation.json
+          if-no-files-found: warn
+          retention-days: 14
