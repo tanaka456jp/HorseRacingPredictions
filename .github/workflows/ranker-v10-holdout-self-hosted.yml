@@ -1,0 +1,43 @@
+name: Ranker v10 Holdout Confirmation (Self-hosted)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "research/ranker_v10_holdout_request.txt"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ranker-v10-holdout-confirmation-self-hosted
+  cancel-in-progress: true
+
+jobs:
+  ranker-v10-holdout:
+    name: Confirm fixed Ranker v10 on 2025-2026 holdout
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 150
+
+    steps:
+      - name: Checkout without deleting local ignored data
+        uses: actions/checkout@v4
+        with:
+          clean: false
+          persist-credentials: false
+
+      - name: Run fixed Ranker v10 holdout confirmation
+        shell: powershell
+        run: |
+          & .\scripts\run_ranker_v10_holdout_runner.ps1
+
+      - name: Publish sanitized validation only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ranker-v10-holdout-validation
+          path: artifacts/ranker_v10_holdout_runner_validation.json
+          if-no-files-found: warn
+          retention-days: 14
