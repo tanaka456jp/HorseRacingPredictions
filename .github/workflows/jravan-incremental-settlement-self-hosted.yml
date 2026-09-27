@@ -1,0 +1,55 @@
+name: JRA-VAN Incremental + Settlement (Self-hosted)
+
+on:
+  workflow_dispatch:
+    inputs:
+      overlap_days:
+        description: "Days to overlap when refreshing completed history"
+        required: false
+        default: "7"
+        type: string
+  push:
+    branches:
+      - main
+    paths:
+      - "research/jravan_incremental_settlement_request.txt"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: jravan-incremental-settlement-self-hosted
+  cancel-in-progress: true
+
+jobs:
+  incremental-settlement:
+    name: Incremental completed history and Paper settlement
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout without deleting local ignored data
+        uses: actions/checkout@v4
+        with:
+          clean: false
+          persist-credentials: false
+
+      - name: Refresh completed history and settle Paper bets
+        shell: powershell
+        env:
+          INPUT_OVERLAP_DAYS: ${{ inputs.overlap_days }}
+        run: |
+          $overlap = 7
+          if (-not [string]::IsNullOrWhiteSpace($env:INPUT_OVERLAP_DAYS)) {
+            $overlap = [int]$env:INPUT_OVERLAP_DAYS
+          }
+          & .\scripts\run_jravan_incremental_settlement_runner.ps1 -OverlapDays $overlap
+
+      - name: Publish sanitized validation only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jravan-incremental-settlement-validation
+          path: artifacts/jravan_incremental_runner_validation.json
+          if-no-files-found: warn
+          retention-days: 14
