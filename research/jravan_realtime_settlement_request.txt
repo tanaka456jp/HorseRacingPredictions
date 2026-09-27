@@ -1,0 +1,3 @@
+JRA-VAN FREE-FIRST realtime Paper settlement request marker.
+Update this file on main to run local 0B12 completed-race settlement.
+Raw realtime records and the SQLite ledger must remain local.
