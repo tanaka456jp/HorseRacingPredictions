@@ -1,0 +1,43 @@
+name: Champion Challenger Research (Self-hosted)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "research/champion_challenger_request.txt"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: champion-challenger-research-self-hosted
+  cancel-in-progress: true
+
+jobs:
+  challenger:
+    name: Compare Champion with unweighted CatBoost challenger
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 180
+
+    steps:
+      - name: Checkout without deleting local ignored data
+        uses: actions/checkout@v4
+        with:
+          clean: false
+          persist-credentials: false
+
+      - name: Train and evaluate research challenger
+        shell: powershell
+        run: |
+          & .\scripts\run_champion_challenger_runner.ps1
+
+      - name: Publish sanitized validation only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: champion-challenger-validation
+          path: artifacts/champion_challenger_runner_validation.json
+          if-no-files-found: warn
+          retention-days: 14
