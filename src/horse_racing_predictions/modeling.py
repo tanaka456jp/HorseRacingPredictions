@@ -98,6 +98,7 @@ class CatBoostProbabilityModel:
     depth: int = 7
     learning_rate: float = 0.05
     random_seed: int = 42
+    auto_class_weights: str | None = "Balanced"
 
     def __post_init__(self):
         self.model = None
@@ -134,17 +135,23 @@ class CatBoostProbabilityModel:
             column for column in self.feature_columns
             if not pd.api.types.is_numeric_dtype(x[column])
         ]
+        model_kwargs = {
+            "iterations": self.iterations,
+            "depth": self.depth,
+            "learning_rate": self.learning_rate,
+            "loss_function": "Logloss",
+            "random_seed": self.random_seed,
+            "verbose": False,
+            "allow_writing_files": False,
+            "thread_count": -1,
+            "l2_leaf_reg": 5.0,
+        }
+        if self.auto_class_weights is not None:
+            model_kwargs["auto_class_weights"] = (
+                self.auto_class_weights
+            )
         self.model = CatBoostClassifier(
-            iterations=self.iterations,
-            depth=self.depth,
-            learning_rate=self.learning_rate,
-            loss_function="Logloss",
-            auto_class_weights="Balanced",
-            random_seed=self.random_seed,
-            verbose=False,
-            allow_writing_files=False,
-            thread_count=-1,
-            l2_leaf_reg=5.0,
+            **model_kwargs,
         )
         self.model.fit(
             x,
