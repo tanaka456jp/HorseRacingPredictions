@@ -181,8 +181,8 @@ def _ev_threshold_sweep(
     return rows
 
 
-def evaluate_temperature_calibration_split(
-    history: pd.DataFrame,
+def evaluate_temperature_calibration_predictions(
+    predictions: pd.DataFrame,
     champion: LoadedChampion,
     *,
     config: StrategyConfig | None = None,
@@ -190,11 +190,11 @@ def evaluate_temperature_calibration_split(
     holdout_start: str = "2025-01-01",
 ) -> dict:
     config = config or StrategyConfig()
+    if predictions.empty:
+        raise ValueError(
+            "temperature calibration predictions are empty"
+        )
 
-    predictions = build_frozen_champion_predictions(
-        history,
-        champion,
-    )
     dates = pd.to_datetime(
         predictions["race_date"],
         errors="raise",
@@ -402,3 +402,24 @@ def evaluate_temperature_calibration_split(
             },
         },
     }
+
+
+def evaluate_temperature_calibration_split(
+    history: pd.DataFrame,
+    champion: LoadedChampion,
+    *,
+    config: StrategyConfig | None = None,
+    development_end: str = "2024-12-31",
+    holdout_start: str = "2025-01-01",
+) -> dict:
+    predictions = build_frozen_champion_predictions(
+        history,
+        champion,
+    )
+    return evaluate_temperature_calibration_predictions(
+        predictions,
+        champion,
+        config=config,
+        development_end=development_end,
+        holdout_start=holdout_start,
+    )
