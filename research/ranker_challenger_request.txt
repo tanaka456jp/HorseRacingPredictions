@@ -1,0 +1,5 @@
+Research-only CatBoostRanker Challenger request marker.
+Update this file on main to compare the race-grouped ranker with the frozen
+Champion on local development and untouched holdout history.
+Only sanitized aggregate validation may be uploaded. Historical final odds
+remain research-only and must not be treated as verified live profitability.
