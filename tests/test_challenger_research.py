@@ -9,6 +9,7 @@ from horse_racing_predictions.challenger_research import (
 )
 from horse_racing_predictions.modeling import (
     CatBoostProbabilityModel,
+    CatBoostRankingProbabilityModel,
 )
 
 
@@ -119,3 +120,38 @@ def test_unweighted_challenger_uses_same_train_end_and_holdout():
     assert comparison[
         "challenger_calibrated_winner_log_loss"
     ] is not None
+
+
+def test_catboost_ranker_probabilities_sum_to_one():
+    pytest.importorskip("catboost")
+    train = pd.DataFrame({
+        "race_id": [
+            "R1", "R1", "R1",
+            "R2", "R2", "R2",
+            "R3", "R3", "R3",
+        ],
+        "post_position": [
+            1, 2, 3,
+            1, 2, 3,
+            1, 2, 3,
+        ],
+        "is_winner": [
+            1, 0, 0,
+            0, 1, 0,
+            0, 0, 1,
+        ],
+    })
+    model = CatBoostRankingProbabilityModel(
+        ["post_position"],
+        iterations=5,
+        depth=2,
+    ).fit(train)
+
+    p = model.predict_win_probability(train)
+    sums = p.groupby(train["race_id"]).sum()
+
+    assert np.allclose(
+        sums.to_numpy(),
+        [1.0, 1.0, 1.0],
+    )
+    assert ((p >= 0) & (p <= 1)).all()
