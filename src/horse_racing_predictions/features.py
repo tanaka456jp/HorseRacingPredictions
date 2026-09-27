@@ -49,6 +49,17 @@ def _add_group_history(
     )
     work["_finish_valid"] = work["_finish"].notna().astype(int)
     work["_finish_sum"] = work["_finish"].fillna(0.0)
+    if "_finish_percentile" in df.columns:
+        work["_finish_percentile"] = pd.to_numeric(
+            df["_finish_percentile"],
+            errors="coerce",
+        )
+        work["_finish_percentile_valid"] = (
+            work["_finish_percentile"].notna().astype(int)
+        )
+        work["_finish_percentile_sum"] = (
+            work["_finish_percentile"].fillna(0.0)
+        )
 
     daily = (
         work.groupby(
@@ -57,10 +68,26 @@ def _add_group_history(
             as_index=False,
         )
         .agg(
-            daily_starts=("_starts", "sum"),
-            daily_wins=("_wins", "sum"),
-            daily_finish_sum=("_finish_sum", "sum"),
-            daily_finish_count=("_finish_valid", "sum"),
+            **({
+                "daily_starts": ("_starts", "sum"),
+                "daily_wins": ("_wins", "sum"),
+                "daily_finish_sum": ("_finish_sum", "sum"),
+                "daily_finish_count": ("_finish_valid", "sum"),
+                **(
+                    {
+                        "daily_finish_percentile_sum": (
+                            "_finish_percentile_sum",
+                            "sum",
+                        ),
+                        "daily_finish_percentile_count": (
+                            "_finish_percentile_valid",
+                            "sum",
+                        ),
+                    }
+                    if "_finish_percentile" in work.columns
+                    else {}
+                ),
+            })
         )
         .sort_values(group_cols + ["_race_day"])
     )
@@ -89,6 +116,22 @@ def _add_group_history(
     daily[f"{prefix}_past_avg_finish"] = (
         daily["_past_finish_sum"] / finish_count
     )
+    if "daily_finish_percentile_sum" in daily.columns:
+        daily["_past_finish_percentile_sum"] = (
+            grouped["daily_finish_percentile_sum"].cumsum()
+            - daily["daily_finish_percentile_sum"]
+        )
+        daily["_past_finish_percentile_count"] = (
+            grouped["daily_finish_percentile_count"].cumsum()
+            - daily["daily_finish_percentile_count"]
+        )
+        percentile_count = daily[
+            "_past_finish_percentile_count"
+        ].replace(0, np.nan)
+        daily[f"{prefix}_past_avg_finish_percentile"] = (
+            daily["_past_finish_percentile_sum"]
+            / percentile_count
+        )
     previous_day = grouped["_race_day"].shift(1)
     daily[f"{prefix}_days_since_seen"] = (
         daily["_race_day"] - previous_day
@@ -100,6 +143,10 @@ def _add_group_history(
         f"{prefix}_past_avg_finish",
         f"{prefix}_days_since_seen",
     ]
+    if "daily_finish_percentile_sum" in daily.columns:
+        generated.append(
+            f"{prefix}_past_avg_finish_percentile"
+        )
     keep = group_cols + ["_race_day"] + generated
     return (
         df.merge(
@@ -133,6 +180,7 @@ def _add_recent_horse_form(
         "_last_3f": "last_3f",
         "_early_ratio": "_early_position_ratio",
         "_late_ratio": "_late_position_ratio",
+        "_finish_percentile": "_finish_percentile",
     }
     for target, source_col in optional.items():
         if source_col in df.columns:
@@ -151,6 +199,11 @@ def _add_recent_horse_form(
         aggregations["early_ratio"] = ("_early_ratio", "mean")
     if "_late_ratio" in source.columns:
         aggregations["late_ratio"] = ("_late_ratio", "mean")
+    if "_finish_percentile" in source.columns:
+        aggregations["finish_percentile"] = (
+            "_finish_percentile",
+            "mean",
+        )
 
     daily = (
         source.groupby(
@@ -177,6 +230,10 @@ def _add_recent_horse_form(
             metrics[f"horse_recent_early_ratio_mean_{window}"] = "early_ratio"
         if "late_ratio" in daily.columns:
             metrics[f"horse_recent_late_ratio_mean_{window}"] = "late_ratio"
+        if "finish_percentile" in daily.columns:
+            metrics[
+                f"horse_recent_finish_percentile_mean_{window}"
+            ] = "finish_percentile"
 
         for output, metric in metrics.items():
             daily[output] = grouped[metric].transform(
@@ -267,7 +324,11 @@ def _prepare_postrace_history_sources(df: pd.DataFrame) -> pd.DataFrame:
         )
     return out
 
-def build_pre_race_features(frame: pd.DataFrame) -> FeatureBuildResult:
+def build_pre_race_features(
+    frame: pd.DataFrame,
+    *,
+    experimental_ranker_v10: bool = False,
+) -> FeatureBuildResult:
     required = {"race_id", "race_date", "horse_name", "finish_position"}
     missing = required - set(frame.columns)
     if missing:
@@ -297,6 +358,21 @@ def build_pre_race_features(frame: pd.DataFrame) -> FeatureBuildResult:
             )
 
     df = _prepare_race_relative_features(df)
+    if experimental_ranker_v10:
+        finish = pd.to_numeric(
+            df["finish_position"],
+            errors="coerce",
+        )
+        field_denominator = (
+            pd.to_numeric(
+                df["field_size"],
+                errors="coerce",
+            )
+            - 1.0
+        ).replace(0, np.nan)
+        df["_finish_percentile"] = (
+            (finish - 1.0) / field_denominator
+        ).clip(lower=0.0, upper=1.0)
     df = _prepare_postrace_history_sources(df)
 
     if "distance_m" in df.columns:
@@ -316,6 +392,21 @@ def build_pre_race_features(frame: pd.DataFrame) -> FeatureBuildResult:
         (["jockey", "racecourse"], "jockey_course"),
         (["trainer", "racecourse"], "trainer_course"),
     ]
+    if experimental_ranker_v10:
+        history_specs.extend([
+            (["horse_name", "jockey"], "horse_jockey"),
+            (["jockey", "trainer"], "jockey_trainer"),
+            (["jockey", "surface"], "jockey_surface"),
+            (["trainer", "surface"], "trainer_surface"),
+            (
+                ["jockey", "_distance_bucket"],
+                "jockey_distance",
+            ),
+            (
+                ["trainer", "_distance_bucket"],
+                "trainer_distance",
+            ),
+        ])
 
     for group_cols, prefix in history_specs:
         df, generated = _add_group_history(df, group_cols, prefix)
@@ -333,7 +424,7 @@ def build_pre_race_features(frame: pd.DataFrame) -> FeatureBuildResult:
 
     drop_columns = [
         "_row_order", "_race_day", "_early_position_ratio",
-        "_late_position_ratio",
+        "_late_position_ratio", "_finish_percentile",
     ]
     if "_distance_bucket" in df.columns:
         drop_columns.append("_distance_bucket")
