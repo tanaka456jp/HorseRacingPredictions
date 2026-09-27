@@ -1,0 +1,3 @@
+Frozen Champion v7 confidence diagnostics request marker.
+Update this file on main to run local post-training diagnostics.
+Only sanitized aggregate validation may be uploaded.
