@@ -40,6 +40,15 @@ SCHEMA = (
 "recorded_at TEXT NOT NULL,"
 "FOREIGN KEY(bet_id) REFERENCES bets(id),"
 "FOREIGN KEY(prediction_id) REFERENCES predictions(id));"
+"CREATE TABLE IF NOT EXISTS paper_settlement_evidence("
+"id INTEGER PRIMARY KEY AUTOINCREMENT,"
+"bet_id INTEGER NOT NULL UNIQUE,"
+"race_id TEXT NOT NULL,horse_id TEXT NOT NULL,"
+"finish_position INTEGER NOT NULL,final_win_odds REAL,"
+"result TEXT NOT NULL,payout_yen INTEGER NOT NULL,"
+"source TEXT NOT NULL,source_reference TEXT NOT NULL DEFAULT '',"
+"recorded_at TEXT NOT NULL,"
+"FOREIGN KEY(bet_id) REFERENCES bets(id));"
 )
 
 class Ledger:
@@ -256,6 +265,134 @@ class Ledger:
             "broker": row[5],
             "broker_reference": row[6],
         }
+
+    def unsettled_paper_bets(self):
+        rows = self.conn.execute(
+            "SELECT b.id,b.race_id,b.horse_id,b.horse_name,b.bet_type,"
+            "b.stake_yen,b.decimal_odds,b.placed_at "
+            "FROM bets b "
+            "JOIN paper_bet_evidence e ON e.bet_id=b.id "
+            "WHERE b.stake_yen > 0 AND b.result IS NULL "
+            "ORDER BY b.id"
+        ).fetchall()
+        return [
+            {
+                "bet_id": int(row[0]),
+                "race_id": row[1],
+                "horse_id": row[2],
+                "horse_name": row[3],
+                "bet_type": row[4],
+                "stake_yen": int(row[5]),
+                "decimal_odds": float(row[6]),
+                "placed_at": row[7],
+            }
+            for row in rows
+        ]
+
+    def record_paper_settlement(
+        self,
+        *,
+        bet_id,
+        race_id,
+        horse_id,
+        finish_position,
+        final_win_odds,
+        won,
+        payout_yen,
+        source,
+        source_reference="",
+    ):
+        bet_id = int(bet_id)
+        finish_position = int(finish_position)
+        payout_yen = int(payout_yen)
+        result = "WIN" if won else "LOSE"
+
+        if finish_position <= 0:
+            raise ValueError("finish_position must be positive")
+        if payout_yen < 0:
+            raise ValueError("payout_yen must not be negative")
+        if not str(source).strip():
+            raise ValueError("settlement source must not be empty")
+        if won:
+            if final_win_odds is None or float(final_win_odds) <= 1.0:
+                raise ValueError(
+                    "winning settlement requires valid final_win_odds"
+                )
+            if payout_yen <= 0:
+                raise ValueError(
+                    "winning settlement requires positive payout_yen"
+                )
+        elif payout_yen != 0:
+            raise ValueError("losing settlement payout_yen must be zero")
+
+        row = self.conn.execute(
+            "SELECT b.race_id,b.horse_id,b.result,b.payout_yen "
+            "FROM bets b "
+            "JOIN paper_bet_evidence e ON e.bet_id=b.id "
+            "WHERE b.id=?",
+            (bet_id,),
+        ).fetchone()
+        if row is None:
+            raise ValueError("settlement requires an existing Paper bet")
+        if row[0] != race_id or row[1] != horse_id:
+            raise ValueError("settlement identity does not match Paper bet")
+
+        existing = self.conn.execute(
+            "SELECT finish_position,final_win_odds,result,payout_yen,"
+            "source,source_reference "
+            "FROM paper_settlement_evidence WHERE bet_id=?",
+            (bet_id,),
+        ).fetchone()
+        expected = (
+            finish_position,
+            None if final_win_odds is None else float(final_win_odds),
+            result,
+            payout_yen,
+            str(source),
+            str(source_reference),
+        )
+        if existing is not None:
+            actual = (
+                int(existing[0]),
+                None if existing[1] is None else float(existing[1]),
+                existing[2],
+                int(existing[3]),
+                existing[4],
+                existing[5],
+            )
+            if actual != expected:
+                raise ValueError(
+                    "immutable settlement evidence conflict for bet"
+                )
+            return False
+
+        if row[2] is not None:
+            raise ValueError("Paper bet is already settled without evidence")
+
+        with self.conn:
+            self.conn.execute(
+                "UPDATE bets SET result=?, payout_yen=? WHERE id=?",
+                (result, payout_yen, bet_id),
+            )
+            self.conn.execute(
+                "INSERT INTO paper_settlement_evidence "
+                "(bet_id,race_id,horse_id,finish_position,final_win_odds,"
+                "result,payout_yen,source,source_reference,recorded_at) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?)",
+                (
+                    bet_id,
+                    race_id,
+                    horse_id,
+                    finish_position,
+                    None if final_win_odds is None else float(final_win_odds),
+                    result,
+                    payout_yen,
+                    str(source),
+                    str(source_reference),
+                    datetime.now(timezone.utc).isoformat(),
+                ),
+            )
+        return True
 
     def settle_bet(self, bet_id, won, payout_yen):
         self.conn.execute(
