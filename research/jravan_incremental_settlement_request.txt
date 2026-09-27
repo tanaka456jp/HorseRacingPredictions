@@ -1,0 +1,4 @@
+JRA-VAN FREE-FIRST incremental completed-history and Paper settlement request marker.
+Update this file on main to explicitly run local incremental JV-Link acquisition
+and settle eligible Paper bets. Raw racing data and the local SQLite ledger
+must remain on the self-hosted runner.
