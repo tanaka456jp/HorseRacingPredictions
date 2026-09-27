@@ -1,0 +1,5 @@
+Research-only Ranker v10 development selection request marker.
+Update this file on main to compare the current Ranker v9 feature set against
+the experimental context-feature Ranker v10 using only data through 2024.
+The 2025-2026 holdout must not be used for feature selection.
+Only sanitized aggregate validation may be uploaded.
