@@ -1,0 +1,43 @@
+name: JRA-VAN Realtime Settlement (Self-hosted)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "research/jravan_realtime_settlement_request.txt"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: jravan-realtime-settlement-self-hosted
+  cancel-in-progress: true
+
+jobs:
+  realtime-settlement:
+    name: Settle Paper bets from JRA-VAN 0B12
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout without deleting local ignored data
+        uses: actions/checkout@v4
+        with:
+          clean: false
+          persist-credentials: false
+
+      - name: Run Paper-only realtime settlement
+        shell: powershell
+        run: |
+          & .\scripts\run_jravan_realtime_settlement_runner.ps1
+
+      - name: Publish sanitized validation only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jravan-realtime-settlement-validation
+          path: artifacts/jravan_realtime_settlement_runner_validation.json
+          if-no-files-found: warn
+          retention-days: 14
