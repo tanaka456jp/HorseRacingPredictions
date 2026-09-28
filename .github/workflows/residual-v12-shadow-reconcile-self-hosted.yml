@@ -1,0 +1,43 @@
+name: Residual v12 Result Reconcile (Self-hosted)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "research/residual_v12_shadow_reconcile_request.txt"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: residual-v12-forward-shadow-self-hosted
+  cancel-in-progress: false
+
+jobs:
+  reconcile:
+    name: Reconcile pending frozen v12 shadow results
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout without deleting local ignored data
+        uses: actions/checkout@v4
+        with:
+          clean: false
+          persist-credentials: false
+
+      - name: Reconcile pending result records only
+        shell: powershell
+        run: |
+          & .\scripts\run_residual_v12_shadow_reconcile_runner.ps1
+
+      - name: Publish sanitized validation only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: residual-v12-shadow-reconcile-validation
+          path: artifacts/residual_v12_shadow_reconcile_validation.json
+          if-no-files-found: warn
+          retention-days: 14
