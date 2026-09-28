@@ -280,3 +280,35 @@ def test_shadow_result_lookup_uses_bounded_wait():
             "wait_seconds": 0.2,
         }
     ]
+
+
+def test_market_context_handles_existing_decimal_odds_column():
+    from horse_racing_predictions.market_aware_ranker_v11 import (
+        add_market_context_features,
+    )
+
+    frame = pd.DataFrame([
+        {
+            "race_id": "R1",
+            "win_odds": 2.0,
+            "decimal_odds": 2.0,
+        },
+        {
+            "race_id": "R1",
+            "win_odds": 4.0,
+            "decimal_odds": 4.0,
+        },
+        {
+            "race_id": "R1",
+            "win_odds": 8.0,
+            "decimal_odds": 8.0,
+        },
+    ])
+
+    out = add_market_context_features(frame)
+
+    assert "market_implied_probability" in out.columns
+    assert abs(
+        out["market_implied_probability"].sum() - 1.0
+    ) < 1e-12
+    assert list(out["decimal_odds"]) == [2.0, 4.0, 8.0]
