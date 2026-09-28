@@ -109,6 +109,8 @@ $base.paper_forward_status = [string]$paper.status
 $base.paper_policy_version = [string]$paper.policy_version
 $base.paper_min_ev = $paper.min_ev
 $base.paper_fractional_kelly = $paper.fractional_kelly
+$base.paper_max_odds_age_minutes = [int]$paper.max_odds_age_minutes
+$base.paper_stale_odds_rows = [int]$paper.stale_odds_rows
 $base.paper_eligible_rows = [int]$paper.eligible_rows
 $base.paper_new_evaluations = [int]$paper.new_evaluations
 $base.paper_duplicate_evaluations = [int]$paper.duplicate_evaluations
@@ -168,6 +170,8 @@ if (-not [string]::IsNullOrWhiteSpace($env:GITHUB_STEP_SUMMARY)) {
         "- cumulative Brier delta vs market: $($summary.cumulative.evaluation.brier_delta_vs_market)",
         "- Paper v1 status: $($paper.status)",
         "- Paper v1 rule: EV >= $($paper.min_ev), fractional Kelly $($paper.fractional_kelly)",
+        "- Paper v1 max odds age: $($paper.max_odds_age_minutes) minutes",
+        "- Paper v1 stale odds rows skipped: $($paper.stale_odds_rows)",
         "- Paper v1 new evaluations/bets: $($paper.new_evaluations) / $($paper.new_selected_bets)",
         "- Paper v1 new committed stake: $($paper.new_committed_stake_yen) yen",
         "- Paper v1 settled bets: $($paperPerf.settled_bets)",
