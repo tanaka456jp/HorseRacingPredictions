@@ -53,6 +53,10 @@ def main() -> None:
         type=int,
         default=100_000,
     )
+    parser.add_argument(
+        "--residual-model-cache",
+        default="artifacts/residual_v12_frozen_model",
+    )
     args = parser.parse_args()
 
     history = read_csv_flexible(args.history, low_memory=False)
@@ -65,6 +69,7 @@ def main() -> None:
         entries,
         odds,
         champion,
+        model_cache_dir=args.residual_model_cache,
     )
 
     predictions_path = Path(args.predictions_output)

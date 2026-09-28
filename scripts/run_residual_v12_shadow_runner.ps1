@@ -33,6 +33,7 @@ $manifestPath = Join-Path $championDir "manifest.json"
 $predictionsPath = Join-Path $ProjectRoot "data\jravan\forward\residual_v12_shadow_predictions.csv"
 $ledgerPath = Join-Path $ProjectRoot "data\jravan\forward\residual_v12_shadow.sqlite3"
 $paperLedgerPath = Join-Path $ProjectRoot "data\paper\paper_trading.sqlite3"
+$residualModelCache = Join-Path $ProjectRoot "artifacts\residual_v12_frozen_model"
 $summaryPath = Join-Path $ProjectRoot "artifacts\residual_v12_shadow\summary.json"
 
 if (-not (Test-UsableFile $venvPython)) {
@@ -72,7 +73,7 @@ if (-not (Test-UsableFile $modelPath) -or -not (Test-UsableFile $manifestPath)) 
 }
 
 Write-Host "[3/4] Running frozen Residual v12 shadow with saved pre-race odds"
-& $venvPython "scripts\evaluate_residual_v12_shadow_snapshot.py" --history $historyPath --entries $entriesPath --odds $oddsPath --champion $championDir --predictions-output $predictionsPath --summary-output $summaryPath --ledger $ledgerPath --paper-ledger $paperLedgerPath
+& $venvPython "scripts\evaluate_residual_v12_shadow_snapshot.py" --history $historyPath --entries $entriesPath --odds $oddsPath --champion $championDir --predictions-output $predictionsPath --summary-output $summaryPath --ledger $ledgerPath --paper-ledger $paperLedgerPath --residual-model-cache $residualModelCache
 if ($LASTEXITCODE -ne 0) { throw "Residual v12 shadow replay failed." }
 if (-not (Test-UsableFile $summaryPath)) {
     throw "Residual v12 shadow summary was not created."
@@ -99,6 +100,7 @@ $base.max_overlay_ratio = $pred.max_overlay_ratio
 $base.min_lead_minutes = $pred.min_lead_minutes
 $base.max_lead_minutes = $pred.max_lead_minutes
 $base.fixed_gamma = $pred.fixed_gamma
+$base.residual_model_cache_status = [string]$pred.residual_model_cache_status
 $base.result_fetch_errors = [int]$summary.result_fetch_errors
 $base.evaluation_status = [string]$eval.status
 $base.evaluated_rows = [int]$eval.evaluated_rows
@@ -154,6 +156,7 @@ if (-not [string]::IsNullOrWhiteSpace($env:GITHUB_STEP_SUMMARY)) {
         "",
         "- status: $($summary.status)",
         "- prediction rows/races: $($pred.rows) / $($pred.races)",
+        "- Residual v12 model cache: $($pred.residual_model_cache_status)",
         "- overlay >= 5% rows: $($pred.overlay_ge_5pct_rows)",
         "- result evaluation: $($eval.status)",
         "- evaluated races: $($eval.evaluated_races)",
