@@ -68,6 +68,11 @@ def main() -> None:
         default=10,
     )
     parser.add_argument(
+        "--max-lead-minutes",
+        type=int,
+        default=70,
+    )
+    parser.add_argument(
         "--max-current-week-records",
         type=int,
         default=100000,
@@ -79,6 +84,10 @@ def main() -> None:
         raise FileNotFoundError(history_path)
     if args.min_lead_minutes < 0:
         raise ValueError("--min-lead-minutes must be non-negative")
+    if args.max_lead_minutes < args.min_lead_minutes:
+        raise ValueError(
+            "--max-lead-minutes must be >= --min-lead-minutes"
+        )
     if args.max_current_week_records < 1:
         raise ValueError("--max-current-week-records must be positive")
 
@@ -126,6 +135,7 @@ def main() -> None:
             history_cutoff=cutoff,
             now=captured_at,
             min_lead_minutes=args.min_lead_minutes,
+            max_lead_minutes=args.max_lead_minutes,
         )
     )
 
@@ -161,6 +171,7 @@ def main() -> None:
         entries,
         schedules,
         min_lead_minutes=args.min_lead_minutes,
+        max_lead_minutes=args.max_lead_minutes,
     )
     decision_time = datetime.now(JST)
 
@@ -170,12 +181,16 @@ def main() -> None:
             errors="raise",
             utc=True,
         )
-        threshold_utc = pd.Timestamp(
+        min_threshold_utc = pd.Timestamp(
             decision_time + timedelta(minutes=args.min_lead_minutes)
+        ).tz_convert("UTC")
+        max_threshold_utc = pd.Timestamp(
+            decision_time + timedelta(minutes=args.max_lead_minutes)
         ).tz_convert("UTC")
         safe_race_ids = set(
             odds.loc[
-                post_times > threshold_utc,
+                post_times.gt(min_threshold_utc)
+                & post_times.le(max_threshold_utc),
                 "race_id",
             ].astype(str)
         )

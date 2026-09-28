@@ -194,9 +194,17 @@ def build_future_entries_from_current_week(
     history_cutoff: str | pd.Timestamp,
     now: datetime | None = None,
     min_lead_minutes: int = 10,
+    max_lead_minutes: int | None = None,
 ) -> tuple[pd.DataFrame, dict[str, RaceSchedule], dict]:
     if min_lead_minutes < 0:
         raise ValueError("min_lead_minutes must be non-negative")
+    if (
+        max_lead_minutes is not None
+        and max_lead_minutes < min_lead_minutes
+    ):
+        raise ValueError(
+            "max_lead_minutes must be >= min_lead_minutes"
+        )
     now = now or datetime.now(JST)
     if now.tzinfo is None or now.utcoffset() is None:
         raise ValueError("now must be timezone-aware")
@@ -215,7 +223,12 @@ def build_future_entries_from_current_week(
         }
 
     cutoff = pd.Timestamp(history_cutoff).normalize()
-    threshold = now + timedelta(minutes=min_lead_minutes)
+    min_threshold = now + timedelta(minutes=min_lead_minutes)
+    max_threshold = (
+        now + timedelta(minutes=max_lead_minutes)
+        if max_lead_minutes is not None
+        else None
+    )
 
     frame = frame.copy()
     frame["race_date"] = pd.to_datetime(
@@ -227,7 +240,11 @@ def build_future_entries_from_current_week(
         race_id: schedule
         for race_id, schedule in schedules.items()
         if pd.Timestamp(schedule.scheduled_post_time.date()) > cutoff
-        and schedule.scheduled_post_time > threshold
+        and schedule.scheduled_post_time > min_threshold
+        and (
+            max_threshold is None
+            or schedule.scheduled_post_time <= max_threshold
+        )
     }
 
     entries = frame.loc[
@@ -365,11 +382,19 @@ def capture_complete_win_odds(
     schedules: dict[str, RaceSchedule],
     *,
     min_lead_minutes: int = 10,
+    max_lead_minutes: int | None = None,
     client_factory: Callable[[], JvLinkClient] = JvLinkClient,
     now_fn: Callable[[], datetime] | None = None,
 ) -> tuple[pd.DataFrame, int]:
     if min_lead_minutes < 0:
         raise ValueError("min_lead_minutes must be non-negative")
+    if (
+        max_lead_minutes is not None
+        and max_lead_minutes < min_lead_minutes
+    ):
+        raise ValueError(
+            "max_lead_minutes must be >= min_lead_minutes"
+        )
     now_fn = now_fn or (lambda: datetime.now(JST))
 
     rows: list[dict] = []
@@ -386,9 +411,13 @@ def capture_complete_win_odds(
             continue
 
         observed_at = now_fn().astimezone(JST)
+        lead = schedule.scheduled_post_time - observed_at
+        if lead <= timedelta(minutes=min_lead_minutes):
+            skipped += 1
+            continue
         if (
-            schedule.scheduled_post_time
-            <= observed_at + timedelta(minutes=min_lead_minutes)
+            max_lead_minutes is not None
+            and lead > timedelta(minutes=max_lead_minutes)
         ):
             skipped += 1
             continue
@@ -437,9 +466,13 @@ def capture_complete_win_odds(
             continue
 
         observed_at = now_fn().astimezone(JST)
+        lead = schedule.scheduled_post_time - observed_at
+        if lead <= timedelta(minutes=min_lead_minutes):
+            skipped += 1
+            continue
         if (
-            schedule.scheduled_post_time
-            <= observed_at + timedelta(minutes=min_lead_minutes)
+            max_lead_minutes is not None
+            and lead > timedelta(minutes=max_lead_minutes)
         ):
             skipped += 1
             continue

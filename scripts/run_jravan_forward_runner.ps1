@@ -1,6 +1,7 @@
 param(
     [int]$BankrollYen = 100000,
     [int]$MinLeadMinutes = 10,
+    [int]$MaxLeadMinutes = 70,
     [string]$ValidationOutput = "artifacts/jravan_forward_runner_validation.json"
 )
 
@@ -27,6 +28,9 @@ function Write-Validation {
 
 if ($BankrollYen -le 0) { throw "BankrollYen must be positive." }
 if ($MinLeadMinutes -lt 0) { throw "MinLeadMinutes must be non-negative." }
+if ($MaxLeadMinutes -lt $MinLeadMinutes) {
+    throw "MaxLeadMinutes must be greater than or equal to MinLeadMinutes."
+}
 
 Write-Host "=== HorseRacingPredictions JRA-VAN FREE-FIRST Forward Paper ==="
 
@@ -50,7 +54,8 @@ $inputArgs = @(
     "scripts\jravan_trial_forward.py",
     "--history", $historyPath,
     "--history-summary", $historySummaryPath,
-    "--min-lead-minutes", [string]$MinLeadMinutes
+    "--min-lead-minutes", [string]$MinLeadMinutes,
+    "--max-lead-minutes", [string]$MaxLeadMinutes
 )
 & $venvPython @inputArgs
 if ($LASTEXITCODE -ne 0) {
@@ -81,6 +86,8 @@ $baseValidation = @{
     earliest_post_time = $inputSummary.earliest_post_time
     latest_post_time = $inputSummary.latest_post_time
     decision_time = $inputSummary.decision_time
+    min_lead_minutes = [int]$MinLeadMinutes
+    max_lead_minutes = [int]$MaxLeadMinutes
     forward_paper_executed = $false
 }
 
@@ -95,6 +102,7 @@ if ($inputSummary.status -ne "ready") {
             "- history_cutoff: $($inputSummary.history_cutoff)",
             "- future_entry_races: $($inputSummary.future_entry_races)",
             "- odds_races: $($inputSummary.odds_races)",
+            "- decision window: >$MinLeadMinutes and <=$MaxLeadMinutes minutes before post",
             "- forward_paper_executed: false"
         ) | Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Encoding UTF8
     }
@@ -168,6 +176,7 @@ if (-not [string]::IsNullOrWhiteSpace($env:GITHUB_STEP_SUMMARY)) {
         "- history_cutoff: $($inputSummary.history_cutoff)",
         "- future_entry_races: $($inputSummary.future_entry_races)",
         "- odds_races: $($inputSummary.odds_races)",
+        "- decision window: >$MinLeadMinutes and <=$MaxLeadMinutes minutes before post",
         "- model_version: $($forwardSummary.model_version)",
         "- paper_evaluations: $($evaluations.Count)",
         "- paper_accepted_bets: $($accepted.Count)",

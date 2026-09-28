@@ -13,6 +13,11 @@ on:
         required: false
         default: "10"
         type: string
+      max_lead_minutes:
+        description: "Maximum minutes before scheduled post time"
+        required: false
+        default: "70"
+        type: string
   push:
     branches:
       - main
@@ -23,8 +28,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: jravan-forward-paper-self-hosted
-  cancel-in-progress: true
+  group: residual-v12-forward-shadow-self-hosted
+  cancel-in-progress: false
 
 jobs:
   forward-paper:
@@ -44,6 +49,7 @@ jobs:
         env:
           INPUT_BANKROLL_YEN: ${{ inputs.bankroll_yen }}
           INPUT_MIN_LEAD_MINUTES: ${{ inputs.min_lead_minutes }}
+          INPUT_MAX_LEAD_MINUTES: ${{ inputs.max_lead_minutes }}
         run: |
           $bankroll = 100000
           if (-not [string]::IsNullOrWhiteSpace($env:INPUT_BANKROLL_YEN)) {
@@ -53,7 +59,11 @@ jobs:
           if (-not [string]::IsNullOrWhiteSpace($env:INPUT_MIN_LEAD_MINUTES)) {
             $lead = [int]$env:INPUT_MIN_LEAD_MINUTES
           }
-          & .\scripts\run_jravan_forward_runner.ps1 -BankrollYen $bankroll -MinLeadMinutes $lead
+          $maxLead = 70
+          if (-not [string]::IsNullOrWhiteSpace($env:INPUT_MAX_LEAD_MINUTES)) {
+            $maxLead = [int]$env:INPUT_MAX_LEAD_MINUTES
+          }
+          & .\scripts\run_jravan_forward_runner.ps1 -BankrollYen $bankroll -MinLeadMinutes $lead -MaxLeadMinutes $maxLead
 
       - name: Publish sanitized validation only
         if: always()
