@@ -1,0 +1,92 @@
+param(
+    [string]$ValidationOutput = "artifacts/market_residual_v12_runner_validation.json"
+)
+
+$ErrorActionPreference = "Stop"
+$ProjectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+Set-Location $ProjectRoot
+
+$venvPython = Join-Path $ProjectRoot ".venv-jravan\Scripts\python.exe"
+$historyPath = Join-Path $ProjectRoot "data\jravan\full\current_history.csv"
+$championDir = Join-Path $ProjectRoot "artifacts\champion_v7"
+$summaryPath = Join-Path $ProjectRoot "artifacts\market_residual_v12\summary.json"
+
+if (-not (Test-Path -LiteralPath $venvPython -PathType Leaf)) {
+    throw ".venv-jravan is missing; complete JRA-VAN Resume validation first."
+}
+if (-not (Test-Path -LiteralPath $historyPath -PathType Leaf)) {
+    throw "current_history.csv is missing."
+}
+
+Write-Host "=== Market residual v12 development research ==="
+Write-Host "[1/4] Refreshing local project package"
+& $venvPython -m pip install -e ".[research]"
+if ($LASTEXITCODE -ne 0) { throw "Project installation failed." }
+
+Write-Host "[2/4] Ensuring frozen Champion v7 artifact"
+$manifestPath = Join-Path $championDir "manifest.json"
+$modelPath = Join-Path $championDir "model.cbm"
+if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf) -or -not (Test-Path -LiteralPath $modelPath -PathType Leaf)) {
+    & $venvPython "scripts\train_champion_artifact.py" --start "2017-01-01" --end "2021-07-31" --output-dir $championDir
+    if ($LASTEXITCODE -ne 0) { throw "Champion v7 artifact creation failed." }
+}
+
+Write-Host "[3/4] Training residual model and validating 2023/2024"
+& $venvPython "scripts\evaluate_market_residual_v12.py" --history $historyPath --champion $championDir --output $summaryPath
+if ($LASTEXITCODE -ne 0) { throw "Market residual v12 research failed." }
+if (-not (Test-Path -LiteralPath $summaryPath -PathType Leaf)) {
+    throw "Market residual v12 summary was not created."
+}
+
+Write-Host "[4/4] Writing sanitized validation"
+$summary = Get-Content -LiteralPath $summaryPath -Raw -Encoding UTF8 | ConvertFrom-Json
+$v23 = $summary.validation_2023
+$v24 = $summary.validation_2024
+$payload = @{
+    validated_at_utc = [DateTimeOffset]::UtcNow.ToString("o")
+    commit_sha = (& git rev-parse HEAD).Trim()
+    runner_os = $env:RUNNER_OS
+    runner_arch = $env:RUNNER_ARCH
+    status = [string]$summary.status
+    training = $summary.training
+    gamma_tuning_period_start = [string]$summary.gamma_tuning.period_start
+    gamma_tuning_period_end = [string]$summary.gamma_tuning.period_end
+    gamma_tuning_rows = [int]$summary.gamma_tuning.rows
+    gamma_tuning_races = [int]$summary.gamma_tuning.races
+    selected_gamma = [double]$summary.gamma_tuning.selected_gamma
+    gamma_sweep = $summary.gamma_tuning.sweep
+    validation_2023 = $v23
+    validation_2024 = $v24
+    development_gate_passed = [bool]$summary.development_gate_passed
+}
+$validationPath = Join-Path $ProjectRoot $ValidationOutput
+$validationDir = Split-Path -Parent $validationPath
+if (-not [string]::IsNullOrWhiteSpace($validationDir)) {
+    New-Item -ItemType Directory -Force -Path $validationDir | Out-Null
+}
+$payload | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $validationPath -Encoding UTF8
+
+if (-not [string]::IsNullOrWhiteSpace($env:GITHUB_STEP_SUMMARY)) {
+    @(
+        "### Market residual v12 development research",
+        "",
+        "- selected gamma: $($summary.gamma_tuning.selected_gamma)",
+        "- 2023 market winner log-loss: $($v23.market_quality.winner_log_loss)",
+        "- 2023 residual winner log-loss: $($v23.residual_quality.winner_log_loss)",
+        "- 2023 market Brier: $($v23.market_quality.brier)",
+        "- 2023 residual Brier: $($v23.residual_quality.brier)",
+        "- 2024 market winner log-loss: $($v24.market_quality.winner_log_loss)",
+        "- 2024 residual winner log-loss: $($v24.residual_quality.winner_log_loss)",
+        "- 2024 market Brier: $($v24.market_quality.brier)",
+        "- 2024 residual Brier: $($v24.residual_quality.brier)",
+        "- development gate passed: $($summary.development_gate_passed)"
+    ) | Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Encoding UTF8
+}
+
+Write-Host "Market residual v12 development research PASS."
+Write-Host "selected_gamma=$($summary.gamma_tuning.selected_gamma)"
+Write-Host "v2023_log_loss_delta=$($v23.winner_log_loss_delta_vs_market)"
+Write-Host "v2023_brier_delta=$($v23.brier_delta_vs_market)"
+Write-Host "v2024_log_loss_delta=$($v24.winner_log_loss_delta_vs_market)"
+Write-Host "v2024_brier_delta=$($v24.brier_delta_vs_market)"
+Write-Host "development_gate_passed=$($summary.development_gate_passed)"

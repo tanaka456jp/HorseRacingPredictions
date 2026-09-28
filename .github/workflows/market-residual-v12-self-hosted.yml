@@ -1,0 +1,43 @@
+name: Market Residual v12 Development (Self-hosted)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "research/market_residual_v12_request.txt"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: market-residual-v12-development-self-hosted
+  cancel-in-progress: true
+
+jobs:
+  market-residual-v12:
+    name: Market residual v12 development gate
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 150
+
+    steps:
+      - name: Checkout without deleting local ignored data
+        uses: actions/checkout@v4
+        with:
+          clean: false
+          persist-credentials: false
+
+      - name: Run market residual development research
+        shell: powershell
+        run: |
+          & .\scripts\run_market_residual_v12_runner.ps1
+
+      - name: Publish sanitized validation only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: market-residual-v12-development-validation
+          path: artifacts/market_residual_v12_runner_validation.json
+          if-no-files-found: warn
+          retention-days: 14
