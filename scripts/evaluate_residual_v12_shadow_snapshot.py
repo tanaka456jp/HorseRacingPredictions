@@ -12,6 +12,9 @@ from horse_racing_predictions.residual_v12_shadow import (
     evaluate_shadow_results,
     summarize_shadow_predictions,
 )
+from horse_racing_predictions.residual_shadow_ledger import (
+    ResidualShadowLedger,
+)
 
 
 def main() -> None:
@@ -32,6 +35,10 @@ def main() -> None:
     parser.add_argument(
         "--summary-output",
         default="artifacts/residual_v12_shadow/summary.json",
+    )
+    parser.add_argument(
+        "--ledger",
+        default="data/jravan/forward/residual_v12_shadow.sqlite3",
     )
     args = parser.parse_args()
 
@@ -66,6 +73,18 @@ def main() -> None:
         results,
     )
 
+    ledger = ResidualShadowLedger(args.ledger)
+    try:
+        newly_recorded_predictions = (
+            ledger.record_predictions(predictions)
+        )
+        newly_recorded_results = (
+            ledger.record_results(results)
+        )
+        cumulative = ledger.cumulative_summary()
+    finally:
+        ledger.close()
+
     payload = {
         "status": (
             "evaluated"
@@ -75,6 +94,15 @@ def main() -> None:
         "prediction_summary": prediction_summary,
         "result_fetch_errors": int(realtime_errors),
         "evaluation": evaluation,
+        "ledger_update": {
+            "new_prediction_rows": int(
+                newly_recorded_predictions
+            ),
+            "new_result_rows": int(
+                newly_recorded_results
+            ),
+        },
+        "cumulative": cumulative,
         "paper_broker_unchanged": True,
         "uses_timestamped_prerace_odds": True,
         "uses_final_odds_for_shadow_inference": False,
