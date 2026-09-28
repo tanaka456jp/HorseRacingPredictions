@@ -59,6 +59,8 @@ def capture_completed_race_0b12(
     race_id: str,
     *,
     client_factory: Callable[[], JvLinkClient] = JvLinkClient,
+    wait_retries: int | None = None,
+    wait_seconds: float | None = None,
 ) -> pd.DataFrame:
     key = realtime_result_key_from_race_id(race_id)
     client = client_factory()
@@ -71,7 +73,17 @@ def capture_completed_race_0b12(
             dataspec="0B12",
             key=key,
         )
-        for record in client.iter_records():
+        read_kwargs = {}
+        if wait_retries is not None:
+            if wait_retries < 0:
+                raise ValueError("wait_retries must be non-negative")
+            read_kwargs["wait_retries"] = int(wait_retries)
+        if wait_seconds is not None:
+            if wait_seconds < 0:
+                raise ValueError("wait_seconds must be non-negative")
+            read_kwargs["wait_seconds"] = float(wait_seconds)
+
+        for record in client.iter_records(**read_kwargs):
             if record.record_type in {"RA", "SE"}:
                 records.append({
                     "record_type": record.record_type,
