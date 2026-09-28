@@ -368,6 +368,8 @@ def capture_shadow_results_0b12(
             result = capture_completed_race_0b12(
                 race_id,
                 client_factory=client_factory,
+                wait_retries=25,
+                wait_seconds=0.2,
             )
         except (JraVanApiError, ValueError):
             errors += 1
