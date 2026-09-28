@@ -228,3 +228,56 @@ def test_complete_odds_capture_requires_every_entry(tmp_path):
 
     assert incomplete.empty
     assert skipped == 1
+
+
+def test_decision_window_excludes_races_too_far_from_post(tmp_path):
+    raw_path = tmp_path / "raw.jsonl"
+    _write_raw(raw_path)
+
+    too_early, _, _ = build_future_entries_from_current_week(
+        raw_path,
+        history_cutoff="2026-09-22",
+        now=datetime(2026, 9, 27, 8, 0, tzinfo=JST),
+        min_lead_minutes=10,
+        max_lead_minutes=70,
+    )
+    assert too_early.empty
+
+    in_window, schedules, _ = build_future_entries_from_current_week(
+        raw_path,
+        history_cutoff="2026-09-22",
+        now=datetime(2026, 9, 27, 9, 0, tzinfo=JST),
+        min_lead_minutes=10,
+        max_lead_minutes=70,
+    )
+    assert len(in_window) == 2
+
+    odds, skipped = capture_complete_win_odds(
+        in_window,
+        schedules,
+        min_lead_minutes=10,
+        max_lead_minutes=70,
+        client_factory=lambda: FakeRealtimeClient(_o1()),
+        now_fn=lambda: datetime(2026, 9, 27, 9, 0, tzinfo=JST),
+    )
+    assert skipped == 0
+    assert len(odds) == 2
+
+
+def test_decision_window_rejects_invalid_bounds(tmp_path):
+    raw_path = tmp_path / "raw.jsonl"
+    _write_raw(raw_path)
+
+    import pytest
+
+    with pytest.raises(
+        ValueError,
+        match="max_lead_minutes must be >= min_lead_minutes",
+    ):
+        build_future_entries_from_current_week(
+            raw_path,
+            history_cutoff="2026-09-22",
+            now=datetime(2026, 9, 27, 9, 0, tzinfo=JST),
+            min_lead_minutes=30,
+            max_lead_minutes=10,
+        )
