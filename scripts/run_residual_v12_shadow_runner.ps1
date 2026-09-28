@@ -1,0 +1,129 @@
+param(
+    [string]$ValidationOutput = "artifacts/residual_v12_shadow_runner_validation.json"
+)
+
+$ErrorActionPreference = "Stop"
+$ProjectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+Set-Location $ProjectRoot
+
+function Test-UsableFile {
+    param([string]$Path)
+    if ([string]::IsNullOrWhiteSpace($Path)) { return $false }
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $false }
+    return (Get-Item -LiteralPath $Path).Length -gt 0
+}
+
+function Write-Validation {
+    param([hashtable]$Payload)
+    $path = Join-Path $ProjectRoot $ValidationOutput
+    $dir = Split-Path -Parent $path
+    if (-not [string]::IsNullOrWhiteSpace($dir)) {
+        New-Item -ItemType Directory -Force -Path $dir | Out-Null
+    }
+    $Payload | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $path -Encoding UTF8
+}
+
+$venvPython = Join-Path $ProjectRoot ".venv-jravan\Scripts\python.exe"
+$historyPath = Join-Path $ProjectRoot "data\jravan\full\current_history.csv"
+$entriesPath = Join-Path $ProjectRoot "data\jravan\forward\future_entries.csv"
+$oddsPath = Join-Path $ProjectRoot "data\jravan\forward\odds_snapshots.csv"
+$championDir = Join-Path $ProjectRoot "artifacts\champion_v7"
+$modelPath = Join-Path $championDir "model.cbm"
+$manifestPath = Join-Path $championDir "manifest.json"
+$predictionsPath = Join-Path $ProjectRoot "data\jravan\forward\residual_v12_shadow_predictions.csv"
+$summaryPath = Join-Path $ProjectRoot "artifacts\residual_v12_shadow\summary.json"
+
+if (-not (Test-UsableFile $venvPython)) {
+    throw ".venv-jravan is missing; complete JRA-VAN Resume validation first."
+}
+if (-not (Test-UsableFile $historyPath)) {
+    throw "current_history.csv is missing."
+}
+
+$base = @{
+    validated_at_utc = [DateTimeOffset]::UtcNow.ToString("o")
+    commit_sha = (& git rev-parse HEAD).Trim()
+    runner_os = $env:RUNNER_OS
+    runner_arch = $env:RUNNER_ARCH
+    shadow_executed = $false
+    paper_broker_unchanged = $true
+}
+
+if (-not (Test-UsableFile $entriesPath) -or -not (Test-UsableFile $oddsPath)) {
+    $base.status = "snapshot_missing"
+    $base.entries_present = (Test-UsableFile $entriesPath)
+    $base.odds_present = (Test-UsableFile $oddsPath)
+    Write-Validation -Payload $base
+    Write-Host "Residual v12 shadow safely deferred: saved 0B31 snapshot is missing."
+    exit 0
+}
+
+Write-Host "=== Residual v12 saved 0B31 shadow replay ==="
+Write-Host "[1/4] Refreshing local project package"
+& $venvPython -m pip install -e ".[research]"
+if ($LASTEXITCODE -ne 0) { throw "Project installation failed." }
+
+Write-Host "[2/4] Ensuring frozen Champion v7 artifact"
+if (-not (Test-UsableFile $modelPath) -or -not (Test-UsableFile $manifestPath)) {
+    & $venvPython "scripts\train_champion_artifact.py" --start "2017-01-01" --end "2021-07-31" --output-dir $championDir
+    if ($LASTEXITCODE -ne 0) { throw "Champion v7 artifact creation failed." }
+}
+
+Write-Host "[3/4] Running frozen Residual v12 shadow with saved pre-race odds"
+& $venvPython "scripts\evaluate_residual_v12_shadow_snapshot.py" --history $historyPath --entries $entriesPath --odds $oddsPath --champion $championDir --predictions-output $predictionsPath --summary-output $summaryPath
+if ($LASTEXITCODE -ne 0) { throw "Residual v12 shadow replay failed." }
+if (-not (Test-UsableFile $summaryPath)) {
+    throw "Residual v12 shadow summary was not created."
+}
+
+Write-Host "[4/4] Writing sanitized validation"
+$summary = Get-Content -LiteralPath $summaryPath -Raw -Encoding UTF8 | ConvertFrom-Json
+$pred = $summary.prediction_summary
+$eval = $summary.evaluation
+$base.status = [string]$summary.status
+$base.shadow_executed = $true
+$base.uses_timestamped_prerace_odds = [bool]$summary.uses_timestamped_prerace_odds
+$base.uses_final_odds_for_shadow_inference = [bool]$summary.uses_final_odds_for_shadow_inference
+$base.prediction_rows = [int]$pred.rows
+$base.prediction_races = [int]$pred.races
+$base.positive_overlay_rows = [int]$pred.positive_overlay_rows
+$base.overlay_ge_5pct_rows = [int]$pred.overlay_ge_5pct_rows
+$base.overlay_ge_10pct_rows = [int]$pred.overlay_ge_10pct_rows
+$base.overlay_ge_20pct_rows = [int]$pred.overlay_ge_20pct_rows
+$base.mean_overlay_ratio = $pred.mean_overlay_ratio
+$base.max_overlay_ratio = $pred.max_overlay_ratio
+$base.min_lead_minutes = $pred.min_lead_minutes
+$base.max_lead_minutes = $pred.max_lead_minutes
+$base.fixed_gamma = $pred.fixed_gamma
+$base.result_fetch_errors = [int]$summary.result_fetch_errors
+$base.evaluation_status = [string]$eval.status
+$base.evaluated_rows = [int]$eval.evaluated_rows
+$base.evaluated_races = [int]$eval.evaluated_races
+if ($eval.status -eq "evaluated") {
+    $base.market_quality = $eval.market_quality
+    $base.residual_quality = $eval.residual_quality
+    $base.winner_log_loss_delta_vs_market = $eval.winner_log_loss_delta_vs_market
+    $base.brier_delta_vs_market = $eval.brier_delta_vs_market
+    $base.beats_market_winner_log_loss = [bool]$eval.beats_market_winner_log_loss
+    $base.beats_market_brier = [bool]$eval.beats_market_brier
+}
+Write-Validation -Payload $base
+
+if (-not [string]::IsNullOrWhiteSpace($env:GITHUB_STEP_SUMMARY)) {
+    @(
+        "### Residual v12 saved 0B31 shadow replay",
+        "",
+        "- status: $($summary.status)",
+        "- prediction rows/races: $($pred.rows) / $($pred.races)",
+        "- overlay >= 5% rows: $($pred.overlay_ge_5pct_rows)",
+        "- result evaluation: $($eval.status)",
+        "- evaluated races: $($eval.evaluated_races)",
+        "- PaperBroker unchanged: true"
+    ) | Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Encoding UTF8
+}
+
+Write-Host "Residual v12 shadow replay PASS."
+Write-Host "status=$($summary.status)"
+Write-Host "prediction_races=$($pred.races)"
+Write-Host "evaluation_status=$($eval.status)"
+Write-Host "evaluated_races=$($eval.evaluated_races)"

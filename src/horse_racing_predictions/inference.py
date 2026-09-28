@@ -16,6 +16,7 @@ def build_future_feature_frame(
     *,
     max_history_gap_days: int = 14,
     allow_stale_history: bool = False,
+    experimental_ranker_v10: bool = False,
 ) -> pd.DataFrame:
     if history.empty:
         raise ValueError("historical frame must not be empty")
@@ -65,7 +66,10 @@ def build_future_feature_frame(
         ignore_index=True,
         sort=False,
     )
-    built = build_pre_race_features(combined)
+    built = build_pre_race_features(
+        combined,
+        experimental_ranker_v10=experimental_ranker_v10,
+    )
     future = built.frame.loc[
         built.frame["_prediction_row"].fillna(False)
     ].copy()

@@ -1,0 +1,43 @@
+name: Residual v12 Forward Shadow (Self-hosted)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "research/residual_v12_forward_shadow_request.txt"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: residual-v12-forward-shadow-self-hosted
+  cancel-in-progress: true
+
+jobs:
+  residual-v12-shadow:
+    name: Replay frozen v12 on saved 0B31 snapshot
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout without deleting local ignored data
+        uses: actions/checkout@v4
+        with:
+          clean: false
+          persist-credentials: false
+
+      - name: Run saved pre-race shadow replay
+        shell: powershell
+        run: |
+          & .\scripts\run_residual_v12_shadow_runner.ps1
+
+      - name: Publish sanitized validation only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: residual-v12-forward-shadow-validation
+          path: artifacts/residual_v12_shadow_runner_validation.json
+          if-no-files-found: warn
+          retention-days: 14
