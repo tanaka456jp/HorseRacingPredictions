@@ -1,8 +1,10 @@
 Research-only Residual v12 forward shadow request marker.
 Replay the frozen residual v12 with locally saved timestamped pre-race 0B31
-odds. Do not change PaperBroker decisions or create real-money betting paths.
-Horse-level predictions, odds, and results stay local under data/. Upload only
-sanitized aggregate validation.
+odds. Record only prospective Paper v1 decisions that are still pre-race.
+Never backfill already-started races and never create real-money betting paths.
+Horse-level predictions, odds, results, and SQLite ledgers stay local under data/.
+Upload only sanitized aggregate validation.
 request=2026-09-28T14:07:00+09:00
 request=2026-09-28T16:42:00+09:00
 request=2026-09-28T19:43:00+09:00
+request=2026-09-28T21:49:00+09:00
