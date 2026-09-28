@@ -32,6 +32,7 @@ $modelPath = Join-Path $championDir "model.cbm"
 $manifestPath = Join-Path $championDir "manifest.json"
 $predictionsPath = Join-Path $ProjectRoot "data\jravan\forward\residual_v12_shadow_predictions.csv"
 $ledgerPath = Join-Path $ProjectRoot "data\jravan\forward\residual_v12_shadow.sqlite3"
+$paperLedgerPath = Join-Path $ProjectRoot "data\paper\paper_trading.sqlite3"
 $summaryPath = Join-Path $ProjectRoot "artifacts\residual_v12_shadow\summary.json"
 
 if (-not (Test-UsableFile $venvPython)) {
@@ -71,7 +72,7 @@ if (-not (Test-UsableFile $modelPath) -or -not (Test-UsableFile $manifestPath)) 
 }
 
 Write-Host "[3/4] Running frozen Residual v12 shadow with saved pre-race odds"
-& $venvPython "scripts\evaluate_residual_v12_shadow_snapshot.py" --history $historyPath --entries $entriesPath --odds $oddsPath --champion $championDir --predictions-output $predictionsPath --summary-output $summaryPath --ledger $ledgerPath
+& $venvPython "scripts\evaluate_residual_v12_shadow_snapshot.py" --history $historyPath --entries $entriesPath --odds $oddsPath --champion $championDir --predictions-output $predictionsPath --summary-output $summaryPath --ledger $ledgerPath --paper-ledger $paperLedgerPath
 if ($LASTEXITCODE -ne 0) { throw "Residual v12 shadow replay failed." }
 if (-not (Test-UsableFile $summaryPath)) {
     throw "Residual v12 shadow summary was not created."
@@ -81,6 +82,8 @@ Write-Host "[4/4] Writing sanitized validation"
 $summary = Get-Content -LiteralPath $summaryPath -Raw -Encoding UTF8 | ConvertFrom-Json
 $pred = $summary.prediction_summary
 $eval = $summary.evaluation
+$paper = $summary.paper_forward
+$paperPerf = $paper.performance
 $base.status = [string]$summary.status
 $base.shadow_executed = $true
 $base.uses_timestamped_prerace_odds = [bool]$summary.uses_timestamped_prerace_odds
@@ -100,6 +103,26 @@ $base.result_fetch_errors = [int]$summary.result_fetch_errors
 $base.evaluation_status = [string]$eval.status
 $base.evaluated_rows = [int]$eval.evaluated_rows
 $base.evaluated_races = [int]$eval.evaluated_races
+$base.paper_forward_status = [string]$paper.status
+$base.paper_policy_version = [string]$paper.policy_version
+$base.paper_min_ev = $paper.min_ev
+$base.paper_fractional_kelly = $paper.fractional_kelly
+$base.paper_eligible_rows = [int]$paper.eligible_rows
+$base.paper_new_evaluations = [int]$paper.new_evaluations
+$base.paper_duplicate_evaluations = [int]$paper.duplicate_evaluations
+$base.paper_new_selected_bets = [int]$paper.new_selected_bets
+$base.paper_new_committed_stake_yen = [int]$paper.new_committed_stake_yen
+$base.paper_total_selected_bets = [int]$paperPerf.selected_bets
+$base.paper_settled_bets = [int]$paperPerf.settled_bets
+$base.paper_unsettled_bets = [int]$paperPerf.unsettled_bets
+$base.paper_settled_stake_yen = [int]$paperPerf.settled_stake_yen
+$base.paper_payout_yen = [int]$paperPerf.payout_yen
+$base.paper_profit_yen = [int]$paperPerf.profit_yen
+$base.paper_roi = $paperPerf.roi
+$base.paper_max_drawdown_yen = [int]$paperPerf.max_drawdown_yen
+$base.paper_prospective_only = [bool]$paper.prospective_only
+$base.paper_historical_forward_rows_backfilled = [bool]$paper.historical_forward_rows_backfilled
+$base.live_execution_enabled = [bool]$summary.live_execution_enabled
 $base.ledger_new_prediction_rows = [int]$summary.ledger_update.new_prediction_rows
 $base.ledger_new_result_rows = [int]$summary.ledger_update.new_result_rows
 $base.ledger_pending_races_before = [int]$summary.ledger_update.pending_races_before
@@ -140,7 +163,17 @@ if (-not [string]::IsNullOrWhiteSpace($env:GITHUB_STEP_SUMMARY)) {
         "- cumulative evaluated races: $($summary.cumulative.evaluated_races)",
         "- cumulative log-loss delta vs market: $($summary.cumulative.evaluation.winner_log_loss_delta_vs_market)",
         "- cumulative Brier delta vs market: $($summary.cumulative.evaluation.brier_delta_vs_market)",
-        "- PaperBroker unchanged: true"
+        "- Paper v1 status: $($paper.status)",
+        "- Paper v1 rule: EV >= $($paper.min_ev), fractional Kelly $($paper.fractional_kelly)",
+        "- Paper v1 new evaluations/bets: $($paper.new_evaluations) / $($paper.new_selected_bets)",
+        "- Paper v1 new committed stake: $($paper.new_committed_stake_yen) yen",
+        "- Paper v1 settled bets: $($paperPerf.settled_bets)",
+        "- Paper v1 profit / ROI: $($paperPerf.profit_yen) yen / $($paperPerf.roi)",
+        "- Paper v1 max drawdown: $($paperPerf.max_drawdown_yen) yen",
+        "- Paper v1 prospective only: true",
+        "- historical forward rows backfilled: false",
+        "- live execution enabled: false",
+        "- PaperBroker implementation unchanged: true"
     ) | Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Encoding UTF8
 }
 

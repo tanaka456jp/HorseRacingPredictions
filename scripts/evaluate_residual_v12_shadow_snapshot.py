@@ -1,4 +1,5 @@
 import argparse
+from datetime import datetime, timezone
 import json
 from pathlib import Path
 
@@ -14,6 +15,9 @@ from horse_racing_predictions.residual_v12_shadow import (
 )
 from horse_racing_predictions.residual_shadow_ledger import (
     ResidualShadowLedger,
+)
+from horse_racing_predictions.residual_shadow_paper import (
+    run_residual_v12_forward_paper,
 )
 
 
@@ -40,6 +44,15 @@ def main() -> None:
         "--ledger",
         default="data/jravan/forward/residual_v12_shadow.sqlite3",
     )
+    parser.add_argument(
+        "--paper-ledger",
+        default="data/paper/paper_trading.sqlite3",
+    )
+    parser.add_argument(
+        "--paper-bankroll-yen",
+        type=int,
+        default=100_000,
+    )
     args = parser.parse_args()
 
     history = read_csv_flexible(args.history, low_memory=False)
@@ -64,6 +77,12 @@ def main() -> None:
 
     prediction_summary = summarize_shadow_predictions(
         predictions
+    )
+    paper_forward = run_residual_v12_forward_paper(
+        predictions,
+        ledger_path=args.paper_ledger,
+        bankroll_yen=args.paper_bankroll_yen,
+        decision_time=datetime.now(timezone.utc),
     )
 
     ledger = ResidualShadowLedger(args.ledger)
@@ -118,7 +137,10 @@ def main() -> None:
             ),
         },
         "cumulative": cumulative,
+        "paper_forward": paper_forward,
         "paper_broker_unchanged": True,
+        "paper_forward_enabled": True,
+        "live_execution_enabled": False,
         "uses_timestamped_prerace_odds": True,
         "uses_final_odds_for_shadow_inference": False,
     }
