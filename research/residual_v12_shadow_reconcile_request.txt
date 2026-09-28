@@ -1,0 +1,7 @@
+# Residual v12 lightweight result reconciliation request
+
+This marker triggers a result-only reconciliation on the local self-hosted runner.
+It must not regenerate predictions, reopen the 2025-2026 holdout, retune gamma,
+change PaperBroker decisions, or upload horse-level data.
+
+request=2026-09-28T20:40:00+09:00
