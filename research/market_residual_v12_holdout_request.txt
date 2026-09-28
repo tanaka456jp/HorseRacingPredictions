@@ -1,0 +1,5 @@
+One-time frozen market residual v12 holdout confirmation request.
+Use the fixed residual model design and gamma=4.0 selected before opening the
+2025-2026 holdout. Do not retune from holdout results. Historical final odds
+remain a research proxy only; equivalent timestamped pre-race 0B31 inputs are
+required before any Forward Paper use. Upload sanitized aggregates only.
