@@ -68,6 +68,8 @@ def test_residual_v12_paper_records_only_prospective_decisions(tmp_path):
     assert summary["new_committed_stake_yen"] == 2_000
     assert summary["min_ev"] == 1.15
     assert summary["fractional_kelly"] == 0.25
+    assert summary["max_odds_age_minutes"] == 10
+    assert summary["stale_odds_rows"] == 0
     assert summary["prospective_only"] is True
     assert summary["historical_forward_rows_backfilled"] is False
     assert summary["live_execution_enabled"] is False
@@ -97,7 +99,7 @@ def test_residual_v12_paper_is_idempotent_for_same_snapshot(tmp_path):
     second = run_residual_v12_forward_paper(
         predictions,
         ledger_path=ledger_path,
-        decision_time=decision + timedelta(minutes=1),
+        decision_time=decision,
     )
 
     assert first["new_evaluations"] == 2
@@ -228,3 +230,23 @@ def test_residual_v12_paper_performance_uses_settled_final_payout(tmp_path):
     assert performance["profit_yen"] == 4_000
     assert performance["roi"] == 2.0
     assert performance["max_drawdown_yen"] == 0
+
+
+def test_residual_v12_paper_rejects_stale_prerace_odds(tmp_path):
+    observed = datetime(2026, 9, 29, 0, 0, tzinfo=UTC)
+    post = observed + timedelta(hours=1)
+
+    summary = run_residual_v12_forward_paper(
+        _prediction_rows(observed=observed, post=post),
+        ledger_path=tmp_path / "paper.sqlite3",
+        bankroll_yen=100_000,
+        decision_time=observed + timedelta(minutes=11),
+    )
+
+    assert summary["status"] == "no_eligible_future_predictions"
+    assert summary["eligible_rows"] == 0
+    assert summary["stale_odds_rows"] == 2
+    assert summary["new_evaluations"] == 0
+    assert summary["new_selected_bets"] == 0
+    assert summary["max_odds_age_minutes"] == 10
+    assert summary["performance"]["selected_bets"] == 0

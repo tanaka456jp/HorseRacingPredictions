@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pandas as pd
@@ -23,6 +23,7 @@ PAPER_MAX_DAY_FRACTION = 0.08
 PAPER_MAX_BET_YEN = 10_000
 PAPER_MIN_BET_YEN = 100
 PAPER_BET_UNIT_YEN = 100
+PAPER_MAX_ODDS_AGE_MINUTES = 10
 
 
 def residual_v12_paper_config() -> StrategyConfig:
@@ -239,6 +240,7 @@ def run_residual_v12_forward_paper(
         counters = {
             "eligible_rows": 0,
             "past_or_not_yet_observed_rows": 0,
+            "stale_odds_rows": 0,
             "duplicate_evaluations": 0,
             "new_evaluations": 0,
             "new_selected_bets": 0,
@@ -259,6 +261,12 @@ def run_residual_v12_forward_paper(
                 observed_at <= decision_time < scheduled_post_time
             ):
                 counters["past_or_not_yet_observed_rows"] += 1
+                continue
+            if (
+                decision_time - observed_at
+                > timedelta(minutes=PAPER_MAX_ODDS_AGE_MINUTES)
+            ):
+                counters["stale_odds_rows"] += 1
                 continue
 
             counters["eligible_rows"] += 1
@@ -363,6 +371,7 @@ def run_residual_v12_forward_paper(
             "fractional_kelly": float(PAPER_FRACTIONAL_KELLY),
             "max_race_fraction": float(PAPER_MAX_RACE_FRACTION),
             "max_day_fraction": float(PAPER_MAX_DAY_FRACTION),
+            "max_odds_age_minutes": int(PAPER_MAX_ODDS_AGE_MINUTES),
             "bankroll_yen": int(bankroll_yen),
             **counters,
             "performance": performance,
