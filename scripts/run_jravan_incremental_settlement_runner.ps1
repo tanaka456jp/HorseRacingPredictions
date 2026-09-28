@@ -26,11 +26,11 @@ if (-not (Test-UsableFile $venvPython)) {
 }
 
 Write-Host "=== JRA-VAN Incremental History + Paper Settlement ==="
-Write-Host "[1/3] Refreshing local project package"
+Write-Host "[1/4] Refreshing local project package"
 & $venvPython -m pip install -e ".[research]"
 if ($LASTEXITCODE -ne 0) { throw "Project installation failed." }
 
-Write-Host "[2/3] Incremental completed-history update and settlement"
+Write-Host "[2/4] Incremental completed-history update and settlement"
 $argsList = @(
     "scripts\jravan_incremental_settlement.py",
     "--parsed", $parsedPath,
@@ -44,7 +44,16 @@ if ($LASTEXITCODE -ne 0) {
     throw "Incremental history + settlement pipeline failed."
 }
 
-Write-Host "[3/3] Writing sanitized validation"
+Write-Host "[3/4] Refreshing Residual v12 Paper evidence gate"
+$evidencePath = Join-Path $ProjectRoot "artifacts\residual_v12_paper_evidence\summary.json"
+& $venvPython "scripts\report_residual_v12_paper_evidence.py" --ledger (Join-Path $ProjectRoot "data\paper\paper_trading.sqlite3") --output $evidencePath
+if ($LASTEXITCODE -ne 0) { throw "Residual v12 Paper evidence report failed." }
+if (-not (Test-UsableFile $evidencePath)) {
+    throw "Residual v12 Paper evidence summary was not created."
+}
+$evidence = Get-Content -LiteralPath $evidencePath -Raw -Encoding UTF8 | ConvertFrom-Json
+
+Write-Host "[4/4] Writing sanitized validation"
 $summaryPath = Join-Path $ProjectRoot "artifacts\jravan_incremental\incremental_settlement_summary.json"
 if (-not (Test-UsableFile $summaryPath)) {
     throw "incremental_settlement_summary.json was not created."
@@ -72,6 +81,15 @@ $validation = @{
     winner_conflict_excluded_races = [int]$summary.incremental.winner_conflict_excluded_races
     winner_conflict_excluded_rows = [int]$summary.incremental.winner_conflict_excluded_rows
     settlement_settled_now = [int]$summary.settlement.settled_now
+    residual_evidence_status = [string]$evidence.status
+    residual_prospective_evaluated_races = [int]$evidence.prospective_evaluated_races
+    residual_settled_paper_bets = [int]$evidence.settled_paper_bets
+    residual_evidence_sufficient = [bool]$evidence.sufficient_evidence
+    residual_observed_positive_roi = [bool]$evidence.observed_positive_roi
+    residual_roi = $evidence.roi
+    residual_profit_yen = [int]$evidence.profit_yen
+    residual_max_drawdown_yen = [int]$evidence.max_drawdown_yen
+    residual_automatic_live_promotion = [bool]$evidence.automatic_live_promotion
 }
 foreach ($name in @("unsettled_before","wins","losses","unsettled_after","stake_settled_yen","payout_yen","profit_yen")) {
     if ($null -ne $summary.settlement.$name) {
@@ -93,7 +111,13 @@ if (-not [string]::IsNullOrWhiteSpace($env:GITHUB_STEP_SUMMARY)) {
         "- existing_end: $($summary.incremental.existing_end)",
         "- current_history_end: $($summary.incremental.current_history_end)",
         "- eligible_update_races: $($summary.incremental.eligible_update_races)",
-        "- settlement_settled_now: $($summary.settlement.settled_now)"
+        "- settlement_settled_now: $($summary.settlement.settled_now)",
+        "- Residual v12 evidence status: $($evidence.status)",
+        "- Residual prospective evaluated races: $($evidence.prospective_evaluated_races) / $($evidence.minimum_prospective_evaluated_races)",
+        "- Residual settled Paper bets: $($evidence.settled_paper_bets) / $($evidence.minimum_settled_paper_bets)",
+        "- Residual observed ROI: $($evidence.roi)",
+        "- Residual max drawdown: $($evidence.max_drawdown_yen) yen",
+        "- automatic live promotion: false"
     ) | Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Encoding UTF8
 }
 
@@ -101,3 +125,6 @@ Write-Host "JRA-VAN incremental + settlement PASS."
 Write-Host "incremental_status=$($summary.incremental.status)"
 Write-Host "current_history_end=$($summary.incremental.current_history_end)"
 Write-Host "settlement_settled_now=$($summary.settlement.settled_now)"
+Write-Host "residual_evidence_status=$($evidence.status)"
+Write-Host "residual_prospective_evaluated_races=$($evidence.prospective_evaluated_races)"
+Write-Host "residual_settled_paper_bets=$($evidence.settled_paper_bets)"
