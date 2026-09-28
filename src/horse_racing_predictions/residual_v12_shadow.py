@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+from pathlib import Path
 from typing import Callable
 
 import pandas as pd
@@ -23,6 +24,10 @@ from .market_residual_v12 import (
 )
 from .market_residual_v12_holdout import FIXED_GAMMA
 from .model_artifact import LoadedChampion
+from .residual_v12_artifact import (
+    load_frozen_residual_v12_model,
+    save_frozen_residual_v12_model,
+)
 
 
 def _safe_float(value) -> float | None:
@@ -100,6 +105,7 @@ def build_residual_v12_shadow_predictions(
     iterations: int = 350,
     fixed_gamma: float = FIXED_GAMMA,
     max_history_gap_days: int = 14,
+    model_cache_dir: str | Path | None = None,
 ) -> pd.DataFrame:
     if iterations < 1:
         raise ValueError("iterations must be positive")
@@ -156,13 +162,42 @@ def build_residual_v12_shadow_predictions(
         train_outcome - train_market_probability
     )
 
-    model = MarketResidualRegressor(
-        list(feature_columns),
-        iterations=iterations,
-    ).fit(
-        train,
-        train_target,
-    )
+    model_cache_status = "disabled"
+    if model_cache_dir is not None:
+        try:
+            model, _manifest = load_frozen_residual_v12_model(
+                model_cache_dir,
+                expected_feature_columns=feature_columns,
+                train_start=champion.manifest.train_start,
+                train_end=champion.manifest.train_end,
+                iterations=iterations,
+                fixed_gamma=fixed_gamma,
+            )
+            model_cache_status = "loaded"
+        except FileNotFoundError:
+            model = MarketResidualRegressor(
+                list(feature_columns),
+                iterations=iterations,
+            ).fit(
+                train,
+                train_target,
+            )
+            save_frozen_residual_v12_model(
+                model,
+                model_cache_dir,
+                train_start=champion.manifest.train_start,
+                train_end=champion.manifest.train_end,
+                fixed_gamma=fixed_gamma,
+            )
+            model_cache_status = "created"
+    else:
+        model = MarketResidualRegressor(
+            list(feature_columns),
+            iterations=iterations,
+        ).fit(
+            train,
+            train_target,
+        )
 
     future = build_future_feature_frame(
         aligned_history,
@@ -266,6 +301,7 @@ def build_residual_v12_shadow_predictions(
     output["model_train_end"] = (
         champion.manifest.train_end
     )
+    output["residual_model_cache_status"] = model_cache_status
     output["history_cutoff"] = str(
         pd.to_datetime(
             aligned_history["race_date"],
@@ -351,6 +387,9 @@ def summarize_shadow_predictions(
         "fixed_gamma": float(
             predictions["fixed_gamma"].iloc[0]
         ),
+        "residual_model_cache_status": str(
+            predictions["residual_model_cache_status"].iloc[0]
+        ) if "residual_model_cache_status" in predictions.columns else "disabled",
     }
 
 
