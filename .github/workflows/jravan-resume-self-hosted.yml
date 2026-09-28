@@ -21,8 +21,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: jravan-resume-self-hosted
-  cancel-in-progress: true
+  group: horse-racing-jravan-self-hosted
+  cancel-in-progress: false
 
 jobs:
   resume:

@@ -18,6 +18,10 @@ on:
         required: false
         default: "70"
         type: string
+  schedule:
+    # GitHub cron is UTC: 00:00-08:00 UTC = 09:00-17:00 JST.
+    # Run every day so special weekday JRA meetings are not missed.
+    - cron: "0 0-8 * * *"
   push:
     branches:
       - main
@@ -28,7 +32,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: residual-v12-forward-shadow-self-hosted
+  group: horse-racing-jravan-self-hosted
   cancel-in-progress: false
 
 jobs:

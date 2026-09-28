@@ -8,6 +8,9 @@ on:
         required: false
         default: "7"
         type: string
+  schedule:
+    # 11:00 UTC = 20:00 JST. Refresh completed history after racing.
+    - cron: "0 11 * * *"
   push:
     branches:
       - main
@@ -18,8 +21,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: jravan-incremental-settlement-self-hosted
-  cancel-in-progress: true
+  group: horse-racing-jravan-self-hosted
+  cancel-in-progress: false
 
 jobs:
   incremental-settlement:
