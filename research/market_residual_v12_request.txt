@@ -1,0 +1,7 @@
+Research-only market residual v12 development request marker.
+Train the residual model on the original training period, select correction
+strength only through 2022, and validate unchanged on both 2023 and 2024.
+Rows from 2025 onward must remain untouched until the development gate passes.
+Historical final odds are a research proxy only; equivalent pre-race 0B31
+inputs are required before any Forward Paper use. Only sanitized aggregates
+may be uploaded.
