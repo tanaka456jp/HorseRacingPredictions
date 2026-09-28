@@ -15,7 +15,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: residual-v12-forward-shadow-self-hosted
+  group: horse-racing-jravan-self-hosted
   cancel-in-progress: false
 
 jobs:

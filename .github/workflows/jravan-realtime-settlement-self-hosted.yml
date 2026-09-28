@@ -2,6 +2,9 @@ name: JRA-VAN Realtime Settlement (Self-hosted)
 
 on:
   workflow_dispatch:
+  schedule:
+    # 09:00 UTC = 18:00 JST. Settle Paper bets after the normal race day.
+    - cron: "0 9 * * *"
   push:
     branches:
       - main
@@ -12,8 +15,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: jravan-realtime-settlement-self-hosted
-  cancel-in-progress: true
+  group: horse-racing-jravan-self-hosted
+  cancel-in-progress: false
 
 jobs:
   realtime-settlement:
