@@ -65,25 +65,31 @@ def main() -> None:
     prediction_summary = summarize_shadow_predictions(
         predictions
     )
-    results, realtime_errors = capture_shadow_results_0b12(
-        predictions
-    )
-    evaluation = evaluate_shadow_results(
-        predictions,
-        results,
-    )
 
     ledger = ResidualShadowLedger(args.ledger)
     try:
         newly_recorded_predictions = (
             ledger.record_predictions(predictions)
         )
+        pending_races_before = ledger.pending_race_ids()
+        results, realtime_errors = capture_shadow_results_0b12(
+            pd.DataFrame({"race_id": pending_races_before})
+        )
         newly_recorded_results = (
             ledger.record_results(results)
         )
+        pending_races_after = ledger.pending_race_ids()
         cumulative = ledger.cumulative_summary()
     finally:
         ledger.close()
+
+    evaluation = evaluate_shadow_results(
+        predictions,
+        results,
+    )
+    reconciled_races = len(
+        set(pending_races_before) - set(pending_races_after)
+    )
 
     payload = {
         "status": (
@@ -100,6 +106,15 @@ def main() -> None:
             ),
             "new_result_rows": int(
                 newly_recorded_results
+            ),
+            "pending_races_before": int(
+                len(pending_races_before)
+            ),
+            "pending_races_after": int(
+                len(pending_races_after)
+            ),
+            "reconciled_races": int(
+                reconciled_races
             ),
         },
         "cumulative": cumulative,
