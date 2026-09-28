@@ -3,3 +3,4 @@ Replay the frozen residual v12 with locally saved timestamped pre-race 0B31
 odds. Do not change PaperBroker decisions or create real-money betting paths.
 Horse-level predictions, odds, and results stay local under data/. Upload only
 sanitized aggregate validation.
+request=2026-09-28T14:07:00+09:00
