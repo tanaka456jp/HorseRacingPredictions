@@ -5,6 +5,7 @@ import pytest
 
 from horse_racing_predictions.residual_v12_shadow import (
     build_residual_v12_shadow_predictions,
+    capture_shadow_results_0b12,
     evaluate_shadow_results,
     summarize_shadow_predictions,
 )
@@ -233,3 +234,81 @@ def test_shadow_result_evaluation_waits_for_complete_race():
     assert evaluated["evaluated_races"] == 1
     assert "market_quality" in evaluated
     assert "residual_quality" in evaluated
+
+
+
+class _WaitTrackingClient:
+    calls = []
+
+    def __init__(self):
+        self.initialized = False
+        self.opened = False
+
+    def initialize(self):
+        self.initialized = True
+
+    def open_realtime(self, *, dataspec, key):
+        self.opened = True
+        return 0
+
+    def iter_records(self, **kwargs):
+        type(self).calls.append(dict(kwargs))
+        return iter(())
+
+    def close(self):
+        self.opened = False
+
+
+def test_shadow_result_lookup_uses_bounded_wait():
+    _WaitTrackingClient.calls.clear()
+    predictions = pd.DataFrame([
+        {
+            "race_id": "20260927-08-03-04-11",
+        }
+    ])
+
+    results, errors = capture_shadow_results_0b12(
+        predictions,
+        client_factory=_WaitTrackingClient,
+    )
+
+    assert results.empty
+    assert errors == 0
+    assert _WaitTrackingClient.calls == [
+        {
+            "wait_retries": 25,
+            "wait_seconds": 0.2,
+        }
+    ]
+
+
+def test_market_context_handles_existing_decimal_odds_column():
+    from horse_racing_predictions.market_aware_ranker_v11 import (
+        add_market_context_features,
+    )
+
+    frame = pd.DataFrame([
+        {
+            "race_id": "R1",
+            "win_odds": 2.0,
+            "decimal_odds": 2.0,
+        },
+        {
+            "race_id": "R1",
+            "win_odds": 4.0,
+            "decimal_odds": 4.0,
+        },
+        {
+            "race_id": "R1",
+            "win_odds": 8.0,
+            "decimal_odds": 8.0,
+        },
+    ])
+
+    out = add_market_context_features(frame)
+
+    assert "market_implied_probability" in out.columns
+    assert abs(
+        out["market_implied_probability"].sum() - 1.0
+    ) < 1e-12
+    assert list(out["decimal_odds"]) == [2.0, 4.0, 8.0]

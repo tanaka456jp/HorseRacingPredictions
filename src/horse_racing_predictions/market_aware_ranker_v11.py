@@ -79,10 +79,18 @@ def add_market_context_features(
         )
 
     out = frame.copy()
-    market = normalized_market_probability(
-        out.rename(
+    market_frame = out.copy()
+    if "decimal_odds" in market_frame.columns:
+        market_frame["decimal_odds"] = pd.to_numeric(
+            out["win_odds"],
+            errors="raise",
+        )
+    else:
+        market_frame = market_frame.rename(
             columns={"win_odds": "decimal_odds"}
         )
+    market = normalized_market_probability(
+        market_frame
     )
     clipped = market.clip(
         lower=1e-12,
