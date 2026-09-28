@@ -107,3 +107,17 @@ def test_shadow_ledger_rejects_result_conflict(tmp_path):
             ledger.record_results(changed)
     finally:
         ledger.close()
+
+
+def test_pending_race_ids_clear_after_results(tmp_path):
+    ledger = ResidualShadowLedger(
+        tmp_path / "shadow.sqlite3"
+    )
+    try:
+        ledger.record_predictions(_predictions())
+        assert ledger.pending_race_ids() == ["R1"]
+
+        ledger.record_results(_results())
+        assert ledger.pending_race_ids() == []
+    finally:
+        ledger.close()

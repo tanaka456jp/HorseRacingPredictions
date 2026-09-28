@@ -5,3 +5,4 @@ Horse-level predictions, odds, and results stay local under data/. Upload only
 sanitized aggregate validation.
 request=2026-09-28T14:07:00+09:00
 request=2026-09-28T16:42:00+09:00
+request=2026-09-28T19:43:00+09:00

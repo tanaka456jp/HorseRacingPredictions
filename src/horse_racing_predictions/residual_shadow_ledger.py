@@ -174,6 +174,20 @@ class ResidualShadowLedger:
         self.conn.commit()
         return updated
 
+    def pending_race_ids(self) -> list[str]:
+        rows = self.conn.execute(
+            """
+            SELECT race_id
+            FROM shadow_rows
+            GROUP BY race_id
+            HAVING SUM(
+                CASE WHEN finish_position IS NULL THEN 1 ELSE 0 END
+            ) > 0
+            ORDER BY race_id
+            """
+        ).fetchall()
+        return [str(row[0]) for row in rows]
+
     def cumulative_frame(self) -> pd.DataFrame:
         return pd.read_sql_query(
             """

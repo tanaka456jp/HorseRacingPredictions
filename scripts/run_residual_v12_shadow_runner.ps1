@@ -102,6 +102,9 @@ $base.evaluated_rows = [int]$eval.evaluated_rows
 $base.evaluated_races = [int]$eval.evaluated_races
 $base.ledger_new_prediction_rows = [int]$summary.ledger_update.new_prediction_rows
 $base.ledger_new_result_rows = [int]$summary.ledger_update.new_result_rows
+$base.ledger_pending_races_before = [int]$summary.ledger_update.pending_races_before
+$base.ledger_pending_races_after = [int]$summary.ledger_update.pending_races_after
+$base.ledger_reconciled_races = [int]$summary.ledger_update.reconciled_races
 $base.cumulative_prediction_rows = [int]$summary.cumulative.prediction_rows
 $base.cumulative_prediction_races = [int]$summary.cumulative.prediction_races
 $base.cumulative_evaluated_rows = [int]$summary.cumulative.evaluated_rows
@@ -131,6 +134,9 @@ if (-not [string]::IsNullOrWhiteSpace($env:GITHUB_STEP_SUMMARY)) {
         "- overlay >= 5% rows: $($pred.overlay_ge_5pct_rows)",
         "- result evaluation: $($eval.status)",
         "- evaluated races: $($eval.evaluated_races)",
+        "- pending races before reconciliation: $($summary.ledger_update.pending_races_before)",
+        "- pending races after reconciliation: $($summary.ledger_update.pending_races_after)",
+        "- reconciled races this run: $($summary.ledger_update.reconciled_races)",
         "- cumulative evaluated races: $($summary.cumulative.evaluated_races)",
         "- cumulative log-loss delta vs market: $($summary.cumulative.evaluation.winner_log_loss_delta_vs_market)",
         "- cumulative Brier delta vs market: $($summary.cumulative.evaluation.brier_delta_vs_market)",
