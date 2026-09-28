@@ -117,6 +117,46 @@ class PaperTradingSession:
         self._day_stakes[day_key] += int(stake_yen)
         self._race_stakes[race_key] += int(stake_yen)
 
+
+    def seed_exposure(
+        self,
+        *,
+        scheduled_post_time,
+        race_id: str,
+        stake_yen: int,
+        bankroll_yen: int,
+    ) -> None:
+        """Restore already-recorded Paper exposure into a new session.
+
+        This is used by forward runners that may execute more than once on the
+        same race day. It prevents a later run from forgetting stakes that were
+        already committed by an earlier run.
+        """
+        stake_yen = int(stake_yen)
+        if stake_yen < 0:
+            raise ValueError("stake_yen must not be negative")
+        if bankroll_yen <= 0:
+            raise ValueError("bankroll_yen must be positive")
+        if stake_yen == 0:
+            return
+
+        day_key = scheduled_post_time.date().isoformat()
+        race_key = (day_key, str(race_id))
+
+        if day_key not in self._day_limits:
+            self._day_limits[day_key] = self._round_down(
+                bankroll_yen * self.config.max_day_fraction
+            )
+            self._day_stakes[day_key] = 0
+        if race_key not in self._race_limits:
+            self._race_limits[race_key] = self._round_down(
+                bankroll_yen * self.config.max_race_fraction
+            )
+            self._race_stakes[race_key] = 0
+
+        self._day_stakes[day_key] += stake_yen
+        self._race_stakes[race_key] += stake_yen
+
     def exposure_snapshot(self) -> dict:
         return {
             "day_limits": dict(self._day_limits),
