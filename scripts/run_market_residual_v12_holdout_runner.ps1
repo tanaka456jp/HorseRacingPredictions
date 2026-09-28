@@ -1,0 +1,83 @@
+param(
+    [string]$ValidationOutput = "artifacts/market_residual_v12_holdout_runner_validation.json"
+)
+
+$ErrorActionPreference = "Stop"
+$ProjectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+Set-Location $ProjectRoot
+
+$venvPython = Join-Path $ProjectRoot ".venv-jravan\Scripts\python.exe"
+$historyPath = Join-Path $ProjectRoot "data\jravan\full\current_history.csv"
+$championDir = Join-Path $ProjectRoot "artifacts\champion_v7"
+$summaryPath = Join-Path $ProjectRoot "artifacts\market_residual_v12_holdout\summary.json"
+
+if (-not (Test-Path -LiteralPath $venvPython -PathType Leaf)) {
+    throw ".venv-jravan is missing; complete JRA-VAN Resume validation first."
+}
+if (-not (Test-Path -LiteralPath $historyPath -PathType Leaf)) {
+    throw "current_history.csv is missing."
+}
+
+Write-Host "=== Market residual v12 holdout confirmation ==="
+Write-Host "[1/4] Refreshing local project package"
+& $venvPython -m pip install -e ".[research]"
+if ($LASTEXITCODE -ne 0) { throw "Project installation failed." }
+
+Write-Host "[2/4] Ensuring frozen Champion v7 artifact"
+$manifestPath = Join-Path $championDir "manifest.json"
+$modelPath = Join-Path $championDir "model.cbm"
+if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf) -or -not (Test-Path -LiteralPath $modelPath -PathType Leaf)) {
+    & $venvPython "scripts\train_champion_artifact.py" --start "2017-01-01" --end "2021-07-31" --output-dir $championDir
+    if ($LASTEXITCODE -ne 0) { throw "Champion v7 artifact creation failed." }
+}
+
+Write-Host "[3/4] Confirming frozen residual v12 on 2025-2026 holdout"
+& $venvPython "scripts\evaluate_market_residual_v12_holdout.py" --history $historyPath --champion $championDir --output $summaryPath
+if ($LASTEXITCODE -ne 0) { throw "Market residual v12 holdout confirmation failed." }
+if (-not (Test-Path -LiteralPath $summaryPath -PathType Leaf)) {
+    throw "Market residual v12 holdout summary was not created."
+}
+
+Write-Host "[4/4] Writing sanitized validation"
+$summary = Get-Content -LiteralPath $summaryPath -Raw -Encoding UTF8 | ConvertFrom-Json
+$payload = @{
+    validated_at_utc = [DateTimeOffset]::UtcNow.ToString("o")
+    commit_sha = (& git rev-parse HEAD).Trim()
+    runner_os = $env:RUNNER_OS
+    runner_arch = $env:RUNNER_ARCH
+    status = [string]$summary.status
+    training = $summary.training
+    fixed_parameters = $summary.fixed_parameters
+    holdout_combined = $summary.holdout_combined
+    holdout_yearly = $summary.holdout_yearly
+    confirmation_gate_passed = [bool]$summary.confirmation_gate_passed
+}
+$validationPath = Join-Path $ProjectRoot $ValidationOutput
+$validationDir = Split-Path -Parent $validationPath
+if (-not [string]::IsNullOrWhiteSpace($validationDir)) {
+    New-Item -ItemType Directory -Force -Path $validationDir | Out-Null
+}
+$payload | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $validationPath -Encoding UTF8
+
+if (-not [string]::IsNullOrWhiteSpace($env:GITHUB_STEP_SUMMARY)) {
+    $combined = $summary.holdout_combined
+    @(
+        "### Market residual v12 holdout confirmation",
+        "",
+        "- fixed gamma: $($summary.fixed_parameters.gamma)",
+        "- combined market winner log-loss: $($combined.market_quality.winner_log_loss)",
+        "- combined residual winner log-loss: $($combined.residual_quality.winner_log_loss)",
+        "- combined market Brier: $($combined.market_quality.brier)",
+        "- combined residual Brier: $($combined.residual_quality.brier)",
+        "- confirmation gate passed: $($summary.confirmation_gate_passed)"
+    ) | Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Encoding UTF8
+}
+
+Write-Host "Market residual v12 holdout confirmation PASS."
+Write-Host "fixed_gamma=$($summary.fixed_parameters.gamma)"
+Write-Host "combined_log_loss_delta=$($summary.holdout_combined.winner_log_loss_delta_vs_market)"
+Write-Host "combined_brier_delta=$($summary.holdout_combined.brier_delta_vs_market)"
+foreach ($yearRow in $summary.holdout_yearly) {
+    Write-Host "year=$($yearRow.year) log_loss_delta=$($yearRow.winner_log_loss_delta_vs_market) brier_delta=$($yearRow.brier_delta_vs_market)"
+}
+Write-Host "confirmation_gate_passed=$($summary.confirmation_gate_passed)"
