@@ -31,6 +31,7 @@ $championDir = Join-Path $ProjectRoot "artifacts\champion_v7"
 $modelPath = Join-Path $championDir "model.cbm"
 $manifestPath = Join-Path $championDir "manifest.json"
 $predictionsPath = Join-Path $ProjectRoot "data\jravan\forward\residual_v12_shadow_predictions.csv"
+$ledgerPath = Join-Path $ProjectRoot "data\jravan\forward\residual_v12_shadow.sqlite3"
 $summaryPath = Join-Path $ProjectRoot "artifacts\residual_v12_shadow\summary.json"
 
 if (-not (Test-UsableFile $venvPython)) {
@@ -70,7 +71,7 @@ if (-not (Test-UsableFile $modelPath) -or -not (Test-UsableFile $manifestPath)) 
 }
 
 Write-Host "[3/4] Running frozen Residual v12 shadow with saved pre-race odds"
-& $venvPython "scripts\evaluate_residual_v12_shadow_snapshot.py" --history $historyPath --entries $entriesPath --odds $oddsPath --champion $championDir --predictions-output $predictionsPath --summary-output $summaryPath
+& $venvPython "scripts\evaluate_residual_v12_shadow_snapshot.py" --history $historyPath --entries $entriesPath --odds $oddsPath --champion $championDir --predictions-output $predictionsPath --summary-output $summaryPath --ledger $ledgerPath
 if ($LASTEXITCODE -ne 0) { throw "Residual v12 shadow replay failed." }
 if (-not (Test-UsableFile $summaryPath)) {
     throw "Residual v12 shadow summary was not created."
@@ -99,6 +100,18 @@ $base.result_fetch_errors = [int]$summary.result_fetch_errors
 $base.evaluation_status = [string]$eval.status
 $base.evaluated_rows = [int]$eval.evaluated_rows
 $base.evaluated_races = [int]$eval.evaluated_races
+$base.ledger_new_prediction_rows = [int]$summary.ledger_update.new_prediction_rows
+$base.ledger_new_result_rows = [int]$summary.ledger_update.new_result_rows
+$base.cumulative_prediction_rows = [int]$summary.cumulative.prediction_rows
+$base.cumulative_prediction_races = [int]$summary.cumulative.prediction_races
+$base.cumulative_evaluated_rows = [int]$summary.cumulative.evaluated_rows
+$base.cumulative_evaluated_races = [int]$summary.cumulative.evaluated_races
+if ($summary.cumulative.evaluation.status -eq "evaluated") {
+    $base.cumulative_winner_log_loss_delta_vs_market = $summary.cumulative.evaluation.winner_log_loss_delta_vs_market
+    $base.cumulative_brier_delta_vs_market = $summary.cumulative.evaluation.brier_delta_vs_market
+    $base.cumulative_beats_market_winner_log_loss = [bool]$summary.cumulative.evaluation.beats_market_winner_log_loss
+    $base.cumulative_beats_market_brier = [bool]$summary.cumulative.evaluation.beats_market_brier
+}
 if ($eval.status -eq "evaluated") {
     $base.market_quality = $eval.market_quality
     $base.residual_quality = $eval.residual_quality
@@ -118,6 +131,9 @@ if (-not [string]::IsNullOrWhiteSpace($env:GITHUB_STEP_SUMMARY)) {
         "- overlay >= 5% rows: $($pred.overlay_ge_5pct_rows)",
         "- result evaluation: $($eval.status)",
         "- evaluated races: $($eval.evaluated_races)",
+        "- cumulative evaluated races: $($summary.cumulative.evaluated_races)",
+        "- cumulative log-loss delta vs market: $($summary.cumulative.evaluation.winner_log_loss_delta_vs_market)",
+        "- cumulative Brier delta vs market: $($summary.cumulative.evaluation.brier_delta_vs_market)",
         "- PaperBroker unchanged: true"
     ) | Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Encoding UTF8
 }
