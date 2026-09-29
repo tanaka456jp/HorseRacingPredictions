@@ -19,9 +19,13 @@ on:
         default: "70"
         type: string
   schedule:
-    # GitHub cron is UTC: 00:00-08:00 UTC = 09:00-17:00 JST.
-    # Run every day so special weekday JRA meetings are not missed.
-    - cron: "0 0-8 * * *"
+    # Avoid minute 0: GitHub documents that start-of-hour load can delay
+    # scheduled workflows or drop queued jobs.
+    # UTC 00:17/00:47-08:17/08:47 = JST 09:17/09:47-17:17/17:47.
+    # Two staggered attempts plus the model/race lock reduce missed snapshots
+    # without creating duplicate Paper decisions.
+    - cron: "17 0-8 * * *"
+    - cron: "47 0-8 * * *"
   push:
     branches:
       - main

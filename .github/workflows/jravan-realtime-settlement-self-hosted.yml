@@ -3,8 +3,8 @@ name: JRA-VAN Realtime Settlement (Self-hosted)
 on:
   workflow_dispatch:
   schedule:
-    # 09:00 UTC = 18:00 JST. Settle Paper bets after the normal race day.
-    - cron: "0 9 * * *"
+    # 09:17 UTC = 18:17 JST. Avoid GitHub's start-of-hour load window.
+    - cron: "17 9 * * *"
   push:
     branches:
       - main
