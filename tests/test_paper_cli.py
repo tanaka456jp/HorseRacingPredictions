@@ -92,3 +92,52 @@ def test_run_paper_csv_creates_nested_ledger_directory(tmp_path):
     assert ledger_path.exists()
     assert ledger_path.parent.is_dir()
     assert len(result["evaluations"]) == 3
+
+
+def test_run_paper_csv_skips_model_race_on_later_snapshot_run(tmp_path):
+    input_path = tmp_path / "paper.csv"
+    ledger_path = tmp_path / "paper.sqlite3"
+    _write_csv(input_path)
+
+    config = StrategyConfig(
+        min_ev=1.05,
+        min_probability=0.01,
+        min_confidence=0.0,
+        fractional_kelly=1.0,
+        max_race_fraction=0.02,
+        max_day_fraction=0.05,
+        max_bet_yen=100_000,
+    )
+    first = run_paper_csv(
+        input_path,
+        ledger_path,
+        bankroll_yen=100_000,
+        config=config,
+    )
+    second = run_paper_csv(
+        input_path,
+        ledger_path,
+        bankroll_yen=100_000,
+        config=config,
+    )
+
+    assert len(first["evaluations"]) == 3
+    assert len(second["evaluations"]) == 0
+    assert second["skipped_existing_races"] == 2
+    assert second["skipped_existing_evaluation_rows"] == 3
+
+    from horse_racing_predictions.ledger import Ledger
+
+    ledger = Ledger(ledger_path)
+    try:
+        prediction_count = ledger.conn.execute(
+            "SELECT COUNT(*) FROM predictions"
+        ).fetchone()[0]
+        bet_count = ledger.conn.execute(
+            "SELECT COUNT(*) FROM bets"
+        ).fetchone()[0]
+    finally:
+        ledger.close()
+
+    assert prediction_count == 3
+    assert bet_count == 2

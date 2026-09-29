@@ -3,8 +3,8 @@ name: Residual v12 Result Reconcile (Self-hosted)
 on:
   workflow_dispatch:
   schedule:
-    # GitHub cron is UTC: 12:30 UTC = 21:30 JST.
-    - cron: "30 12 * * *"
+    # 12:37 UTC = 21:37 JST. Keep away from top-of-hour load.
+    - cron: "37 12 * * *"
   push:
     branches:
       - main

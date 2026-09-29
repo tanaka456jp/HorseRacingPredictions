@@ -9,8 +9,8 @@ on:
         default: "7"
         type: string
   schedule:
-    # 11:00 UTC = 20:00 JST. Refresh completed history after racing.
-    - cron: "0 11 * * *"
+    # 11:23 UTC = 20:23 JST. Avoid GitHub's start-of-hour load window.
+    - cron: "23 11 * * *"
   push:
     branches:
       - main

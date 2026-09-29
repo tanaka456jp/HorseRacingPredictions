@@ -147,20 +147,97 @@ def run_paper_csv(
         ledger,
         config,
     )
-    available = int(bankroll_yen)
     evaluations = []
 
     try:
+        existing_race_keys = ledger.paper_evaluated_race_keys()
+        skipped_keys = {
+            (
+                case.prediction.model_version,
+                case.prediction.race_id,
+            )
+            for case in cases
+            if (
+                case.prediction.model_version,
+                case.prediction.race_id,
+            ) in existing_race_keys
+        }
+        skipped_rows = sum(
+            1
+            for case in cases
+            if (
+                case.prediction.model_version,
+                case.prediction.race_id,
+            ) in existing_race_keys
+        )
+        cases = [
+            case
+            for case in cases
+            if (
+                case.prediction.model_version,
+                case.prediction.race_id,
+            ) not in existing_race_keys
+        ]
+
+        model_versions = {
+            case.prediction.model_version
+            for case in cases
+        }
+        case_days = {
+            case.snapshot.scheduled_post_time.date().isoformat()
+            for case in cases
+        }
+        existing_day_stakes = {
+            day: 0
+            for day in case_days
+        }
+        for exposure in ledger.paper_exposures(model_versions):
+            scheduled_post_time = _parse_datetime(
+                exposure["scheduled_post_time"]
+            )
+            day_key = scheduled_post_time.date().isoformat()
+            if day_key not in case_days:
+                continue
+            stake = int(exposure["stake_yen"])
+            existing_day_stakes[day_key] += stake
+            session.seed_exposure(
+                scheduled_post_time=scheduled_post_time,
+                race_id=exposure["race_id"],
+                stake_yen=stake,
+                bankroll_yen=bankroll_yen,
+            )
+
+        available_by_day = {
+            day: max(
+                0,
+                int(bankroll_yen)
+                - int(existing_day_stakes.get(day, 0)),
+            )
+            for day in case_days
+        }
+
         for case in cases:
+            day_key = (
+                case.snapshot.scheduled_post_time.date().isoformat()
+            )
+            available = available_by_day[day_key]
+            evaluation_bankroll = (
+                available
+                if available > 0
+                else int(bankroll_yen)
+            )
             result = session.evaluate(
                 case.prediction,
                 case.snapshot,
-                bankroll_yen=available,
+                bankroll_yen=evaluation_bankroll,
             )
 
             stake = int(result.decision.stake_yen)
             if result.receipt.accepted:
-                available -= stake
+                available_by_day[day_key] = max(
+                    0,
+                    available - stake,
+                )
 
             evaluations.append({
                 "race_id": case.prediction.race_id,
@@ -195,12 +272,19 @@ def run_paper_csv(
             for row in evaluations
             if row["accepted"]
         )
+        remaining = (
+            min(available_by_day.values())
+            if available_by_day
+            else int(bankroll_yen)
+        )
         return {
             "mode": "paper_only",
             "starting_bankroll_yen": int(bankroll_yen),
             "committed_stake_yen": int(committed),
-            "remaining_uncommitted_bankroll_yen": int(available),
+            "remaining_uncommitted_bankroll_yen": int(remaining),
             "evaluations": evaluations,
+            "skipped_existing_races": int(len(skipped_keys)),
+            "skipped_existing_evaluation_rows": int(skipped_rows),
             "exposure": _json_exposure(
                 session.exposure_snapshot()
             ),
