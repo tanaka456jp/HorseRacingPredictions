@@ -105,6 +105,7 @@ def test_residual_v12_paper_is_idempotent_for_same_snapshot(tmp_path):
     assert first["new_evaluations"] == 2
     assert second["new_evaluations"] == 0
     assert second["duplicate_evaluations"] == 2
+    assert second["locked_existing_races"] == 1
     assert second["performance"]["selected_bets"] == 1
 
 

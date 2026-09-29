@@ -245,6 +245,47 @@ class Ledger:
             )
         return bet_id
 
+    def paper_evaluated_race_keys(self):
+        rows = self.conn.execute(
+            "SELECT DISTINCT p.model_version,p.race_id "
+            "FROM predictions p "
+            "JOIN paper_prediction_evidence e ON e.prediction_id=p.id"
+        ).fetchall()
+        return {
+            (str(row[0]), str(row[1]))
+            for row in rows
+        }
+
+    def paper_exposures(self, model_versions=None):
+        params = []
+        where = "WHERE b.stake_yen > 0"
+        if model_versions:
+            versions = sorted({str(value) for value in model_versions})
+            placeholders = ",".join("?" for _ in versions)
+            where += f" AND p.model_version IN ({placeholders})"
+            params.extend(versions)
+
+        rows = self.conn.execute(
+            "SELECT p.model_version,s.scheduled_post_time,b.race_id,b.stake_yen "
+            "FROM bets b "
+            "JOIN paper_bet_evidence be ON be.bet_id=b.id "
+            "JOIN predictions p ON p.id=be.prediction_id "
+            "JOIN paper_prediction_evidence pe ON pe.prediction_id=p.id "
+            "JOIN pre_race_odds_snapshots s ON s.id=pe.odds_snapshot_id "
+            f"{where} "
+            "ORDER BY b.id",
+            tuple(params),
+        ).fetchall()
+        return [
+            {
+                "model_version": str(row[0]),
+                "scheduled_post_time": row[1],
+                "race_id": str(row[2]),
+                "stake_yen": int(row[3]),
+            }
+            for row in rows
+        ]
+
     def paper_bet_evidence(self, bet_id):
         row = self.conn.execute(
             "SELECT b.race_id,b.horse_id,b.stake_yen,b.decimal_odds,"

@@ -237,11 +237,37 @@ def run_residual_v12_forward_paper(
             kind="stable",
         )
 
+        existing_race_rows = ledger.conn.execute(
+            """
+            SELECT DISTINCT p.race_id
+            FROM predictions p
+            JOIN paper_prediction_evidence pe
+              ON pe.prediction_id=p.id
+            WHERE p.model_version=?
+            """,
+            (PAPER_MODEL_VERSION,),
+        ).fetchall()
+        existing_race_ids = {
+            str(row[0])
+            for row in existing_race_rows
+        }
+        locked_mask = (
+            frame["race_id"].astype(str).isin(existing_race_ids)
+        )
+        locked_rows = int(locked_mask.sum())
+        locked_races = int(
+            frame.loc[locked_mask, "race_id"]
+            .astype(str)
+            .nunique()
+        )
+        frame = frame.loc[~locked_mask].copy()
+
         counters = {
             "eligible_rows": 0,
             "past_or_not_yet_observed_rows": 0,
             "stale_odds_rows": 0,
-            "duplicate_evaluations": 0,
+            "duplicate_evaluations": int(locked_rows),
+            "locked_existing_races": int(locked_races),
             "new_evaluations": 0,
             "new_selected_bets": 0,
             "new_committed_stake_yen": 0,
