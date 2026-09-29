@@ -111,6 +111,9 @@ def test_evidence_gate_stays_closed_below_frozen_thresholds(tmp_path):
     assert report["minimum_settled_paper_bets"] == 200
     assert report["automatic_live_promotion"] is False
     assert report["live_execution_enabled"] is False
+    assert report["roi_bootstrap_status"] == "insufficient_race_clusters"
+    assert report["roi_ci_lower"] is None
+    assert report["roi_ci_upper"] is None
 
 
 def test_evidence_gate_reports_positive_roi_only_after_sample_gate(tmp_path):
@@ -203,5 +206,42 @@ def test_evidence_gate_reports_positive_roi_only_after_sample_gate(tmp_path):
     assert report["settled_paper_bets"] == 200
     assert report["sufficient_evidence"] is True
     assert report["observed_positive_roi"] is True
-    assert report["status"] == "review_ready_positive_observed_roi"
+    assert report["roi_bootstrap_status"] == "available"
+    assert report["roi_bootstrap_race_clusters"] == 200
+    assert report["roi_bootstrap_replicates"] == 5000
+    assert report["roi_bootstrap_seed"] == 20260930
+    assert report["roi_confidence_level"] == 0.95
+    assert report["roi_ci_lower"] is not None
+    assert report["roi_ci_upper"] is not None
+    assert report["roi_ci_lower"] > 0.0
+    assert report["roi_ci_upper"] > report["roi_ci_lower"]
+    assert 0.0 <= report["bootstrap_positive_roi_fraction"] <= 1.0
+    assert report["statistical_positive_roi_evidence"] is True
+    assert report["status"] == "review_ready_statistically_positive_roi"
     assert report["automatic_live_promotion"] is False
+
+
+def test_roi_bootstrap_is_deterministic_for_same_ledger(tmp_path):
+    ledger_path = tmp_path / "paper.sqlite3"
+    ledger = Ledger(ledger_path)
+    try:
+        for index in range(30):
+            _insert_evaluation(
+                ledger,
+                race_id=f"B{index}",
+                stake_yen=100,
+                won=index % 4 == 0,
+            )
+    finally:
+        ledger.close()
+
+    first = build_residual_v12_paper_evidence_report(ledger_path)
+    second = build_residual_v12_paper_evidence_report(ledger_path)
+
+    assert first["roi_bootstrap_status"] == "available"
+    assert first["roi_ci_lower"] == second["roi_ci_lower"]
+    assert first["roi_ci_upper"] == second["roi_ci_upper"]
+    assert (
+        first["bootstrap_positive_roi_fraction"]
+        == second["bootstrap_positive_roi_fraction"]
+    )
