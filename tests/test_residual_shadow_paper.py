@@ -137,7 +137,7 @@ def test_residual_v12_paper_rejects_gamma_change(tmp_path):
         )
 
 
-def test_residual_v12_paper_restores_race_exposure_between_runs(tmp_path):
+def test_residual_v12_paper_locks_race_between_runs(tmp_path):
     observed = datetime(2026, 9, 29, 0, 0, tzinfo=UTC)
     post = observed + timedelta(hours=1)
     ledger_path = tmp_path / "paper.sqlite3"
@@ -172,7 +172,9 @@ def test_residual_v12_paper_restores_race_exposure_between_runs(tmp_path):
         decision_time=observed + timedelta(minutes=15),
     )
 
-    assert summary["new_evaluations"] == 1
+    assert summary["new_evaluations"] == 0
+    assert summary["duplicate_evaluations"] == 1
+    assert summary["locked_existing_races"] == 1
     assert summary["new_selected_bets"] == 0
     assert summary["performance"]["selected_bets"] == 1
 
