@@ -57,6 +57,32 @@ e4.metric(
     f"¥{evidence['max_drawdown_yen']:,}",
 )
 
+s1, s2, s3 = st.columns(3)
+s1.metric(
+    "ROI 95%下限",
+    (
+        f"{float(evidence['roi_ci_lower']):.1%}"
+        if evidence["roi_ci_lower"] is not None
+        else "—"
+    ),
+)
+s2.metric(
+    "ROI 95%上限",
+    (
+        f"{float(evidence['roi_ci_upper']):.1%}"
+        if evidence["roi_ci_upper"] is not None
+        else "—"
+    ),
+)
+s3.metric(
+    "BootstrapでROI>0の割合",
+    (
+        f"{float(evidence['bootstrap_positive_roi_fraction']):.1%}"
+        if evidence["bootstrap_positive_roi_fraction"] is not None
+        else "—"
+    ),
+)
+
 st.progress(
     float(evidence["evaluated_race_progress"]),
     text=(
@@ -79,11 +105,18 @@ if not evidence["sufficient_evidence"]:
         "Evidence Gate: insufficient_evidence。"
         "標本条件を満たすまではROIがプラスでも判定保留です。"
     )
-elif evidence["observed_positive_roi"]:
+elif evidence["statistical_positive_roi_evidence"]:
     st.success(
         "Evidence Gate: review_ready。"
-        "固定標本条件到達後のPaper ROIは現時点でプラスです。"
+        "固定標本条件を満たし、レース単位Bootstrapの"
+        "95% ROI下限も0を上回っています。"
         "実賭けへの自動昇格は行いません。"
+    )
+elif evidence["observed_positive_roi"]:
+    st.warning(
+        "Evidence Gate: review_ready。"
+        "観測ROIはプラスですが、95% ROI区間では"
+        "まだ0超を確認できていません。"
     )
 else:
     st.warning(
@@ -95,7 +128,9 @@ else:
 st.caption(
     "固定条件: prospective評価500レース以上・"
     "決済済みPaper賭け200件以上。"
-    "閾値は結果確認前に固定。Live executionは無効。"
+    "閾値は結果確認前に固定。"
+    "統計診断はレース単位Bootstrap 5,000回、95%区間、"
+    "固定seed=20260930。Live executionは無効。"
 )
 
 r1, r2, r3, r4 = st.columns(4)

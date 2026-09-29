@@ -86,7 +86,12 @@ $validation = @{
     residual_settled_paper_bets = [int]$evidence.settled_paper_bets
     residual_evidence_sufficient = [bool]$evidence.sufficient_evidence
     residual_observed_positive_roi = [bool]$evidence.observed_positive_roi
+    residual_statistical_positive_roi_evidence = [bool]$evidence.statistical_positive_roi_evidence
     residual_roi = $evidence.roi
+    residual_roi_ci_lower = $evidence.roi_ci_lower
+    residual_roi_ci_upper = $evidence.roi_ci_upper
+    residual_bootstrap_positive_roi_fraction = $evidence.bootstrap_positive_roi_fraction
+    residual_roi_bootstrap_race_clusters = [int]$evidence.roi_bootstrap_race_clusters
     residual_profit_yen = [int]$evidence.profit_yen
     residual_max_drawdown_yen = [int]$evidence.max_drawdown_yen
     residual_automatic_live_promotion = [bool]$evidence.automatic_live_promotion
@@ -116,6 +121,9 @@ if (-not [string]::IsNullOrWhiteSpace($env:GITHUB_STEP_SUMMARY)) {
         "- Residual prospective evaluated races: $($evidence.prospective_evaluated_races) / $($evidence.minimum_prospective_evaluated_races)",
         "- Residual settled Paper bets: $($evidence.settled_paper_bets) / $($evidence.minimum_settled_paper_bets)",
         "- Residual observed ROI: $($evidence.roi)",
+        "- Residual ROI 95% interval: $($evidence.roi_ci_lower) to $($evidence.roi_ci_upper)",
+        "- Residual bootstrap ROI>0 fraction: $($evidence.bootstrap_positive_roi_fraction)",
+        "- Residual statistically positive ROI evidence: $($evidence.statistical_positive_roi_evidence)",
         "- Residual max drawdown: $($evidence.max_drawdown_yen) yen",
         "- automatic live promotion: false"
     ) | Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Encoding UTF8
