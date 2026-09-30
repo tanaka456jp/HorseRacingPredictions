@@ -16,7 +16,24 @@ if (-not (Test-Path -LiteralPath $wrapperPath -PathType Leaf)) {
     throw "Local scheduler wrapper is missing."
 }
 
-$powershellExe = (Get-Command powershell.exe -ErrorAction Stop).Source
+$launcherDir = Join-Path $env:LOCALAPPDATA "HorseRacingPredictionsScheduler"
+New-Item -ItemType Directory -Force -Path $launcherDir | Out-Null
+
+function New-Launcher {
+    param(
+        [string]$TaskName
+    )
+
+    $safeName = $TaskName.Replace("-", "_")
+    $launcherPath = Join-Path $launcherDir "$safeName.cmd"
+    $launcherContent = @(
+        "@echo off",
+        "powershell.exe -NoProfile -ExecutionPolicy Bypass -File ""$wrapperPath"" -Task $TaskName",
+        "exit /b %ERRORLEVEL%"
+    )
+    $launcherContent | Set-Content -LiteralPath $launcherPath -Encoding ASCII
+    return $launcherPath
+}
 
 function Install-Task {
     param(
@@ -29,7 +46,12 @@ function Install-Task {
         [string]$EndTime
     )
 
-    $taskCommand = ('"{0}" -NoProfile -ExecutionPolicy Bypass -File "{1}" -Task {2}' -f $powershellExe, $wrapperPath, $TaskName)
+    $launcherPath = New-Launcher -TaskName $TaskName
+    $taskCommand = ('"{0}"' -f $launcherPath)
+    if ($taskCommand.Length -gt 261) {
+        throw "Task command remains too long for schtasks: $($taskCommand.Length) characters."
+    }
+
     $argsList = @(
         "/Create",
         "/TN", $Name,
@@ -49,6 +71,8 @@ function Install-Task {
     if ($LASTEXITCODE -ne 0) {
         throw "schtasks /Create failed for $Name with exit code $LASTEXITCODE."
     }
+
+    return $launcherPath
 }
 
 $taskSpecs = @(
@@ -90,8 +114,9 @@ $taskSpecs = @(
     }
 )
 
+$launchers = @{}
 foreach ($spec in $taskSpecs) {
-    Install-Task -Name $spec.name -TaskName $spec.task -Schedule $spec.schedule -StartTime $spec.start -Modifier $spec.modifier -EndTime $spec.end
+    $launchers[$spec.name] = Install-Task -Name $spec.name -TaskName $spec.task -Schedule $spec.schedule -StartTime $spec.start -Modifier $spec.modifier -EndTime $spec.end
 }
 
 $installed = @()
@@ -105,6 +130,7 @@ foreach ($spec in $taskSpecs) {
         state = [string]$task.State
         next_run_time = $info.NextRunTime.ToString("o")
         last_task_result = [int]$info.LastTaskResult
+        launcher = [string]$launchers[$spec.name]
     }
 }
 
@@ -115,6 +141,7 @@ $validation = @{
     expected_computer_name = $ExpectedComputerName
     commit_sha = (& git rev-parse HEAD).Trim()
     scheduler = "Windows Task Scheduler"
+    launcher_directory = $launcherDir
     github_cron_is_primary = $false
     local_scheduler_is_primary = $true
     live_execution_enabled = $false
@@ -127,6 +154,7 @@ New-Item -ItemType Directory -Force -Path $validationDir | Out-Null
 $validation | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $validationPath -Encoding UTF8
 
 Write-Host "Local JRA-VAN scheduler installation PASS."
+Write-Host "launcher_directory=$launcherDir"
 foreach ($task in $installed) {
-    Write-Host "$($task.name): $($task.schedule); next=$($task.next_run_time)"
+    Write-Host "$($task.name): $($task.schedule); next=$($task.next_run_time); launcher=$($task.launcher)"
 }
