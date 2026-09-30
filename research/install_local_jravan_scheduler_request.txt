@@ -1,1 +1,1 @@
-install_pc1_exact_time_scheduler_v1
+install_pc1_exact_time_scheduler_v2_short_launcher
