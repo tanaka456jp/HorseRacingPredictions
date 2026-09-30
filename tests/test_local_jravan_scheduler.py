@@ -35,6 +35,9 @@ def test_local_scheduler_installer_registers_exact_jst_times():
     assert "HorseRacingPredictionsScheduler" in script
     assert "New-Launcher" in script
     assert "taskCommand.Length -gt 261" in script
+    assert "[int]$Modifier" in script
+    assert "if ($Modifier -gt 0)" in script
+    assert "[string]$Modifier.Value" not in script
 
 
 def test_local_scheduler_wrapper_has_machine_local_lock_and_heartbeat():
