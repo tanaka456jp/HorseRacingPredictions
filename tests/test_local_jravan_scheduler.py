@@ -32,6 +32,9 @@ def test_local_scheduler_installer_registers_exact_jst_times():
     assert "modifier = 30" in script
     assert 'ExpectedComputerName = "DESKTOP-MVV1FD4"' in script
     assert "live_execution_enabled = $false" in script
+    assert "HorseRacingPredictionsScheduler" in script
+    assert "New-Launcher" in script
+    assert "taskCommand.Length -gt 261" in script
 
 
 def test_local_scheduler_wrapper_has_machine_local_lock_and_heartbeat():
