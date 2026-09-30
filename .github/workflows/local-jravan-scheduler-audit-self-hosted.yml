@@ -1,0 +1,39 @@
+name: Audit Local JRA-VAN Scheduler (Self-hosted)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "research/local_scheduler_audit_request.txt"
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    name: Audit PC1 exact-time scheduler and heartbeats
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout without deleting local ignored data
+        uses: actions/checkout@v4
+        with:
+          clean: false
+          persist-credentials: false
+
+      - name: Audit scheduler
+        shell: powershell
+        run: |
+          & .\scripts\audit_local_jravan_scheduler.ps1 -ExpectedComputerName "DESKTOP-MVV1FD4"
+
+      - name: Publish sanitized audit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: local-jravan-scheduler-audit-validation
+          path: artifacts/local_scheduler_audit_validation.json
+          if-no-files-found: warn
+          retention-days: 14

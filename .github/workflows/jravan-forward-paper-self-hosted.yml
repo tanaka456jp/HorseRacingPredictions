@@ -18,14 +18,6 @@ on:
         required: false
         default: "70"
         type: string
-  schedule:
-    # Avoid minute 0: GitHub documents that start-of-hour load can delay
-    # scheduled workflows or drop queued jobs.
-    # UTC 00:17/00:47-08:17/08:47 = JST 09:17/09:47-17:17/17:47.
-    # Two staggered attempts plus the model/race lock reduce missed snapshots
-    # without creating duplicate Paper decisions.
-    - cron: "17 0-8 * * *"
-    - cron: "47 0-8 * * *"
   push:
     branches:
       - main
@@ -71,7 +63,8 @@ jobs:
           if (-not [string]::IsNullOrWhiteSpace($env:INPUT_MAX_LEAD_MINUTES)) {
             $maxLead = [int]$env:INPUT_MAX_LEAD_MINUTES
           }
-          & .\scripts\run_jravan_forward_runner.ps1 -BankrollYen $bankroll -MinLeadMinutes $lead -MaxLeadMinutes $maxLead
+          Remove-Item -LiteralPath "artifacts\jravan_forward_runner_validation.json" -ErrorAction SilentlyContinue
+          & .\scripts\run_local_jravan_scheduled_task.ps1 -Task forward -BankrollYen $bankroll -MinLeadMinutes $lead -MaxLeadMinutes $maxLead
 
       - name: Publish sanitized validation only
         if: always()

@@ -2,9 +2,6 @@ name: JRA-VAN Realtime Settlement (Self-hosted)
 
 on:
   workflow_dispatch:
-  schedule:
-    # 09:17 UTC = 18:17 JST. Avoid GitHub's start-of-hour load window.
-    - cron: "17 9 * * *"
   push:
     branches:
       - main
@@ -34,7 +31,8 @@ jobs:
       - name: Run Paper-only realtime settlement
         shell: powershell
         run: |
-          & .\scripts\run_jravan_realtime_settlement_runner.ps1
+          Remove-Item -LiteralPath "artifacts\jravan_realtime_settlement_runner_validation.json" -ErrorAction SilentlyContinue
+          & .\scripts\run_local_jravan_scheduled_task.ps1 -Task realtime-settlement
 
       - name: Publish sanitized validation only
         if: always()
