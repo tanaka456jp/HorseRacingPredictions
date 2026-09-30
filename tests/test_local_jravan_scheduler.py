@@ -38,6 +38,7 @@ def test_local_scheduler_installer_registers_exact_jst_times():
     assert "[int]$Modifier" in script
     assert "if ($Modifier -gt 0)" in script
     assert "[string]$Modifier.Value" not in script
+    assert "$null -ne $info.NextRunTime" in script
 
 
 def test_local_scheduler_wrapper_has_machine_local_lock_and_heartbeat():
@@ -64,3 +65,12 @@ def test_local_scheduler_install_and_audit_workflows_are_pc1_guarded():
     assert 'ExpectedComputerName "DESKTOP-MVV1FD4"' in audit
     assert "schedule:" not in install
     assert "schedule:" not in audit
+
+
+def test_local_scheduler_audit_handles_never_run_tasks():
+    script = Path(
+        "scripts/audit_local_jravan_scheduler.ps1"
+    ).read_text(encoding="utf-8")
+
+    assert "$null -ne $info.LastRunTime" in script
+    assert "$null -ne $info.NextRunTime" in script

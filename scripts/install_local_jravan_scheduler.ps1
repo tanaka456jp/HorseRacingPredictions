@@ -123,12 +123,16 @@ $installed = @()
 foreach ($spec in $taskSpecs) {
     $task = Get-ScheduledTask -TaskName $spec.name -ErrorAction Stop
     $info = Get-ScheduledTaskInfo -TaskName $spec.name -ErrorAction Stop
+    $nextRunTime = $null
+    if ($null -ne $info.NextRunTime) {
+        $nextRunTime = ([datetime]$info.NextRunTime).ToString("o")
+    }
     $installed += @{
         name = $spec.name
         task = $spec.task
         schedule = $spec.description
         state = [string]$task.State
-        next_run_time = $info.NextRunTime.ToString("o")
+        next_run_time = $nextRunTime
         last_task_result = [int]$info.LastTaskResult
         launcher = [string]$launchers[$spec.name]
     }

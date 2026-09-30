@@ -22,11 +22,19 @@ $tasks = @()
 foreach ($name in $names) {
     $task = Get-ScheduledTask -TaskName $name -ErrorAction Stop
     $info = Get-ScheduledTaskInfo -TaskName $name -ErrorAction Stop
+    $lastRunTime = $null
+    if ($null -ne $info.LastRunTime) {
+        $lastRunTime = ([datetime]$info.LastRunTime).ToString("o")
+    }
+    $nextRunTime = $null
+    if ($null -ne $info.NextRunTime) {
+        $nextRunTime = ([datetime]$info.NextRunTime).ToString("o")
+    }
     $tasks += @{
         name = $name
         state = [string]$task.State
-        last_run_time = $info.LastRunTime.ToString("o")
-        next_run_time = $info.NextRunTime.ToString("o")
+        last_run_time = $lastRunTime
+        next_run_time = $nextRunTime
         last_task_result = [int]$info.LastTaskResult
     }
 }
