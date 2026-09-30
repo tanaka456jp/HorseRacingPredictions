@@ -42,7 +42,7 @@ function Install-Task {
         [ValidateSet("DAILY", "MINUTE")]
         [string]$Schedule,
         [string]$StartTime,
-        [Nullable[int]]$Modifier,
+        [int]$Modifier,
         [string]$EndTime
     )
 
@@ -60,8 +60,8 @@ function Install-Task {
         "/ST", $StartTime,
         "/F"
     )
-    if ($null -ne $Modifier) {
-        $argsList += @("/MO", [string]$Modifier.Value)
+    if ($Modifier -gt 0) {
+        $argsList += @("/MO", [string]$Modifier)
     }
     if (-not [string]::IsNullOrWhiteSpace($EndTime)) {
         $argsList += @("/ET", $EndTime)
@@ -90,7 +90,7 @@ $taskSpecs = @(
         task = "realtime-settlement"
         schedule = "DAILY"
         start = "18:17"
-        modifier = $null
+        modifier = 0
         end = ""
         description = "Daily 18:17 local time"
     },
@@ -99,7 +99,7 @@ $taskSpecs = @(
         task = "incremental-settlement"
         schedule = "DAILY"
         start = "20:23"
-        modifier = $null
+        modifier = 0
         end = ""
         description = "Daily 20:23 local time"
     },
@@ -108,7 +108,7 @@ $taskSpecs = @(
         task = "residual-reconcile"
         schedule = "DAILY"
         start = "21:37"
-        modifier = $null
+        modifier = 0
         end = ""
         description = "Daily 21:37 local time"
     }
