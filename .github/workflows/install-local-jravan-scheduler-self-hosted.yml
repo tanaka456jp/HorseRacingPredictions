@@ -1,0 +1,43 @@
+name: Install Local JRA-VAN Scheduler (Self-hosted)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "research/install_local_jravan_scheduler_request.txt"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: horse-racing-jravan-scheduler-install
+  cancel-in-progress: false
+
+jobs:
+  install:
+    name: Install PC1 Windows Task Scheduler jobs
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout without deleting local ignored data
+        uses: actions/checkout@v4
+        with:
+          clean: false
+          persist-credentials: false
+
+      - name: Install exact-time local scheduler on PC1
+        shell: powershell
+        run: |
+          & .\scripts\install_local_jravan_scheduler.ps1 -ExpectedComputerName "DESKTOP-MVV1FD4"
+
+      - name: Publish sanitized installation validation
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: local-jravan-scheduler-install-validation
+          path: artifacts/local_scheduler_install_validation.json
+          if-no-files-found: warn
+          retention-days: 14
