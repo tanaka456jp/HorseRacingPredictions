@@ -43,7 +43,8 @@ jobs:
           if (-not [string]::IsNullOrWhiteSpace($env:INPUT_OVERLAP_DAYS)) {
             $overlap = [int]$env:INPUT_OVERLAP_DAYS
           }
-          & .\scripts\run_jravan_incremental_settlement_runner.ps1 -OverlapDays $overlap
+          Remove-Item -LiteralPath "artifacts\jravan_incremental_runner_validation.json" -ErrorAction SilentlyContinue
+          & .\scripts\run_local_jravan_scheduled_task.ps1 -Task incremental-settlement -OverlapDays $overlap
 
       - name: Publish sanitized validation only
         if: always()
