@@ -28,16 +28,20 @@ def test_local_scheduler_installer_registers_exact_jst_times():
     assert '"18:17"' in script
     assert '"20:23"' in script
     assert '"21:37"' in script
-    assert '"MINUTE"' in script
-    assert "modifier = 30" in script
+    assert '"DAILY"' in script
+    assert "repeat_minutes = 30" in script
+    assert 'duration = "08:31"' in script
+    assert '"/RI"' in script
+    assert '"/DU"' in script
     assert 'ExpectedComputerName = "DESKTOP-MVV1FD4"' in script
     assert "live_execution_enabled = $false" in script
     assert "HorseRacingPredictionsScheduler" in script
     assert "New-Launcher" in script
     assert "taskCommand.Length -gt 261" in script
-    assert "[int]$Modifier" in script
-    assert "if ($Modifier -gt 0)" in script
-    assert "[string]$Modifier.Value" not in script
+    assert "[int]$RepeatMinutes" in script
+    assert "if ($RepeatMinutes -gt 0)" in script
+    assert '"/MO"' not in script
+    assert '"/ET"' not in script
     assert "$null -ne $info.NextRunTime" in script
 
 
