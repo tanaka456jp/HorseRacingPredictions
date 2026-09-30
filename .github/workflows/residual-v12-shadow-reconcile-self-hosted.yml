@@ -31,7 +31,8 @@ jobs:
       - name: Reconcile pending result records only
         shell: powershell
         run: |
-          & .\scripts\run_residual_v12_shadow_reconcile_runner.ps1
+          Remove-Item -LiteralPath "artifacts\residual_v12_shadow_reconcile_validation.json" -ErrorAction SilentlyContinue
+          & .\scripts\run_local_jravan_scheduled_task.ps1 -Task residual-reconcile
 
       - name: Publish sanitized validation only
         if: always()
