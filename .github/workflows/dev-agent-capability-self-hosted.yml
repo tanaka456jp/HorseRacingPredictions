@@ -1,0 +1,43 @@
+name: Audit Dev Agent Capability (Self-hosted)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "research/dev_agent_capability_request.txt"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: horse-racing-dev-agent-capability
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    name: Audit PC1 autonomous development capability
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout without deleting local ignored data
+        uses: actions/checkout@v4
+        with:
+          clean: false
+          persist-credentials: false
+
+      - name: Audit local development agent capability
+        shell: powershell
+        run: |
+          & .\scripts\audit_dev_agent_capability.ps1 -ExpectedComputerName "DESKTOP-MVV1FD4"
+
+      - name: Publish sanitized capability validation
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dev-agent-capability-validation
+          path: artifacts/dev_agent_capability_validation.json
+          if-no-files-found: warn
+          retention-days: 14
