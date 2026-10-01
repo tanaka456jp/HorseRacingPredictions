@@ -57,11 +57,11 @@ try {
     $process = Start-Process -FilePath $codexPath -ArgumentList "--version" -NoNewWindow -Wait -PassThru -RedirectStandardOutput $stdoutPath -RedirectStandardError $stderrPath
     $versionOutput = ""
     if (Test-Path -LiteralPath $stdoutPath) {
-        $versionOutput = (Get-Content -LiteralPath $stdoutPath -Raw -ErrorAction SilentlyContinue).Trim()
+        $versionOutput = ([string](Get-Content -LiteralPath $stdoutPath -Raw -ErrorAction SilentlyContinue)).Trim()
     }
     $stderrOutput = ""
     if (Test-Path -LiteralPath $stderrPath) {
-        $stderrOutput = (Get-Content -LiteralPath $stderrPath -Raw -ErrorAction SilentlyContinue).Trim()
+        $stderrOutput = ([string](Get-Content -LiteralPath $stderrPath -Raw -ErrorAction SilentlyContinue)).Trim()
     }
     if ($process.ExitCode -ne 0 -or [string]::IsNullOrWhiteSpace($versionOutput)) {
         $safeError = $stderrOutput
