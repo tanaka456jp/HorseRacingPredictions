@@ -1,1 +1,1 @@
-install_codex_cli_pc1_v1
+install_codex_cli_pc1_v2_windows_diagnostics
