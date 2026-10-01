@@ -77,3 +77,26 @@ def test_local_scheduler_audit_handles_never_run_tasks():
 
     assert "$null -ne $info.LastRunTime" in script
     assert "$null -ne $info.NextRunTime" in script
+
+
+def test_local_scheduler_audit_includes_sanitized_pipeline_state():
+    script = Path(
+        "scripts/audit_local_jravan_scheduler.ps1"
+    ).read_text(encoding="utf-8")
+
+    assert "Read-SanitizedJson" in script
+    assert "jravan_forward_runner_validation.json" in script
+    assert "jravan_realtime_settlement_runner_validation.json" in script
+    assert "jravan_incremental_runner_validation.json" in script
+    assert "residual_v12_shadow_reconcile_validation.json" in script
+    assert "residual_v12_paper_evidence" in script
+    assert "sanitized_validations = $sanitizedValidations" in script
+
+
+def test_local_scheduler_audit_normalizes_never_run_sentinel():
+    script = Path(
+        "scripts/audit_local_jravan_scheduler.ps1"
+    ).read_text(encoding="utf-8")
+
+    assert "$info.LastTaskResult -ne 267011" in script
+    assert "has_run = $hasRun" in script
