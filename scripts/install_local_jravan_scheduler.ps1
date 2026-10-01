@@ -39,11 +39,11 @@ function Install-Task {
     param(
         [string]$Name,
         [string]$TaskName,
-        [ValidateSet("DAILY", "MINUTE")]
+        [ValidateSet("DAILY")]
         [string]$Schedule,
         [string]$StartTime,
-        [int]$Modifier,
-        [string]$EndTime
+        [int]$RepeatMinutes,
+        [string]$Duration
     )
 
     $launcherPath = New-Launcher -TaskName $TaskName
@@ -60,11 +60,11 @@ function Install-Task {
         "/ST", $StartTime,
         "/F"
     )
-    if ($Modifier -gt 0) {
-        $argsList += @("/MO", [string]$Modifier)
+    if ($RepeatMinutes -gt 0) {
+        $argsList += @("/RI", [string]$RepeatMinutes)
     }
-    if (-not [string]::IsNullOrWhiteSpace($EndTime)) {
-        $argsList += @("/ET", $EndTime)
+    if (-not [string]::IsNullOrWhiteSpace($Duration)) {
+        $argsList += @("/DU", $Duration)
     }
 
     & schtasks.exe @argsList
@@ -79,19 +79,19 @@ $taskSpecs = @(
     @{
         name = "HorseRacingPredictions-ForwardPaper"
         task = "forward"
-        schedule = "MINUTE"
+        schedule = "DAILY"
         start = "09:17"
-        modifier = 30
-        end = "17:47"
-        description = "Every 30 minutes 09:17-17:47 local time"
+        repeat_minutes = 30
+        duration = "08:31"
+        description = "Daily 09:17 start; every 30 minutes through 17:47 local time"
     },
     @{
         name = "HorseRacingPredictions-RealtimeSettlement"
         task = "realtime-settlement"
         schedule = "DAILY"
         start = "18:17"
-        modifier = 0
-        end = ""
+        repeat_minutes = 0
+        duration = ""
         description = "Daily 18:17 local time"
     },
     @{
@@ -99,8 +99,8 @@ $taskSpecs = @(
         task = "incremental-settlement"
         schedule = "DAILY"
         start = "20:23"
-        modifier = 0
-        end = ""
+        repeat_minutes = 0
+        duration = ""
         description = "Daily 20:23 local time"
     },
     @{
@@ -108,15 +108,15 @@ $taskSpecs = @(
         task = "residual-reconcile"
         schedule = "DAILY"
         start = "21:37"
-        modifier = 0
-        end = ""
+        repeat_minutes = 0
+        duration = ""
         description = "Daily 21:37 local time"
     }
 )
 
 $launchers = @{}
 foreach ($spec in $taskSpecs) {
-    $launchers[$spec.name] = Install-Task -Name $spec.name -TaskName $spec.task -Schedule $spec.schedule -StartTime $spec.start -Modifier $spec.modifier -EndTime $spec.end
+    $launchers[$spec.name] = Install-Task -Name $spec.name -TaskName $spec.task -Schedule $spec.schedule -StartTime $spec.start -RepeatMinutes $spec.repeat_minutes -Duration $spec.duration
 }
 
 $installed = @()

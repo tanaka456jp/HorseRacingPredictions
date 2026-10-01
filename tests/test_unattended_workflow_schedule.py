@@ -44,10 +44,12 @@ def test_exact_times_are_owned_by_pc1_local_scheduler():
     ).read_text(encoding="utf-8")
 
     assert '"09:17"' in script
-    assert '"17:47"' in script
     assert '"18:17"' in script
     assert '"20:23"' in script
     assert '"21:37"' in script
-    assert "modifier = 30" in script
+    assert "repeat_minutes = 30" in script
+    assert 'duration = "08:31"' in script
+    assert '"/RI"' in script
+    assert '"/DU"' in script
     assert "github_cron_is_primary = $false" in script
     assert "local_scheduler_is_primary = $true" in script
