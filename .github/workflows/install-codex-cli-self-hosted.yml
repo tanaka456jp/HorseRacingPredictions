@@ -1,0 +1,43 @@
+name: Install Codex CLI on PC1
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "research/install_codex_cli_request.txt"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: horse-racing-codex-cli-install
+  cancel-in-progress: false
+
+jobs:
+  install:
+    name: Install Codex CLI in PC1 user profile
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          clean: false
+          persist-credentials: false
+
+      - name: Install official Codex CLI
+        shell: powershell
+        run: |
+          & .\scripts\install_codex_cli.ps1 -ExpectedComputerName "DESKTOP-MVV1FD4"
+
+      - name: Publish sanitized installation validation
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: codex-cli-install-validation
+          path: artifacts/codex_cli_install_validation.json
+          if-no-files-found: warn
+          retention-days: 14
