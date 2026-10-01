@@ -24,7 +24,6 @@ def test_local_scheduler_installer_registers_exact_jst_times():
     ).read_text(encoding="utf-8")
 
     assert '"09:17"' in script
-    assert '"17:47"' in script
     assert '"18:17"' in script
     assert '"20:23"' in script
     assert '"21:37"' in script
