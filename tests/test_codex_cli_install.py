@@ -14,6 +14,10 @@ def test_codex_installer_uses_official_release_and_user_scope():
     assert 'Remove-Item Env:OPENAI_API_KEY' in script
     assert "api_key_used = $false" in script
     assert "secrets_included = $false" in script
+    assert "Codex download size mismatch" in script
+    assert "Unblock-File" in script
+    assert "Start-Process -FilePath $codexPath" in script
+    assert "exit_code=" in script
 
 
 def test_codex_install_workflow_is_manual_or_marker_only():
