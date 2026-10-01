@@ -18,6 +18,8 @@ def test_codex_installer_uses_official_release_and_user_scope():
     assert "Unblock-File" in script
     assert "Start-Process -FilePath $codexPath" in script
     assert "exit_code=" in script
+    assert "([string](Get-Content -LiteralPath $stdoutPath" in script
+    assert "([string](Get-Content -LiteralPath $stderrPath" in script
 
 
 def test_codex_install_workflow_is_manual_or_marker_only():
