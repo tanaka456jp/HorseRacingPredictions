@@ -88,7 +88,7 @@ def test_free_opencode_bootstrap_repairs_broken_same_version_wrapper():
     assert "existing_install_healthy = [bool]$existingHealthy" in script
 
 
-def test_free_opencode_smoke_is_bounded_and_standalone():
+def test_free_opencode_smoke_is_bounded_and_persistent():
     script = Path(
         "scripts/smoke_free_opencode_ollama.ps1"
     ).read_text(encoding="utf-8")
@@ -97,8 +97,11 @@ def test_free_opencode_smoke_is_bounded_and_standalone():
     ).read_text(encoding="utf-8")
 
     assert "[int]$TimeoutSeconds = 180" in script
-    assert "run --standalone --model" in script
-    assert '$argumentString = "run --standalone --model $escapedModel --title $escapedTitle $escapedPrompt"' in script
+    assert "run --standalone --model" not in script
+    assert '$argumentString = "run --model $escapedModel --title $escapedTitle $escapedPrompt"' in script
+    assert 'session_persistence_required = $true' in script
+    assert '"OPENCODE_SERVER_PASSWORD"' in script
+    assert '"OPENCODE_SERVER_USERNAME"' in script
     assert 'output_format = "default"' in script
     assert "/no_think Reply with exactly FREE_LOCAL_SMOKE_OK" in script
     assert "WaitForExit($TimeoutSeconds * 1000)" in script
