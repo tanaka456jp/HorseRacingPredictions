@@ -45,3 +45,18 @@ def test_free_opencode_bootstrap_workflow_has_no_paid_credentials():
     assert "OPENAI_API_KEY" not in workflow
     assert "ANTHROPIC_API_KEY" not in workflow
     assert "Codex" not in workflow
+
+
+def test_free_opencode_bootstrap_allows_only_pinned_postinstall():
+    script = Path(
+        "scripts/install_free_opencode_cli.ps1"
+    ).read_text(encoding="utf-8")
+
+    assert '$approvedInstallScript = "opencode-ai@$Version"' in script
+    assert "--ignore-scripts" in script
+    assert "npm approve-scripts opencode-ai" in script
+    assert "npm rebuild opencode-ai" in script
+    assert 'install_script_policy = "pinned_single_package_only"' in script
+    assert "approved_install_script = $approvedInstallScript" in script
+    assert "npm approve-scripts --all" not in script
+    assert "dangerously-allow-all-scripts" not in script
