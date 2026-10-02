@@ -97,7 +97,9 @@ def test_free_opencode_smoke_is_bounded_and_standalone():
     ).read_text(encoding="utf-8")
 
     assert "[int]$TimeoutSeconds = 180" in script
-    assert "run --standalone --format json" in script
+    assert "run --standalone --model" in script
+    assert "--format json" not in script
+    assert 'output_format = "default"' in script
     assert "/no_think Reply with exactly FREE_LOCAL_SMOKE_OK" in script
     assert "WaitForExit($TimeoutSeconds * 1000)" in script
     assert "taskkill.exe /PID $process.Id /T /F" in script
