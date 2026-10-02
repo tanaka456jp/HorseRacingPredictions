@@ -55,7 +55,8 @@ def test_autonomous_12h_workflow_is_self_hosted_and_not_scheduled():
 
     assert "schedule:" not in workflow
     assert "workflow_dispatch:" in workflow
-    assert "research/autonomous_dev_12h_request.txt" in workflow
+    assert "I_APPROVE_PAID_CODEX" in workflow
+    assert "push:" not in workflow
     assert "runs-on: [self-hosted, Windows]" in workflow
     assert "timeout-minutes: 780" in workflow
     assert "persist-credentials: false" in workflow

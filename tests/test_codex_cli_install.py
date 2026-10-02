@@ -22,13 +22,14 @@ def test_codex_installer_uses_official_release_and_user_scope():
     assert "([string](Get-Content -LiteralPath $stderrPath" in script
 
 
-def test_codex_install_workflow_is_manual_or_marker_only():
+def test_codex_install_workflow_requires_explicit_manual_approval():
     workflow = Path(
         ".github/workflows/install-codex-cli-self-hosted.yml"
     ).read_text(encoding="utf-8")
 
     assert "schedule:" not in workflow
     assert "workflow_dispatch:" in workflow
-    assert "research/install_codex_cli_request.txt" in workflow
+    assert "I_APPROVE_PAID_CODEX" in workflow
+    assert "push:" not in workflow
     assert "persist-credentials: false" in workflow
     assert 'ExpectedComputerName "DESKTOP-MVV1FD4"' in workflow

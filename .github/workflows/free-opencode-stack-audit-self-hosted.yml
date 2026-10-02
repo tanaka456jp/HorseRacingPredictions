@@ -1,0 +1,43 @@
+name: Audit Free OpenCode Stack (Self-hosted)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "research/free_opencode_stack_request.txt"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: horse-racing-free-opencode-stack-audit
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    name: Audit PC1 OpenCode + local Ollama free stack
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          clean: false
+          persist-credentials: false
+
+      - name: Audit free development stack
+        shell: powershell
+        run: |
+          & .\scripts\audit_free_opencode_stack.ps1 -ExpectedComputerName "DESKTOP-MVV1FD4"
+
+      - name: Publish sanitized validation
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: free-opencode-stack-validation
+          path: artifacts/free_opencode_stack_validation.json
+          if-no-files-found: warn
+          retention-days: 14
