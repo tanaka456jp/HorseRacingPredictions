@@ -21,7 +21,7 @@ def test_free_opencode_stack_audit_is_local_only_by_policy():
     ).read_text(encoding="utf-8")
 
     assert 'ExpectedComputerName = "DESKTOP-MVV1FD4"' in script
-    assert '"opencode"' in script
+    assert "Resolve-OpenCodePath" in script
     assert '"ollama"' in script
     assert 'ollama_local_endpoint = "http://127.0.0.1:11434"' in script
     assert "paid_cloud_provider_allowed = $false" in script
