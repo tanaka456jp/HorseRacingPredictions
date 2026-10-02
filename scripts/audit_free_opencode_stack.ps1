@@ -17,7 +17,7 @@ function Test-CommandAvailable {
 }
 
 
-function Resolve-OpenCodePath {
+function Get-OpenCodeCandidates {
     $candidates = @()
 
     $command = Get-Command opencode -ErrorAction SilentlyContinue
@@ -35,18 +35,81 @@ function Resolve-OpenCodePath {
         } catch {}
     }
 
+    $machineCandidates = @(
+        "C:\ProgramData\chocolatey\bin\opencode.exe",
+        "C:\ProgramData\chocolatey\bin\opencode.cmd",
+        "C:\Program Files\OpenCode\opencode.exe",
+        "C:\Program Files\opencode\opencode.exe"
+    )
+    $candidates += $machineCandidates
+
     if (Test-Path -LiteralPath "C:\Users" -PathType Container) {
         foreach ($profile in Get-ChildItem -LiteralPath "C:\Users" -Directory -ErrorAction SilentlyContinue) {
-            $candidates += (Join-Path $profile.FullName "AppData\Roaming\npm\opencode.cmd")
-            $candidates += (Join-Path $profile.FullName "AppData\Roaming\npm\opencode.ps1")
-            $candidates += (Join-Path $profile.FullName ".opencode\bin\opencode.exe")
-            $candidates += (Join-Path $profile.FullName "AppData\Local\Programs\opencode\opencode.exe")
+            $root = $profile.FullName
+            $relativeCandidates = @(
+                "AppData\Roaming\npm\opencode.cmd",
+                "AppData\Roaming\npm\opencode.exe",
+                "AppData\Local\pnpm\opencode.cmd",
+                "AppData\Local\pnpm\opencode.exe",
+                ".bun\bin\opencode.exe",
+                ".bun\bin\opencode.cmd",
+                "scoop\shims\opencode.exe",
+                "scoop\shims\opencode.cmd",
+                ".local\bin\opencode.exe",
+                ".local\bin\opencode.cmd",
+                ".opencode\bin\opencode.exe",
+                ".opencode\bin\opencode.cmd",
+                "AppData\Local\Microsoft\WinGet\Links\opencode.exe",
+                "AppData\Local\Microsoft\WinGet\Links\opencode.cmd",
+                "AppData\Local\mise\shims\opencode.exe",
+                "AppData\Local\mise\shims\opencode.cmd",
+                ".local\share\mise\shims\opencode.exe",
+                ".local\share\mise\shims\opencode.cmd",
+                "AppData\Local\Programs\opencode\opencode.exe",
+                "AppData\Local\Programs\OpenCode\opencode.exe"
+            )
+            foreach ($relative in $relativeCandidates) {
+                $candidates += (Join-Path $root $relative)
+            }
         }
     }
 
-    foreach ($candidate in ($candidates | Select-Object -Unique)) {
-        if (Test-Path -LiteralPath $candidate -PathType Leaf) {
-            return $candidate
+    return @(
+        $candidates |
+        Where-Object {
+            -not [string]::IsNullOrWhiteSpace([string]$_) -and
+            (Test-Path -LiteralPath $_ -PathType Leaf)
+        } |
+        Select-Object -Unique
+    )
+}
+
+function Test-OpenCodeCliCandidate {
+    param([string]$Path)
+
+    try {
+        $output = & $Path --version 2>$null
+        $exitCode = [int]$LASTEXITCODE
+        $first = [string]($output | Select-Object -First 1)
+        return @{
+            path = $Path
+            runnable = ($exitCode -eq 0 -and -not [string]::IsNullOrWhiteSpace($first))
+            version = if ($exitCode -eq 0) { $first } else { $null }
+        }
+    } catch {
+        return @{
+            path = $Path
+            runnable = $false
+            version = $null
+        }
+    }
+}
+
+function Resolve-OpenCodePath {
+    foreach ($candidate in (Get-OpenCodeCandidates)) {
+        $test = Test-OpenCodeCliCandidate -Path $candidate
+        if ($test.runnable) {
+            return [string]$candidate
         }
     }
     return $null
@@ -83,6 +146,11 @@ function Get-VersionLine {
     }
 }
 
+$openCodeCandidateResults = @(
+    Get-OpenCodeCandidates | ForEach-Object {
+        Test-OpenCodeCliCandidate -Path $_
+    }
+)
 $resolvedOpenCodePath = Resolve-OpenCodePath
 
 $commands = @{
@@ -168,6 +236,15 @@ $validation = @{
     opencode_discovery = @{
         found = $commands.opencode
         source_path_sanitized = Sanitize-UserPath -Path $resolvedOpenCodePath
+        candidates = @(
+            $openCodeCandidateResults | ForEach-Object {
+                @{
+                    path_sanitized = Sanitize-UserPath -Path $_.path
+                    runnable = [bool]$_.runnable
+                    version = $_.version
+                }
+            }
+        )
     }
     gh_authenticated = [bool]$ghAuthenticated
     ollama_local_endpoint = "http://127.0.0.1:11434"
