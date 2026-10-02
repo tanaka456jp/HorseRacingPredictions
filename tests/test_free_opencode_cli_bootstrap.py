@@ -55,8 +55,21 @@ def test_free_opencode_bootstrap_allows_only_pinned_postinstall():
     assert '$approvedInstallScript = "opencode-ai@$Version"' in script
     assert "--ignore-scripts" in script
     assert "npm approve-scripts opencode-ai" in script
-    assert "npm rebuild opencode-ai" in script
     assert 'install_script_policy = "pinned_single_package_only"' in script
     assert "approved_install_script = $approvedInstallScript" in script
     assert "npm approve-scripts --all" not in script
     assert "dangerously-allow-all-scripts" not in script
+
+
+def test_free_opencode_bootstrap_executes_only_verified_package_postinstall():
+    script = Path(
+        "scripts/install_free_opencode_cli.ps1"
+    ).read_text(encoding="utf-8")
+
+    assert 'if ([string]$packageManifest.name -ne "opencode-ai")' in script
+    assert "if ([string]$packageManifest.version -ne $Version)" in script
+    assert "& node $postinstallPath" in script
+    assert 'postinstall_execution = "explicit_pinned_package_script"' in script
+    assert "target_binary_size_bytes = $targetBinarySize" in script
+    assert "$targetBinarySize -lt 1000000" in script
+    assert "npm rebuild opencode-ai" not in script
