@@ -1,0 +1,50 @@
+name: Bootstrap Free OpenCode CLI (Self-hosted)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "research/free_opencode_cli_bootstrap_request.txt"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: horse-racing-free-opencode-bootstrap
+  cancel-in-progress: false
+
+jobs:
+  bootstrap:
+    name: Bootstrap isolated OpenCode CLI and smoke local Ollama
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          clean: false
+          persist-credentials: false
+
+      - name: Bootstrap free OpenCode CLI
+        shell: powershell
+        run: |
+          & .\scripts\install_free_opencode_cli.ps1 -ExpectedComputerName "DESKTOP-MVV1FD4" -Version "1.18.29"
+
+      - name: Smoke OpenCode with local qwen3 8b only
+        shell: powershell
+        run: |
+          & .\scripts\smoke_free_opencode_ollama.ps1 -ExpectedComputerName "DESKTOP-MVV1FD4" -Version "1.18.29" -Model "ollama/qwen3:8b"
+
+      - name: Publish sanitized free-stack validation
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: free-opencode-cli-bootstrap-validation
+          path: |
+            artifacts/free_opencode_cli_install_validation.json
+            artifacts/free_opencode_ollama_smoke_validation.json
+          if-no-files-found: warn
+          retention-days: 14
