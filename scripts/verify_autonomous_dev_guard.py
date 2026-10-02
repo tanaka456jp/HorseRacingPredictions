@@ -20,9 +20,11 @@ INFRASTRUCTURE_FILES = {
     "scripts/run_autonomous_dev_12h.ps1",
     "scripts/run_free_opencode_dev_cycle.ps1",
     "scripts/run_free_opencode_dev_12h.ps1",
+    "research/free_opencode_autonomous_dev_12h_request.txt",
 }
 FORBIDDEN_PREFIXES = (
     ".github/workflows/",
+    ".opencode/",
     "data/",
     "artifacts/",
     "secrets/",
