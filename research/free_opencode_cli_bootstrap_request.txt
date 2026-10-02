@@ -1,1 +1,1 @@
-bootstrap_free_opencode_cli_1_18_29_qwen3_8b_v8_persistent_session
+bootstrap_free_opencode_cli_1_18_29_qwen3_8b_v10_stdout_primary_final_ci
