@@ -130,3 +130,18 @@ def test_free_opencode_smoke_verifies_exported_session_response():
     assert 'status = "session_export_failed"' in script
     assert 'status = "session_model_mismatch"' in script
     assert "raw_model_output_included = $false" in script
+
+
+def test_free_opencode_smoke_accepts_stdout_proof_before_session_fallback():
+    script = Path(
+        "scripts/smoke_free_opencode_ollama.ps1"
+    ).read_text(encoding="utf-8")
+
+    assert '$verificationChannel = if ($markerSeenStdout)' in script
+    assert '"stdout"' in script
+    assert '"session_export"' in script
+    assert "verification_channel = $verificationChannel" in script
+    assert "model_invocation_explicit = $true" in script
+    assert "local_model_present = $true" in script
+    assert 'if (-not $markerSeen) {' in script
+    assert '$verificationChannel -eq "session_export"' in script
