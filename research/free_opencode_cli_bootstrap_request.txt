@@ -1,1 +1,1 @@
-bootstrap_free_opencode_cli_1_18_29_qwen3_8b_v2_pinned_postinstall
+bootstrap_free_opencode_cli_1_18_29_qwen3_8b_v3_explicit_postinstall
