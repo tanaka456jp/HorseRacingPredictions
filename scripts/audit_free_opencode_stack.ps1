@@ -314,7 +314,7 @@ function Sanitize-UserPath {
     if ([string]::IsNullOrWhiteSpace($Path)) {
         return $null
     }
-    return ($Path -replace '^C:\\Users\\[^\\]+\\', 'C:\Users\<USER>\')
+    return ($Path -replace '(?i)C:\\Users\\[^\\]+\\', 'C:\Users\<USER>\')
 }
 
 function Get-VersionLine {
