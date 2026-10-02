@@ -95,37 +95,43 @@ $configPath = Join-Path $DevRoot "opencode.json"
 {
   "$schema": "https://opencode.ai/config.json",
   "model": "ollama/qwen3:8b",
-  "permission": {
-    "read": "allow",
-    "edit": "allow",
-    "glob": "allow",
-    "grep": "allow",
-    "list": "allow",
-    "bash": {
-      "*": "allow",
-      "git commit *": "deny",
-      "git push *": "deny",
-      "git checkout *": "deny",
-      "git switch *": "deny",
-      "git reset *": "deny",
-      "git clean *": "deny",
-      "gh *": "deny",
-      "curl *": "deny",
-      "wget *": "deny",
-      "Invoke-WebRequest *": "deny",
-      "Invoke-RestMethod *": "deny",
-      "pip install *": "deny",
-      "python -m pip install *": "deny",
-      "npm install *": "deny",
-      "pnpm *": "deny",
-      "yarn *": "deny"
-    },
-    "task": "deny",
-    "external_directory": "deny",
-    "webfetch": "deny",
-    "websearch": "deny",
-    "question": "deny",
-    "doom_loop": "deny"
+  "default_agent": "build",
+  "agent": {
+    "build": {
+      "mode": "primary",
+      "permission": {
+        "read": "allow",
+        "edit": "allow",
+        "glob": "allow",
+        "grep": "allow",
+        "list": "allow",
+        "bash": {
+          "*": "allow",
+          "git commit *": "deny",
+          "git push *": "deny",
+          "git checkout *": "deny",
+          "git switch *": "deny",
+          "git reset *": "deny",
+          "git clean *": "deny",
+          "gh *": "deny",
+          "curl *": "deny",
+          "wget *": "deny",
+          "Invoke-WebRequest *": "deny",
+          "Invoke-RestMethod *": "deny",
+          "pip install *": "deny",
+          "python -m pip install *": "deny",
+          "npm install *": "deny",
+          "pnpm *": "deny",
+          "yarn *": "deny"
+        },
+        "task": "deny",
+        "external_directory": "deny",
+        "webfetch": "deny",
+        "websearch": "deny",
+        "question": "deny",
+        "doom_loop": "deny"
+      }
+    }
   },
   "provider": {
     "ollama": {
@@ -169,10 +175,11 @@ function Invoke-FreeOpenCode {
     $escapedModel = '"' + $Model.Replace('"', '\"') + '"'
     $escapedPrompt = '"' + $fullPrompt.Replace('"', '\"') + '"'
     $escapedTitle = '"' + $sessionTitle.Replace('"', '\"') + '"'
-    $argumentString = "run --auto --model $escapedModel --title $escapedTitle $escapedPrompt"
+    $argumentString = "run --auto --agent build --model $escapedModel --title $escapedTitle $escapedPrompt"
 
     Write-Host "Invoking free OpenCode + local Ollama: $Label"
     Write-Host "opencode_auto_approve=True"
+    Write-Host "opencode_agent=build"
     $process = Start-Process -FilePath $OpenCodePath -ArgumentList $argumentString -WorkingDirectory $DevRoot -NoNewWindow -RedirectStandardOutput $stdoutPath -RedirectStandardError $stderrPath -PassThru
     $completed = $process.WaitForExit($ModelTimeoutSeconds * 1000)
     if (-not $completed) {

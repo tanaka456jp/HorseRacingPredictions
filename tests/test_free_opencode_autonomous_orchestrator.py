@@ -35,7 +35,10 @@ def test_free_opencode_cycle_uses_only_pinned_local_model_and_git_pr_flow():
     assert '"GOOGLE_API_KEY"' in script
     assert '"GROQ_API_KEY"' in script
     assert '"OLLAMA_API_KEY"' in script
-    assert "run --auto --model $escapedModel" in script
+    assert "run --auto --agent build --model $escapedModel" in script
+    assert '"default_agent": "build"' in script
+    assert '"agent": {' in script
+    assert '"build": {' in script
     assert '"permission": {' in script
     assert '"external_directory": "deny"' in script
     assert '"webfetch": "deny"' in script
@@ -45,6 +48,7 @@ def test_free_opencode_cycle_uses_only_pinned_local_model_and_git_pr_flow():
     assert '"git commit *": "deny"' in script
     assert '"git push *": "deny"' in script
     assert '"gh *": "deny"' in script
+    assert 'opencode_agent=build' in script
     assert "codex.exe" not in script.lower()
     assert "verify_autonomous_dev_guard.py" in script
     assert "python -m pytest -q" in script
