@@ -1,12 +1,12 @@
-name: Install Codex CLI on PC1
+name: Install Codex CLI on PC1 (Approval Required)
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-    paths:
-      - "research/install_codex_cli_request.txt"
+    inputs:
+      confirm_paid_codex:
+        description: "Type I_APPROVE_PAID_CODEX only after explicit user approval"
+        required: true
+        default: ""
 
 permissions:
   contents: read
@@ -17,6 +17,7 @@ concurrency:
 
 jobs:
   install:
+    if: ${{ github.event.inputs.confirm_paid_codex == 'I_APPROVE_PAID_CODEX' }}
     name: Install Codex CLI in PC1 user profile
     runs-on: [self-hosted, Windows]
     timeout-minutes: 20
