@@ -70,7 +70,7 @@ def test_free_opencode_bootstrap_executes_only_verified_package_postinstall():
     assert "if ([string]$packageManifest.version -ne $Version)" in script
     assert "& node $postinstallPath" in script
     assert 'postinstall_execution = "explicit_pinned_package_script"' in script
-    assert "target_binary_size_bytes = $targetBinarySize" in script
+    assert "target_binary_size_bytes = $finalBinarySize" in script
     assert "$targetBinarySize -lt 1000000" in script
     assert "npm rebuild opencode-ai" not in script
 
