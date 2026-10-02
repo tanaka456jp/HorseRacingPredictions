@@ -1,1 +1,1 @@
-free_opencode_autonomous_dev_12h_v2_headless_auto_failfast_20261003
+free_opencode_autonomous_dev_12h_v3_force_build_agent_20261003
