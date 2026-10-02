@@ -1,1 +1,1 @@
-free_opencode_autonomous_dev_12h_v1_20261002\n
+free_opencode_autonomous_dev_12h_v2_headless_auto_failfast_20261003
