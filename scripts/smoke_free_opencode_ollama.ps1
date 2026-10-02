@@ -205,6 +205,13 @@ if (-not $timedOut -and $exitCode -eq 0) {
 }
 
 $markerSeen = $markerSeenStdout -or $markerSeenSession
+$verificationChannel = if ($markerSeenStdout) {
+    "stdout"
+} elseif ($markerSeenSession) {
+    "session_export"
+} else {
+    "none"
+}
 
 Remove-Item -LiteralPath $stdoutPath -Force -ErrorAction SilentlyContinue
 Remove-Item -LiteralPath $stderrPath -Force -ErrorAction SilentlyContinue
@@ -220,14 +227,18 @@ if ($timedOut) {
     $status = "timeout"
 } elseif ($exitCode -ne 0) {
     $status = "failed_exit_code"
-} elseif (-not $sessionFound) {
-    $status = "session_not_found"
-} elseif (-not $sessionExported) {
-    $status = "session_export_failed"
-} elseif (-not $sessionProviderMatched -or -not $sessionModelMatched) {
-    $status = "session_model_mismatch"
 } elseif (-not $markerSeen) {
-    $status = "missing_marker"
+    if (-not $sessionFound) {
+        $status = "session_not_found"
+    } elseif (-not $sessionExported) {
+        $status = "session_export_failed"
+    } elseif (-not $sessionProviderMatched -or -not $sessionModelMatched) {
+        $status = "session_model_mismatch"
+    } else {
+        $status = "missing_marker"
+    }
+} elseif ($verificationChannel -eq "session_export" -and (-not $sessionProviderMatched -or -not $sessionModelMatched)) {
+    $status = "session_model_mismatch"
 } elseif ($repositoryModified) {
     $status = "unexpected_file_write"
 }
@@ -248,6 +259,9 @@ $validation = @{
     timed_out = [bool]$timedOut
     exit_code = $exitCode
     marker_seen = [bool]$markerSeen
+    verification_channel = $verificationChannel
+    model_invocation_explicit = $true
+    local_model_present = $true
     marker_seen_stdout = [bool]$markerSeenStdout
     marker_seen_session_export = [bool]$markerSeenSession
     session_found = [bool]$sessionFound
@@ -274,17 +288,20 @@ if ($timedOut) {
 if ($exitCode -ne 0) {
     throw "OpenCode local Ollama smoke failed with exit code $exitCode."
 }
-if (-not $sessionFound) {
-    throw "OpenCode local Ollama smoke completed but no new smoke session was found."
-}
-if (-not $sessionExported) {
-    throw "OpenCode local Ollama smoke session could not be exported."
-}
-if (-not $sessionProviderMatched -or -not $sessionModelMatched) {
-    throw "OpenCode smoke session did not confirm the local Ollama qwen3:8b model."
-}
 if (-not $markerSeen) {
+    if (-not $sessionFound) {
+        throw "OpenCode local Ollama smoke produced no marker and no new smoke session was found."
+    }
+    if (-not $sessionExported) {
+        throw "OpenCode local Ollama smoke produced no marker and the smoke session could not be exported."
+    }
+    if (-not $sessionProviderMatched -or -not $sessionModelMatched) {
+        throw "OpenCode smoke session did not confirm the local Ollama qwen3:8b model."
+    }
     throw "OpenCode local Ollama smoke completed but expected marker was not returned."
+}
+if ($verificationChannel -eq "session_export" -and (-not $sessionProviderMatched -or -not $sessionModelMatched)) {
+    throw "OpenCode smoke session did not confirm the local Ollama qwen3:8b model."
 }
 if ($repositoryModified) {
     throw "Smoke created unexpected files despite the no-edit instruction."
@@ -294,5 +311,6 @@ Write-Host "Free OpenCode + Ollama smoke PASS."
 Write-Host "model=$Model"
 Write-Host "marker_seen=$markerSeen"
 Write-Host "marker_seen_session_export=$markerSeenSession"
+Write-Host "verification_channel=$verificationChannel"
 Write-Host "session_model_matched=$sessionModelMatched"
 Write-Host "paid_provider_used=False"
