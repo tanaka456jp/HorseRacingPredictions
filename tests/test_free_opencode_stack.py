@@ -39,3 +39,16 @@ def test_free_stack_audit_workflow_has_no_paid_provider_setup():
     assert "research/free_opencode_stack_request.txt" in workflow
     assert "OPENAI_API_KEY" not in workflow
     assert "ANTHROPIC_API_KEY" not in workflow
+
+
+def test_free_stack_audit_discovers_user_install_and_ollama_api():
+    script = Path(
+        "scripts/audit_free_opencode_stack.ps1"
+    ).read_text(encoding="utf-8")
+
+    assert "Resolve-OpenCodePath" in script
+    assert "AppData\\Roaming\\npm\\opencode.cmd" in script
+    assert ".opencode\\bin\\opencode.exe" in script
+    assert "Sanitize-UserPath" in script
+    assert "http://127.0.0.1:11434/api/tags" in script
+    assert "ollama_api_reachable" in script
