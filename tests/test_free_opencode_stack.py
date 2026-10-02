@@ -52,3 +52,21 @@ def test_free_stack_audit_discovers_user_install_and_ollama_api():
     assert "Sanitize-UserPath" in script
     assert "http://127.0.0.1:11434/api/tags" in script
     assert "ollama_api_reachable" in script
+
+
+def test_free_stack_audit_covers_common_windows_user_install_locations():
+    script = Path(
+        "scripts/audit_free_opencode_stack.ps1"
+    ).read_text(encoding="utf-8")
+
+    for marker in (
+        ".bun\\bin\\opencode.exe",
+        "scoop\\shims\\opencode.exe",
+        "AppData\\Local\\pnpm\\opencode.cmd",
+        "AppData\\Local\\mise\\shims\\opencode.exe",
+        "Microsoft\\WinGet\\Links\\opencode.exe",
+        "C:\\ProgramData\\chocolatey\\bin\\opencode.exe",
+    ):
+        assert marker in script
+    assert "Test-OpenCodeCliCandidate" in script
+    assert "candidates = @(" in script

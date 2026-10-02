@@ -1,1 +1,1 @@
-audit_free_opencode_stack_v2_runner_visibility
+audit_free_opencode_stack_v3_windows_user_bridge
