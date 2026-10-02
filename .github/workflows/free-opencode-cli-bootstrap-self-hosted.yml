@@ -13,7 +13,7 @@ permissions:
 
 concurrency:
   group: horse-racing-free-opencode-bootstrap
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   bootstrap:
@@ -36,7 +36,7 @@ jobs:
       - name: Smoke OpenCode with local qwen3 8b only
         shell: powershell
         run: |
-          & .\scripts\smoke_free_opencode_ollama.ps1 -ExpectedComputerName "DESKTOP-MVV1FD4" -Version "1.18.29" -Model "ollama/qwen3:8b"
+          & .\scripts\smoke_free_opencode_ollama.ps1 -ExpectedComputerName "DESKTOP-MVV1FD4" -Version "1.18.29" -Model "ollama/qwen3:8b" -TimeoutSeconds 180
 
       - name: Publish sanitized free-stack validation
         if: always()
