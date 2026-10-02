@@ -16,6 +16,50 @@ function Test-CommandAvailable {
     return [bool](Get-Command $Name -ErrorAction SilentlyContinue)
 }
 
+
+function Resolve-OpenCodePath {
+    $candidates = @()
+
+    $command = Get-Command opencode -ErrorAction SilentlyContinue
+    if ($null -ne $command -and -not [string]::IsNullOrWhiteSpace([string]$command.Source)) {
+        $candidates += [string]$command.Source
+    }
+
+    if (Get-Command npm -ErrorAction SilentlyContinue) {
+        try {
+            $npmPrefix = (& npm prefix -g 2>$null | Select-Object -First 1)
+            if (-not [string]::IsNullOrWhiteSpace([string]$npmPrefix)) {
+                $candidates += (Join-Path ([string]$npmPrefix) "opencode.cmd")
+                $candidates += (Join-Path ([string]$npmPrefix) "opencode.exe")
+            }
+        } catch {}
+    }
+
+    if (Test-Path -LiteralPath "C:\Users" -PathType Container) {
+        foreach ($profile in Get-ChildItem -LiteralPath "C:\Users" -Directory -ErrorAction SilentlyContinue) {
+            $candidates += (Join-Path $profile.FullName "AppData\Roaming\npm\opencode.cmd")
+            $candidates += (Join-Path $profile.FullName "AppData\Roaming\npm\opencode.ps1")
+            $candidates += (Join-Path $profile.FullName ".opencode\bin\opencode.exe")
+            $candidates += (Join-Path $profile.FullName "AppData\Local\Programs\opencode\opencode.exe")
+        }
+    }
+
+    foreach ($candidate in ($candidates | Select-Object -Unique)) {
+        if (Test-Path -LiteralPath $candidate -PathType Leaf) {
+            return $candidate
+        }
+    }
+    return $null
+}
+
+function Sanitize-UserPath {
+    param([string]$Path)
+    if ([string]::IsNullOrWhiteSpace($Path)) {
+        return $null
+    }
+    return ($Path -replace '^C:\\Users\\[^\\]+\\', 'C:\Users\<USER>\')
+}
+
 function Get-VersionLine {
     param(
         [string]$Name,
@@ -39,12 +83,14 @@ function Get-VersionLine {
     }
 }
 
+$resolvedOpenCodePath = Resolve-OpenCodePath
+
 $commands = @{
     git = Test-CommandAvailable "git"
     gh = Test-CommandAvailable "gh"
     node = Test-CommandAvailable "node"
     npm = Test-CommandAvailable "npm"
-    opencode = Test-CommandAvailable "opencode"
+    opencode = -not [string]::IsNullOrWhiteSpace([string]$resolvedOpenCodePath)
     ollama = Test-CommandAvailable "ollama"
     python = Test-CommandAvailable "python"
 }
@@ -54,48 +100,37 @@ $versions = @{
     gh = Get-VersionLine -Name "gh" -Arguments @("--version")
     node = Get-VersionLine -Name "node" -Arguments @("--version")
     npm = Get-VersionLine -Name "npm" -Arguments @("--version")
-    opencode = Get-VersionLine -Name "opencode" -Arguments @("--version")
+    opencode = $null
     ollama = Get-VersionLine -Name "ollama" -Arguments @("--version")
     python = Get-VersionLine -Name "python" -Arguments @("--version")
 }
 
-$localModels = @()
-if ($commands.ollama) {
+if ($commands.opencode) {
     try {
-        $jsonText = & ollama list --json 2>$null
-        if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace([string]$jsonText)) {
-            $parsed = $jsonText | ConvertFrom-Json
-            foreach ($item in @($parsed.models)) {
-                $name = [string]$item.name
-                if (-not [string]::IsNullOrWhiteSpace($name)) {
-                    $localModels += @{
-                        name = $name
-                        size = [int64]$item.size
-                        cloud_like_name = (
-                            $name -match "(?i)(cloud|remote)"
-                        )
-                    }
-                }
-            }
-        } else {
-            $lines = @(& ollama list 2>$null)
-            foreach ($line in ($lines | Select-Object -Skip 1)) {
-                $parts = ([string]$line).Trim() -split "\s{2,}"
-                if ($parts.Count -ge 1 -and -not [string]::IsNullOrWhiteSpace($parts[0])) {
-                    $name = [string]$parts[0]
-                    $localModels += @{
-                        name = $name
-                        size = $null
-                        cloud_like_name = (
-                            $name -match "(?i)(cloud|remote)"
-                        )
-                    }
-                }
+        $output = & $resolvedOpenCodePath --version 2>$null
+        if ($LASTEXITCODE -eq 0) {
+            $versions.opencode = [string]($output | Select-Object -First 1)
+        }
+    } catch {}
+}
+
+$localModels = @()
+$ollamaApiReachable = $false
+try {
+    $tags = Invoke-RestMethod -Uri "http://127.0.0.1:11434/api/tags" -Method Get -TimeoutSec 5
+    $ollamaApiReachable = $true
+    foreach ($item in @($tags.models)) {
+        $name = [string]$item.name
+        if (-not [string]::IsNullOrWhiteSpace($name)) {
+            $localModels += @{
+                name = $name
+                size = if ($null -ne $item.size) { [int64]$item.size } else { $null }
+                cloud_like_name = ($name -match "(?i)(cloud|remote)")
             }
         }
-    } catch {
-        $localModels = @()
     }
+} catch {
+    $ollamaApiReachable = $false
 }
 
 $freeLocalCandidates = @(
@@ -130,8 +165,13 @@ $validation = @{
     commit_sha = (& git rev-parse HEAD).Trim()
     commands = $commands
     versions = $versions
+    opencode_discovery = @{
+        found = $commands.opencode
+        source_path_sanitized = Sanitize-UserPath -Path $resolvedOpenCodePath
+    }
     gh_authenticated = [bool]$ghAuthenticated
     ollama_local_endpoint = "http://127.0.0.1:11434"
+    ollama_api_reachable = [bool]$ollamaApiReachable
     local_models = $localModels
     free_local_candidates = $freeLocalCandidates
     cloud_credential_presence = $cloudCredentialFlags
@@ -154,6 +194,8 @@ $validation | ConvertTo-Json -Depth 8 |
 
 Write-Host "Free OpenCode stack audit PASS."
 Write-Host "opencode_available=$($commands.opencode)"
+Write-Host "opencode_source=$(Sanitize-UserPath -Path $resolvedOpenCodePath)"
 Write-Host "ollama_available=$($commands.ollama)"
+Write-Host "ollama_api_reachable=$ollamaApiReachable"
 Write-Host "free_local_model_count=$($freeLocalCandidates.Count)"
 Write-Host "paid_cloud_provider_allowed=False"
