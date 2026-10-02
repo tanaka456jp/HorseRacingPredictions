@@ -77,7 +77,7 @@ $stderrPath = Join-Path $smokeRoot "stderr.log"
 $prompt = "/no_think Reply with exactly FREE_LOCAL_SMOKE_OK. Do not edit or create files."
 $escapedModel = '"' + $Model.Replace('"', '\"') + '"'
 $escapedPrompt = '"' + $prompt.Replace('"', '\"') + '"'
-$argumentString = "run --standalone --format json --model $escapedModel $escapedPrompt"
+$argumentString = "run --standalone --model $escapedModel $escapedPrompt"
 
 $process = Start-Process -FilePath $binaryPath -ArgumentList $argumentString -WorkingDirectory $smokeRoot -NoNewWindow -RedirectStandardOutput $stdoutPath -RedirectStandardError $stderrPath -PassThru
 
@@ -132,6 +132,7 @@ $validation = @{
     model = $Model
     ollama_endpoint = "http://127.0.0.1:11434"
     standalone = $true
+    output_format = "default"
     timeout_seconds = $TimeoutSeconds
     timed_out = [bool]$timedOut
     exit_code = $exitCode

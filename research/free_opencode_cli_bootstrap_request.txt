@@ -1,1 +1,1 @@
-bootstrap_free_opencode_cli_1_18_29_qwen3_8b_v5_bounded_smoke
+bootstrap_free_opencode_cli_1_18_29_qwen3_8b_v6_default_output
