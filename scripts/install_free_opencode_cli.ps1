@@ -83,9 +83,40 @@ if ($existingVersion -ne $Version) {
             throw "Pinned OpenCode install script is not explicitly allowed."
         }
 
-        & npm rebuild opencode-ai
+        $packageRoot = Join-Path $installRoot "node_modules\opencode-ai"
+        $packageManifestPath = Join-Path $packageRoot "package.json"
+        $postinstallPath = Join-Path $packageRoot "postinstall.mjs"
+        if (-not (Test-Path -LiteralPath $packageManifestPath -PathType Leaf)) {
+            throw "Pinned OpenCode package manifest is missing."
+        }
+        if (-not (Test-Path -LiteralPath $postinstallPath -PathType Leaf)) {
+            throw "Pinned OpenCode postinstall script is missing."
+        }
+
+        $packageManifest = Get-Content -LiteralPath $packageManifestPath -Raw -Encoding UTF8 |
+            ConvertFrom-Json
+        if ([string]$packageManifest.name -ne "opencode-ai") {
+            throw "Unexpected package identity before postinstall."
+        }
+        if ([string]$packageManifest.version -ne $Version) {
+            throw "Unexpected OpenCode package version before postinstall: $($packageManifest.version)"
+        }
+
+        if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
+            throw "NODE_NOT_AVAILABLE"
+        }
+        & node $postinstallPath
         if ($LASTEXITCODE -ne 0) {
-            throw "OpenCode postinstall rebuild failed."
+            throw "Pinned OpenCode postinstall execution failed."
+        }
+
+        $targetBinaryPath = Join-Path $packageRoot "bin\opencode.exe"
+        if (-not (Test-Path -LiteralPath $targetBinaryPath -PathType Leaf)) {
+            throw "OpenCode target binary is missing after postinstall."
+        }
+        $targetBinarySize = (Get-Item -LiteralPath $targetBinaryPath).Length
+        if ($targetBinarySize -lt 1000000) {
+            throw "OpenCode target binary remains a placeholder after postinstall."
         }
     } finally {
         Pop-Location
@@ -118,6 +149,8 @@ $validation = @{
     install_scope = "runner_isolated_localappdata"
     install_script_policy = "pinned_single_package_only"
     approved_install_script = $approvedInstallScript
+    postinstall_execution = "explicit_pinned_package_script"
+    target_binary_size_bytes = $targetBinarySize
     install_path_sanitized = "%LOCALAPPDATA%\HorseRacingPredictionsAutonomousDev\opencode-cli-$Version"
     paid_provider_used = $false
     api_key_used = $false
