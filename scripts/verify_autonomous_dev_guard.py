@@ -18,9 +18,13 @@ INFRASTRUCTURE_FILES = {
     "scripts/verify_autonomous_dev_guard.py",
     "scripts/run_autonomous_dev_cycle.ps1",
     "scripts/run_autonomous_dev_12h.ps1",
+    "scripts/run_free_opencode_dev_cycle.ps1",
+    "scripts/run_free_opencode_dev_12h.ps1",
+    "research/free_opencode_autonomous_dev_12h_request.txt",
 }
 FORBIDDEN_PREFIXES = (
     ".github/workflows/",
+    ".opencode/",
     "data/",
     "artifacts/",
     "secrets/",
@@ -67,12 +71,15 @@ def _git(repo: Path, *args: str) -> str:
 
 
 def _changed_files(repo: Path) -> list[str]:
-    output = _git(repo, "diff", "--name-only", "origin/main")
-    return [
+    tracked_output = _git(repo, "diff", "--name-only", "origin/main")
+    untracked_output = _git(repo, "ls-files", "--others", "--exclude-standard")
+    changed = {
         line.strip().replace("\\", "/")
+        for output in (tracked_output, untracked_output)
         for line in output.splitlines()
         if line.strip()
-    ]
+    }
+    return sorted(changed)
 
 
 def _assignments(path: Path) -> dict[str, object]:
@@ -100,7 +107,7 @@ def main() -> int:
     changed = _changed_files(repo)
     errors: list[str] = []
     if not changed:
-        errors.append("Codex produced no tracked repository changes.")
+        errors.append("Autonomous agent produced no repository changes.")
 
     for rel in changed:
         lower = rel.lower()

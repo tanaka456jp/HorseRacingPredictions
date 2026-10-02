@@ -1,0 +1,70 @@
+name: Autonomous Development 12h (PC1 Free OpenCode)
+
+on:
+  workflow_dispatch:
+    inputs:
+      cycles:
+        description: "Number of hourly development cycles"
+        required: false
+        default: "12"
+      cycle_minutes:
+        description: "Target minutes per cycle"
+        required: false
+        default: "60"
+  push:
+    branches:
+      - main
+    paths:
+      - "research/free_opencode_autonomous_dev_12h_request.txt"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: horse-racing-autonomous-development-pc1
+  cancel-in-progress: false
+
+jobs:
+  develop:
+    name: Run guarded free OpenCode development on PC1
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 780
+
+    steps:
+      - name: Checkout orchestrator source
+        uses: actions/checkout@v4
+        with:
+          clean: false
+          persist-credentials: false
+
+      - name: Install Python test dependencies
+        shell: powershell
+        run: |
+          python -m pip install -e ".[dev]"
+
+      - name: Bootstrap pinned free OpenCode CLI
+        shell: powershell
+        run: |
+          & .\scripts\install_free_opencode_cli.ps1 -ExpectedComputerName "DESKTOP-MVV1FD4" -Version "1.18.29"
+
+      - name: Verify free OpenCode with local qwen3 8b
+        shell: powershell
+        run: |
+          & .\scripts\smoke_free_opencode_ollama.ps1 -ExpectedComputerName "DESKTOP-MVV1FD4" -Version "1.18.29" -Model "ollama/qwen3:8b" -TimeoutSeconds 180
+
+      - name: Run free autonomous development cycles
+        shell: powershell
+        env:
+          REQUESTED_CYCLES: ${{ github.event.inputs.cycles || '12' }}
+          REQUESTED_CYCLE_MINUTES: ${{ github.event.inputs.cycle_minutes || '60' }}
+        run: |
+          & .\scripts\run_free_opencode_dev_12h.ps1 -Cycles ([int]$env:REQUESTED_CYCLES) -CycleMinutes ([int]$env:REQUESTED_CYCLE_MINUTES) -ExpectedComputerName "DESKTOP-MVV1FD4" -Version "1.18.29" -Model "ollama/qwen3:8b"
+
+      - name: Publish sanitized autonomous-development summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: free-opencode-autonomous-dev-12h-summary
+          path: artifacts/free_opencode_autonomous_dev_12h_summary.json
+          if-no-files-found: warn
+          retention-days: 14
