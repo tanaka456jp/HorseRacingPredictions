@@ -86,3 +86,22 @@ def test_free_opencode_bootstrap_repairs_broken_same_version_wrapper():
     assert "$actualExitCode = [int]$LASTEXITCODE" in script
     assert "$finalBinarySize -lt 1000000" in script
     assert "existing_install_healthy = [bool]$existingHealthy" in script
+
+
+def test_free_opencode_smoke_is_bounded_and_standalone():
+    script = Path(
+        "scripts/smoke_free_opencode_ollama.ps1"
+    ).read_text(encoding="utf-8")
+    workflow = Path(
+        ".github/workflows/free-opencode-cli-bootstrap-self-hosted.yml"
+    ).read_text(encoding="utf-8")
+
+    assert "[int]$TimeoutSeconds = 180" in script
+    assert "run --standalone --format json" in script
+    assert "/no_think Reply with exactly FREE_LOCAL_SMOKE_OK" in script
+    assert "WaitForExit($TimeoutSeconds * 1000)" in script
+    assert "taskkill.exe /PID $process.Id /T /F" in script
+    assert 'status = "timeout"' in script
+    assert "raw_model_output_included = $false" in script
+    assert "cancel-in-progress: true" in workflow
+    assert "-TimeoutSeconds 180" in workflow
