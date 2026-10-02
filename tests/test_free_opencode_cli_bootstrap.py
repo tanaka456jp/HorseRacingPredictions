@@ -98,7 +98,7 @@ def test_free_opencode_smoke_is_bounded_and_standalone():
 
     assert "[int]$TimeoutSeconds = 180" in script
     assert "run --standalone --model" in script
-    assert "--format json" not in script
+    assert '$argumentString = "run --standalone --model $escapedModel --title $escapedTitle $escapedPrompt"' in script
     assert 'output_format = "default"' in script
     assert "/no_think Reply with exactly FREE_LOCAL_SMOKE_OK" in script
     assert "WaitForExit($TimeoutSeconds * 1000)" in script
@@ -107,3 +107,23 @@ def test_free_opencode_smoke_is_bounded_and_standalone():
     assert "raw_model_output_included = $false" in script
     assert "cancel-in-progress: true" in workflow
     assert "-TimeoutSeconds 180" in workflow
+
+
+def test_free_opencode_smoke_verifies_exported_session_response():
+    script = Path(
+        "scripts/smoke_free_opencode_ollama.ps1"
+    ).read_text(encoding="utf-8")
+
+    assert "session list --format json --max-count 50" in script
+    assert '--title $escapedTitle' in script
+    assert "& $binaryPath export $sessionId" in script
+    assert '[string]$_.info.role -eq "assistant"' in script
+    assert '[string]$_.info.providerID -eq "ollama"' in script
+    assert '[string]$_.info.modelID -eq "qwen3:8b"' in script
+    assert "marker_seen_session_export" in script
+    assert "session_provider_matched" in script
+    assert "session_model_matched" in script
+    assert 'status = "session_not_found"' in script
+    assert 'status = "session_export_failed"' in script
+    assert 'status = "session_model_mismatch"' in script
+    assert "raw_model_output_included = $false" in script
