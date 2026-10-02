@@ -38,11 +38,59 @@ if (Test-Path -LiteralPath $cliPath -PathType Leaf) {
 }
 
 $installedNow = $false
+$approvedInstallScript = "opencode-ai@$Version"
 if ($existingVersion -ne $Version) {
-    & npm install --prefix $installRoot --no-audit --no-fund "opencode-ai@$Version"
-    if ($LASTEXITCODE -ne 0) {
-        throw "Free OpenCode CLI npm installation failed."
+    $nodeModulesPath = Join-Path $installRoot "node_modules"
+    $lockPath = Join-Path $installRoot "package-lock.json"
+    if (Test-Path -LiteralPath $nodeModulesPath) {
+        Remove-Item -LiteralPath $nodeModulesPath -Recurse -Force
     }
+    if (Test-Path -LiteralPath $lockPath -PathType Leaf) {
+        Remove-Item -LiteralPath $lockPath -Force
+    }
+
+    $allowScripts = @{}
+    $allowScripts[$approvedInstallScript] = $true
+    $manifest = [ordered]@{
+        name = "horse-racing-predictions-free-opencode-runner"
+        version = "0.0.0"
+        private = $true
+        allowScripts = $allowScripts
+    }
+    $manifestPath = Join-Path $installRoot "package.json"
+    $manifest | ConvertTo-Json -Depth 6 |
+        Set-Content -LiteralPath $manifestPath -Encoding UTF8
+
+    & npm install --prefix $installRoot --no-audit --no-fund --ignore-scripts "opencode-ai@$Version"
+    if ($LASTEXITCODE -ne 0) {
+        throw "Free OpenCode CLI npm package installation failed."
+    }
+
+    Push-Location $installRoot
+    try {
+        & npm approve-scripts opencode-ai
+        if ($LASTEXITCODE -ne 0) {
+            throw "OpenCode install-script approval failed."
+        }
+
+        $approvedManifest = Get-Content -LiteralPath $manifestPath -Raw -Encoding UTF8 |
+            ConvertFrom-Json
+        $allowedKeys = @($approvedManifest.allowScripts.PSObject.Properties.Name)
+        if ($allowedKeys.Count -ne 1 -or $allowedKeys[0] -ne $approvedInstallScript) {
+            throw "Unexpected install-script approval set: $($allowedKeys -join ',')"
+        }
+        if (-not [bool]$approvedManifest.allowScripts.$approvedInstallScript) {
+            throw "Pinned OpenCode install script is not explicitly allowed."
+        }
+
+        & npm rebuild opencode-ai
+        if ($LASTEXITCODE -ne 0) {
+            throw "OpenCode postinstall rebuild failed."
+        }
+    } finally {
+        Pop-Location
+    }
+
     $installedNow = $true
 }
 
@@ -68,6 +116,8 @@ $validation = @{
     actual_version = $actualVersion.Trim()
     installed_now = $installedNow
     install_scope = "runner_isolated_localappdata"
+    install_script_policy = "pinned_single_package_only"
+    approved_install_script = $approvedInstallScript
     install_path_sanitized = "%LOCALAPPDATA%\HorseRacingPredictionsAutonomousDev\opencode-cli-$Version"
     paid_provider_used = $false
     api_key_used = $false
