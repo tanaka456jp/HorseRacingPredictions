@@ -4,6 +4,7 @@ param(
     [string]$ExpectedComputerName = "DESKTOP-MVV1FD4",
     [string]$Version = "1.18.29",
     [string]$Model = "ollama/qwen3:8b",
+    [int]$MaxConsecutiveFailures = 2,
     [string]$SummaryOutput = "artifacts/free_opencode_autonomous_dev_12h_summary.json"
 )
 
@@ -23,6 +24,9 @@ if ($Version -ne "1.18.29") {
 }
 if ($Model -ne "ollama/qwen3:8b") {
     throw "Only the local model ollama/qwen3:8b is allowed."
+}
+if ($MaxConsecutiveFailures -lt 1 -or $MaxConsecutiveFailures -gt 4) {
+    throw "MaxConsecutiveFailures must be between 1 and 4."
 }
 
 foreach ($name in @(
@@ -65,6 +69,8 @@ if ($LASTEXITCODE -ne 0) {
 
 $lockStream = $null
 $results = @()
+$consecutiveFailures = 0
+$failedFast = $false
 $started = [DateTimeOffset]::UtcNow
 $summaryPath = Join-Path $ProjectRoot $SummaryOutput
 New-Item -ItemType Directory -Force -Path (Split-Path -Parent $summaryPath) | Out-Null
@@ -82,6 +88,12 @@ try {
     }
 
     Remove-Item -LiteralPath $stopPath -Force -ErrorAction SilentlyContinue
+
+    if (-not [string]::IsNullOrWhiteSpace($env:GITHUB_STEP_SUMMARY)) {
+        Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Value "### Free OpenCode autonomous cycles"
+        Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Value "| Cycle | Status | Consecutive failures |"
+        Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Value "|---:|---|---:|"
+    }
 
     for ($cycle = 1; $cycle -le $Cycles; $cycle++) {
         if (Test-Path -LiteralPath $stopPath) {
@@ -105,6 +117,12 @@ try {
             $status = "failure"
             $message = $_.Exception.Message
             Write-Error -ErrorAction Continue "Cycle $cycle failed: $message"
+        }
+
+        if ($status -eq "failure") {
+            $consecutiveFailures += 1
+        } else {
+            $consecutiveFailures = 0
         }
 
         $cycleEnd = [DateTimeOffset]::UtcNow
@@ -131,8 +149,25 @@ try {
             api_key_used = $false
             codex_used = $false
             live_execution_enabled = $false
+            consecutive_failures = $consecutiveFailures
+            max_consecutive_failures = $MaxConsecutiveFailures
             results = $results
         } | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $summaryPath -Encoding UTF8
+
+        Write-Host "cycle=$cycle status=$status consecutive_failures=$consecutiveFailures"
+        if (-not [string]::IsNullOrWhiteSpace($env:GITHUB_STEP_SUMMARY)) {
+            Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Value (
+                "| $cycle | $status | $consecutiveFailures |"
+            )
+        }
+
+        if ($consecutiveFailures -ge $MaxConsecutiveFailures) {
+            $failedFast = $true
+            Write-Error -ErrorAction Continue (
+                "Stopping after $consecutiveFailures consecutive failed cycles."
+            )
+            break
+        }
 
         if ($cycle -lt $Cycles) {
             $elapsed = ([DateTimeOffset]::UtcNow - $cycleStart).TotalSeconds
@@ -148,7 +183,7 @@ try {
     $successfulCycles = @($results | Where-Object { $_.status -eq "success" }).Count
     $failedCycles = @($results | Where-Object { $_.status -eq "failure" }).Count
     @{
-        status = if ($failedCycles -gt 0) { "completed_with_failures" } else { "completed" }
+        status = if ($failedFast) { "failed_fast" } elseif ($failedCycles -gt 0) { "completed_with_failures" } else { "completed" }
         computer_name = $env:COMPUTERNAME
         started_at_utc = $started.ToString("o")
         finished_at_utc = $finished.ToString("o")
@@ -163,9 +198,15 @@ try {
         api_key_used = $false
         codex_used = $false
         live_execution_enabled = $false
+        consecutive_failures = $consecutiveFailures
+        max_consecutive_failures = $MaxConsecutiveFailures
+        failed_fast = $failedFast
         results = $results
     } | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $summaryPath -Encoding UTF8
 
+    if ($failedFast) {
+        throw "Free OpenCode autonomous development stopped after $consecutiveFailures consecutive failed cycles."
+    }
     if ($failedCycles -gt 0) {
         throw "Free OpenCode autonomous development completed with $failedCycles failed cycle(s)."
     }
