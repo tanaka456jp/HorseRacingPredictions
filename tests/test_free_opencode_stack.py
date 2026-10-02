@@ -85,3 +85,20 @@ def test_free_stack_audit_reads_loaded_user_paths_and_install_registry():
     assert "installed_app_matches" in script
     assert "running_process_matches" in script
     assert "opencode2.exe" in script
+
+
+def test_free_stack_audit_uses_installed_app_metadata_without_exposing_usernames():
+    script = Path(
+        "scripts/audit_free_opencode_stack.ps1"
+    ).read_text(encoding="utf-8")
+
+    assert "Get-ExecutablePathFromCommandText" in script
+    assert "Get-OpenCodeInstalledAppDerivedCandidates" in script
+    assert "DisplayIcon" in script
+    assert "UninstallString" in script
+    assert "QuietUninstallString" in script
+    assert "resources\\bin\\opencode.exe" in script
+    assert "display_icon_sanitized" in script
+    assert "uninstall_string_sanitized" in script
+    assert "quiet_uninstall_string_sanitized" in script
+    assert "(?i)C:\\\\Users\\\\[^\\\\]+\\\\" in script

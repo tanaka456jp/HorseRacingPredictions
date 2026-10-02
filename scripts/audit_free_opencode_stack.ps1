@@ -184,6 +184,9 @@ function Get-OpenCodeInstalledAppMatches {
                         display_name = $displayName
                         display_version = [string]$props.DisplayVersion
                         install_location = [string]$props.InstallLocation
+                        display_icon = [string]$props.DisplayIcon
+                        uninstall_string = [string]$props.UninstallString
+                        quiet_uninstall_string = [string]$props.QuietUninstallString
                     }
                 }
             } catch {}
@@ -191,6 +194,71 @@ function Get-OpenCodeInstalledAppMatches {
     }
 
     return $matches
+}
+
+
+function Get-ExecutablePathFromCommandText {
+    param([string]$Text)
+
+    if ([string]::IsNullOrWhiteSpace($Text)) {
+        return $null
+    }
+    $trimmed = $Text.Trim()
+    if ($trimmed -match '^\s*"([^"]+\.exe)"') {
+        return [string]$Matches[1]
+    }
+    if ($trimmed -match '^\s*([^, ]+\.exe)') {
+        return [string]$Matches[1]
+    }
+    return $null
+}
+
+function Get-OpenCodeInstalledAppDerivedCandidates {
+    param($InstalledApps)
+
+    $candidates = @()
+    foreach ($app in @($InstalledApps)) {
+        $roots = @()
+
+        if (-not [string]::IsNullOrWhiteSpace([string]$app.install_location)) {
+            $roots += [string]$app.install_location
+        }
+
+        foreach ($text in @(
+            [string]$app.display_icon,
+            [string]$app.uninstall_string,
+            [string]$app.quiet_uninstall_string
+        )) {
+            $exe = Get-ExecutablePathFromCommandText -Text $text
+            if (-not [string]::IsNullOrWhiteSpace($exe)) {
+                try {
+                    $roots += (Split-Path -Parent $exe)
+                } catch {}
+            }
+        }
+
+        foreach ($root in ($roots | Where-Object {
+            -not [string]::IsNullOrWhiteSpace([string]$_)
+        } | Select-Object -Unique)) {
+            foreach ($relative in @(
+                "bin\opencode.exe",
+                "bin\opencode.cmd",
+                "cli\opencode.exe",
+                "cli\opencode.cmd",
+                "resources\bin\opencode.exe",
+                "resources\bin\opencode.cmd",
+                "resources\cli\opencode.exe",
+                "resources\cli\opencode.cmd"
+            )) {
+                $candidate = Join-Path $root $relative
+                if (Test-Path -LiteralPath $candidate -PathType Leaf) {
+                    $candidates += $candidate
+                }
+            }
+        }
+    }
+
+    return @($candidates | Select-Object -Unique)
 }
 
 function Get-OpenCodeProcessMatches {
@@ -246,7 +314,7 @@ function Sanitize-UserPath {
     if ([string]::IsNullOrWhiteSpace($Path)) {
         return $null
     }
-    return ($Path -replace '^C:\\Users\\[^\\]+\\', 'C:\Users\<USER>\')
+    return ($Path -replace '(?i)C:\\Users\\[^\\]+\\', 'C:\Users\<USER>\')
 }
 
 function Get-VersionLine {
@@ -274,13 +342,24 @@ function Get-VersionLine {
 
 $openCodeInstalledApps = @(Get-OpenCodeInstalledAppMatches)
 $openCodeProcesses = @(Get-OpenCodeProcessMatches)
+$installedAppDerivedCandidates = @(
+    Get-OpenCodeInstalledAppDerivedCandidates -InstalledApps $openCodeInstalledApps
+)
 
 $openCodeCandidateResults = @(
-    Get-OpenCodeCandidates | ForEach-Object {
+    (@(Get-OpenCodeCandidates) + $installedAppDerivedCandidates) |
+    Select-Object -Unique |
+    ForEach-Object {
         Test-OpenCodeCliCandidate -Path $_
     }
 )
-$resolvedOpenCodePath = Resolve-OpenCodePath
+$resolvedOpenCodePath = $null
+foreach ($candidateResult in $openCodeCandidateResults) {
+    if ($candidateResult.runnable) {
+        $resolvedOpenCodePath = [string]$candidateResult.path
+        break
+    }
+}
 
 $commands = @{
     git = Test-CommandAvailable "git"
@@ -380,6 +459,9 @@ $validation = @{
                     display_name = $_.display_name
                     display_version = $_.display_version
                     install_location_sanitized = Sanitize-UserPath -Path $_.install_location
+                    display_icon_sanitized = Sanitize-UserPath -Path $_.display_icon
+                    uninstall_string_sanitized = Sanitize-UserPath -Path $_.uninstall_string
+                    quiet_uninstall_string_sanitized = Sanitize-UserPath -Path $_.quiet_uninstall_string
                 }
             }
         )
