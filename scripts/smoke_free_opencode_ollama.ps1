@@ -22,7 +22,9 @@ foreach ($name in @(
     "ANTHROPIC_API_KEY",
     "GOOGLE_API_KEY",
     "GROQ_API_KEY",
-    "OLLAMA_API_KEY"
+    "OLLAMA_API_KEY",
+    "OPENCODE_SERVER_PASSWORD",
+    "OPENCODE_SERVER_USERNAME"
 )) {
     Remove-Item "Env:$name" -ErrorAction SilentlyContinue
 }
@@ -104,7 +106,7 @@ $sessionTitle = "HRP_FREE_LOCAL_SMOKE_$([DateTimeOffset]::UtcNow.ToUnixTimeMilli
 $escapedModel = '"' + $Model.Replace('"', '\"') + '"'
 $escapedPrompt = '"' + $prompt.Replace('"', '\"') + '"'
 $escapedTitle = '"' + $sessionTitle.Replace('"', '\"') + '"'
-$argumentString = "run --standalone --model $escapedModel --title $escapedTitle $escapedPrompt"
+$argumentString = "run --model $escapedModel --title $escapedTitle $escapedPrompt"
 
 $process = Start-Process -FilePath $binaryPath -ArgumentList $argumentString -WorkingDirectory $smokeRoot -NoNewWindow -RedirectStandardOutput $stdoutPath -RedirectStandardError $stderrPath -PassThru
 
@@ -239,7 +241,8 @@ $validation = @{
     provider = "ollama_local"
     model = $Model
     ollama_endpoint = "http://127.0.0.1:11434"
-    standalone = $true
+    standalone = $false
+    session_persistence_required = $true
     output_format = "default"
     timeout_seconds = $TimeoutSeconds
     timed_out = [bool]$timedOut
