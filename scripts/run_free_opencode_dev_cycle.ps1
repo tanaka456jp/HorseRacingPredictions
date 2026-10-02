@@ -132,7 +132,7 @@ function Invoke-FreeOpenCode {
     $stamp = [DateTimeOffset]::UtcNow.ToString("yyyyMMddTHHmmssZ")
     $stdoutPath = Join-Path $LogDir "$stamp-$Label.stdout.txt"
     $stderrPath = Join-Path $LogDir "$stamp-$Label.stderr.txt"
-    $sessionTitle = "HRP_FREE_AUTO_$Label_$([DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds())"
+    $sessionTitle = "HRP_FREE_AUTO_$($Label)_$([DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds())"
     $fullPrompt = "/no_think " + $Prompt
     $escapedModel = '"' + $Model.Replace('"', '\"') + '"'
     $escapedPrompt = '"' + $fullPrompt.Replace('"', '\"') + '"'
@@ -327,7 +327,7 @@ if ($null -ne $openPr) {
     } elseif ($checkState -eq "pending") {
         Write-Host "cycle_result=existing_pr_pending"
         Write-Host "cycle_pr=$($openPr.number)"
-        exit 0
+        return
     } else {
         throw "Free OpenCode autonomous PR #$($openPr.number) still has failing checks after one repair."
     }
