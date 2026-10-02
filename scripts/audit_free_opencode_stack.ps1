@@ -74,6 +74,8 @@ function Get-OpenCodeCandidates {
         }
     }
 
+    $candidates += Get-LoadedUserEnvironmentCandidates
+
     return @(
         $candidates |
         Where-Object {
@@ -82,6 +84,130 @@ function Get-OpenCodeCandidates {
         } |
         Select-Object -Unique
     )
+}
+
+
+function Get-LoadedUserEnvironmentCandidates {
+    $candidates = @()
+    $profileListRoot = "Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList"
+
+    $sidKeys = @(
+        Get-ChildItem -Path "Registry::HKEY_USERS" -ErrorAction SilentlyContinue |
+        Where-Object {
+            $_.PSChildName -match "^S-1-5-21-" -and
+            $_.PSChildName -notmatch "_Classes$"
+        }
+    )
+
+    foreach ($sidKey in $sidKeys) {
+        $sid = [string]$sidKey.PSChildName
+        $profilePath = $null
+        try {
+            $profileProps = Get-ItemProperty -LiteralPath (Join-Path $profileListRoot $sid) -ErrorAction Stop
+            $profilePath = [Environment]::ExpandEnvironmentVariables([string]$profileProps.ProfileImagePath)
+        } catch {}
+
+        if ([string]::IsNullOrWhiteSpace([string]$profilePath)) {
+            continue
+        }
+
+        $envPathValue = $null
+        try {
+            $envProps = Get-ItemProperty -LiteralPath ("Registry::HKEY_USERS\$sid\Environment") -ErrorAction Stop
+            $envPathValue = [string]$envProps.Path
+        } catch {}
+
+        if ([string]::IsNullOrWhiteSpace($envPathValue)) {
+            continue
+        }
+
+        $appData = Join-Path $profilePath "AppData\Roaming"
+        $localAppData = Join-Path $profilePath "AppData\Local"
+
+        foreach ($entryRaw in ($envPathValue -split ";")) {
+            $entry = ([string]$entryRaw).Trim().Trim('"')
+            if ([string]::IsNullOrWhiteSpace($entry)) {
+                continue
+            }
+
+            $entry = $entry.Replace("%USERPROFILE%", $profilePath)
+            $entry = $entry.Replace("%APPDATA%", $appData)
+            $entry = $entry.Replace("%LOCALAPPDATA%", $localAppData)
+            $entry = [Environment]::ExpandEnvironmentVariables($entry)
+
+            foreach ($name in @(
+                "opencode.exe",
+                "opencode.cmd",
+                "opencode.ps1",
+                "opencode2.exe",
+                "opencode2.cmd",
+                "opencode2.ps1"
+            )) {
+                $candidate = Join-Path $entry $name
+                if (Test-Path -LiteralPath $candidate -PathType Leaf) {
+                    $candidates += $candidate
+                }
+            }
+        }
+    }
+
+    return @($candidates | Select-Object -Unique)
+}
+
+function Get-OpenCodeInstalledAppMatches {
+    $matches = @()
+    $roots = @(
+        "Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",
+        "Registry::HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall"
+    )
+
+    foreach ($sidKey in @(
+        Get-ChildItem -Path "Registry::HKEY_USERS" -ErrorAction SilentlyContinue |
+        Where-Object {
+            $_.PSChildName -match "^S-1-5-21-" -and
+            $_.PSChildName -notmatch "_Classes$"
+        }
+    )) {
+        $roots += "Registry::HKEY_USERS\$($sidKey.PSChildName)\Software\Microsoft\Windows\CurrentVersion\Uninstall"
+    }
+
+    foreach ($root in $roots) {
+        if (-not (Test-Path -LiteralPath $root)) {
+            continue
+        }
+        foreach ($key in Get-ChildItem -LiteralPath $root -ErrorAction SilentlyContinue) {
+            try {
+                $props = Get-ItemProperty -LiteralPath $key.PSPath -ErrorAction Stop
+                $displayName = [string]$props.DisplayName
+                if ($displayName -match "(?i)opencode") {
+                    $matches += @{
+                        display_name = $displayName
+                        display_version = [string]$props.DisplayVersion
+                        install_location = [string]$props.InstallLocation
+                    }
+                }
+            } catch {}
+        }
+    }
+
+    return $matches
+}
+
+function Get-OpenCodeProcessMatches {
+    $matches = @()
+    foreach ($proc in Get-Process -ErrorAction SilentlyContinue | Where-Object {
+        $_.ProcessName -match "(?i)opencode"
+    }) {
+        $path = $null
+        try {
+            $path = [string]$proc.Path
+        } catch {}
+        $matches += @{
+            process_name = [string]$proc.ProcessName
+            path = $path
+        }
+    }
+    return $matches
 }
 
 function Test-OpenCodeCliCandidate {
@@ -145,6 +271,9 @@ function Get-VersionLine {
         return $null
     }
 }
+
+$openCodeInstalledApps = @(Get-OpenCodeInstalledAppMatches)
+$openCodeProcesses = @(Get-OpenCodeProcessMatches)
 
 $openCodeCandidateResults = @(
     Get-OpenCodeCandidates | ForEach-Object {
@@ -242,6 +371,23 @@ $validation = @{
                     path_sanitized = Sanitize-UserPath -Path $_.path
                     runnable = [bool]$_.runnable
                     version = $_.version
+                }
+            }
+        )
+        installed_app_matches = @(
+            $openCodeInstalledApps | ForEach-Object {
+                @{
+                    display_name = $_.display_name
+                    display_version = $_.display_version
+                    install_location_sanitized = Sanitize-UserPath -Path $_.install_location
+                }
+            }
+        )
+        running_process_matches = @(
+            $openCodeProcesses | ForEach-Object {
+                @{
+                    process_name = $_.process_name
+                    path_sanitized = Sanitize-UserPath -Path $_.path
                 }
             }
         )

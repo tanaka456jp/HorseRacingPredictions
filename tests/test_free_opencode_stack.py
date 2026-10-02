@@ -70,3 +70,18 @@ def test_free_stack_audit_covers_common_windows_user_install_locations():
         assert marker in script
     assert "Test-OpenCodeCliCandidate" in script
     assert "candidates = @(" in script
+
+
+def test_free_stack_audit_reads_loaded_user_paths_and_install_registry():
+    script = Path(
+        "scripts/audit_free_opencode_stack.ps1"
+    ).read_text(encoding="utf-8")
+
+    assert "Get-LoadedUserEnvironmentCandidates" in script
+    assert "Registry::HKEY_USERS" in script
+    assert "ProfileList" in script
+    assert "Get-OpenCodeInstalledAppMatches" in script
+    assert "Get-OpenCodeProcessMatches" in script
+    assert "installed_app_matches" in script
+    assert "running_process_matches" in script
+    assert "opencode2.exe" in script
