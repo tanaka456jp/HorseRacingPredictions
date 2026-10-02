@@ -30,3 +30,13 @@ def test_wsl_opencode_audit_workflow_is_manual_or_marker_only():
     assert "research/wsl_opencode_audit_request.txt" in workflow
     assert "runs-on: [self-hosted, Windows]" in workflow
     assert "persist-credentials: false" in workflow
+
+
+def test_wsl_audit_treats_no_distro_as_diagnostic_not_install_request():
+    script = Path(
+        "scripts/audit_wsl_opencode.ps1"
+    ).read_text(encoding="utf-8")
+
+    assert "wsl_list_exit_code" in script
+    assert "wsl_command_available = $true" in script
+    assert "$distros.Count -gt 0" in script
