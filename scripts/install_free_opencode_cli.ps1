@@ -30,16 +30,35 @@ $installRoot = Join-Path $controlRoot "opencode-cli-$Version"
 New-Item -ItemType Directory -Force -Path $installRoot | Out-Null
 $cliPath = Join-Path $installRoot "node_modules\.bin\opencode.cmd"
 
+$targetBinaryPath = Join-Path $installRoot "node_modules\opencode-ai\bin\opencode.exe"
 $existingVersion = $null
+$existingExitCode = $null
+$existingBinarySize = $null
+$existingHealthy = $false
+
 if (Test-Path -LiteralPath $cliPath -PathType Leaf) {
     try {
-        $existingVersion = [string]((& $cliPath --version 2>$null | Select-Object -First 1))
-    } catch {}
+        $existingOutput = @(& $cliPath --version 2>$null)
+        $existingExitCode = [int]$LASTEXITCODE
+        $existingVersion = [string]($existingOutput | Select-Object -First 1)
+    } catch {
+        $existingExitCode = 1
+    }
 }
+if (Test-Path -LiteralPath $targetBinaryPath -PathType Leaf) {
+    $existingBinarySize = (Get-Item -LiteralPath $targetBinaryPath).Length
+}
+$existingHealthy = (
+    $existingExitCode -eq 0 -and
+    -not [string]::IsNullOrWhiteSpace($existingVersion) -and
+    $existingVersion.Trim() -eq $Version -and
+    $null -ne $existingBinarySize -and
+    $existingBinarySize -ge 1000000
+)
 
 $installedNow = $false
 $approvedInstallScript = "opencode-ai@$Version"
-if ($existingVersion -ne $Version) {
+if (-not $existingHealthy) {
     $nodeModulesPath = Join-Path $installRoot "node_modules"
     $lockPath = Join-Path $installRoot "package-lock.json"
     if (Test-Path -LiteralPath $nodeModulesPath) {
@@ -110,7 +129,6 @@ if ($existingVersion -ne $Version) {
             throw "Pinned OpenCode postinstall execution failed."
         }
 
-        $targetBinaryPath = Join-Path $packageRoot "bin\opencode.exe"
         if (-not (Test-Path -LiteralPath $targetBinaryPath -PathType Leaf)) {
             throw "OpenCode target binary is missing after postinstall."
         }
@@ -129,12 +147,21 @@ if (-not (Test-Path -LiteralPath $cliPath -PathType Leaf)) {
     throw "OpenCode CLI wrapper was not created at the expected isolated path."
 }
 
-$actualVersion = [string]((& $cliPath --version 2>$null | Select-Object -First 1))
-if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($actualVersion)) {
+$actualOutput = @(& $cliPath --version 2>$null)
+$actualExitCode = [int]$LASTEXITCODE
+$actualVersion = [string]($actualOutput | Select-Object -First 1)
+if ($actualExitCode -ne 0 -or [string]::IsNullOrWhiteSpace($actualVersion)) {
     throw "OpenCode CLI --version failed after bootstrap."
 }
 if ($actualVersion.Trim() -ne $Version) {
     throw "OpenCode CLI version mismatch: expected=$Version actual=$actualVersion"
+}
+if (-not (Test-Path -LiteralPath $targetBinaryPath -PathType Leaf)) {
+    throw "OpenCode target binary is missing after bootstrap."
+}
+$finalBinarySize = (Get-Item -LiteralPath $targetBinaryPath).Length
+if ($finalBinarySize -lt 1000000) {
+    throw "OpenCode target binary is still a placeholder after bootstrap."
 }
 
 $validation = @{
@@ -150,7 +177,9 @@ $validation = @{
     install_script_policy = "pinned_single_package_only"
     approved_install_script = $approvedInstallScript
     postinstall_execution = "explicit_pinned_package_script"
-    target_binary_size_bytes = $targetBinarySize
+    target_binary_size_bytes = $finalBinarySize
+    existing_install_healthy = [bool]$existingHealthy
+    existing_version_exit_code = $existingExitCode
     install_path_sanitized = "%LOCALAPPDATA%\HorseRacingPredictionsAutonomousDev\opencode-cli-$Version"
     paid_provider_used = $false
     api_key_used = $false
