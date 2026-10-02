@@ -12,6 +12,7 @@ def test_free_opencode_autonomous_workflow_is_pc1_marker_triggered():
     assert "runs-on: [self-hosted, Windows]" in workflow
     assert "timeout-minutes: 780" in workflow
     assert "persist-credentials: false" in workflow
+    assert "cancel-in-progress: true" in workflow
     assert "install_free_opencode_cli.ps1" in workflow
     assert "smoke_free_opencode_ollama.ps1" in workflow
     assert "run_free_opencode_dev_12h.ps1" in workflow
@@ -34,7 +35,16 @@ def test_free_opencode_cycle_uses_only_pinned_local_model_and_git_pr_flow():
     assert '"GOOGLE_API_KEY"' in script
     assert '"GROQ_API_KEY"' in script
     assert '"OLLAMA_API_KEY"' in script
-    assert "run --model $escapedModel" in script
+    assert "run --auto --model $escapedModel" in script
+    assert '"permission": {' in script
+    assert '"external_directory": "deny"' in script
+    assert '"webfetch": "deny"' in script
+    assert '"websearch": "deny"' in script
+    assert '"question": "deny"' in script
+    assert '"doom_loop": "deny"' in script
+    assert '"git commit *": "deny"' in script
+    assert '"git push *": "deny"' in script
+    assert '"gh *": "deny"' in script
     assert "codex.exe" not in script.lower()
     assert "verify_autonomous_dev_guard.py" in script
     assert "python -m pytest -q" in script
@@ -89,6 +99,11 @@ def test_free_opencode_12h_summary_proves_free_only_execution():
     assert "codex_used = $false" in script
     assert "live_execution_enabled = $false" in script
     assert "completed_with_failures" in script
+    assert "[int]$MaxConsecutiveFailures = 2" in script
+    assert "consecutive_failures = $consecutiveFailures" in script
+    assert "failed_fast = $failedFast" in script
+    assert "GITHUB_STEP_SUMMARY" in script
+    assert "Stopping after $consecutiveFailures consecutive failed cycles." in script
 
 
 def test_autonomous_guard_includes_untracked_files_and_free_control_files():
