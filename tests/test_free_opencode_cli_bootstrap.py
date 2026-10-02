@@ -73,3 +73,16 @@ def test_free_opencode_bootstrap_executes_only_verified_package_postinstall():
     assert "target_binary_size_bytes = $targetBinarySize" in script
     assert "$targetBinarySize -lt 1000000" in script
     assert "npm rebuild opencode-ai" not in script
+
+
+def test_free_opencode_bootstrap_repairs_broken_same_version_wrapper():
+    script = Path(
+        "scripts/install_free_opencode_cli.ps1"
+    ).read_text(encoding="utf-8")
+
+    assert "$existingExitCode = [int]$LASTEXITCODE" in script
+    assert "$existingBinarySize -ge 1000000" in script
+    assert "if (-not $existingHealthy)" in script
+    assert "$actualExitCode = [int]$LASTEXITCODE" in script
+    assert "$finalBinarySize -lt 1000000" in script
+    assert "existing_install_healthy = [bool]$existingHealthy" in script
