@@ -1,0 +1,43 @@
+name: Audit WSL OpenCode (Self-hosted)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "research/wsl_opencode_audit_request.txt"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: horse-racing-wsl-opencode-audit
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    name: Audit existing WSL OpenCode on PC1
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          clean: false
+          persist-credentials: false
+
+      - name: Audit WSL OpenCode and local Ollama
+        shell: powershell
+        run: |
+          & .\scripts\audit_wsl_opencode.ps1 -ExpectedComputerName "DESKTOP-MVV1FD4"
+
+      - name: Publish sanitized WSL audit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wsl-opencode-audit-validation
+          path: artifacts/wsl_opencode_audit_validation.json
+          if-no-files-found: warn
+          retention-days: 14
