@@ -98,7 +98,7 @@ def test_free_opencode_smoke_is_bounded_and_standalone():
 
     assert "[int]$TimeoutSeconds = 180" in script
     assert "run --standalone --model" in script
-    assert "--format json" not in script
+    assert '$argumentString = "run --standalone --model $escapedModel --title $escapedTitle $escapedPrompt"' in script
     assert 'output_format = "default"' in script
     assert "/no_think Reply with exactly FREE_LOCAL_SMOKE_OK" in script
     assert "WaitForExit($TimeoutSeconds * 1000)" in script
