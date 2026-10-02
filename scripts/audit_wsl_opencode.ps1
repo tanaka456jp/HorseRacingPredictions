@@ -30,11 +30,21 @@ function Invoke-WslText {
     }
 }
 
-$rawDistros = @(& wsl.exe -l -q 2>$null)
+$rawDistros = @()
+$wslListExitCode = 0
+try {
+    $rawDistros = @(& wsl.exe -l -q 2>$null)
+    $wslListExitCode = [int]$LASTEXITCODE
+} catch {
+    $wslListExitCode = 1
+}
 $distros = @(
     $rawDistros |
     ForEach-Object { ([string]$_).Trim([char]0).Trim() } |
-    Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+    Where-Object {
+        -not [string]::IsNullOrWhiteSpace($_) -and
+        $_ -notmatch "(?i)(install|Linux|Windows|wsl.exe)"
+    } |
     Select-Object -Unique
 )
 
@@ -99,7 +109,9 @@ $validation = @{
     computer_name = $env:COMPUTERNAME
     expected_computer_name = $ExpectedComputerName
     commit_sha = (& git rev-parse HEAD).Trim()
-    wsl_available = $true
+    wsl_available = ($wslListExitCode -eq 0 -and $distros.Count -gt 0)
+    wsl_command_available = $true
+    wsl_list_exit_code = $wslListExitCode
     distro_count = $distros.Count
     distros = $results
     preferred_distro = if ($null -ne $preferred) { [string]$preferred.distro } else { $null }
