@@ -1,1 +1,1 @@
-free_opencode_autonomous_dev_12h_v7_powershell_preflight_20261003
+free_opencode_autonomous_dev_12h_v8_connectivity_gate_20261003

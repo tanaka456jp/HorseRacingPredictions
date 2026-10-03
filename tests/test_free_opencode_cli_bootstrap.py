@@ -27,10 +27,11 @@ def test_free_opencode_smoke_uses_only_local_ollama_qwen():
     assert '"provider": {' in script
     assert '"ollama": {' in script
     assert '"baseURL": "http://127.0.0.1:11434/v1"' in script
-    assert "FREE_LOCAL_TOOL_SMOKE_OK" in script
+    assert "FREE_LOCAL_SMOKE_OK" in script
     assert "paid_provider_used = $false" in script
     assert "api_key_used = $false" in script
-    assert "repository_modified = $false" in script
+    assert "repository_modified = [bool]$workspaceModifiedUnexpectedly" in script
+    assert "connectivity smoke created unexpected files" in script
     assert "workspaceModifiedUnexpectedly" in script
 
 
@@ -89,7 +90,7 @@ def test_free_opencode_bootstrap_repairs_broken_same_version_wrapper():
     assert "existing_install_healthy = [bool]$existingHealthy" in script
 
 
-def test_free_opencode_smoke_uses_v11829_in_process_run_and_tool_probe():
+def test_free_opencode_smoke_uses_v11829_in_process_connectivity_probe():
     script = Path(
         "scripts/smoke_free_opencode_ollama.ps1"
     ).read_text(encoding="utf-8")
@@ -97,10 +98,10 @@ def test_free_opencode_smoke_uses_v11829_in_process_run_and_tool_probe():
         ".github/workflows/free-opencode-cli-bootstrap-self-hosted.yml"
     ).read_text(encoding="utf-8")
 
-    assert "[int]$TimeoutSeconds = 300" in script
-    assert '$argumentString = "--pure run --auto --agent build --format json' in script
+    assert "[int]$TimeoutSeconds = 240" in script
+    assert '$argumentString = "--pure run --agent build --format json' in script
     assert 'run --standalone' not in script
-    assert "--pure run --auto --agent build --format json" in script
+    assert "--pure run --agent build --format json" in script
     assert "--dir $escapedDir" in script
     assert 'run_transport = "in_process_non_attach"' in script
     assert 'shared_service_used = $false' in script
@@ -113,15 +114,17 @@ def test_free_opencode_smoke_uses_v11829_in_process_run_and_tool_probe():
     assert '$env:OPENCODE_DISABLE_AUTOUPDATE = "1"' in script
     assert '$env:OPENCODE_DISABLE_MODELS_FETCH = "1"' in script
     assert '"share": "disabled"' in script
-    assert "TOOL_SMOKE_FILE_OK" in script
-    assert "FREE_LOCAL_TOOL_SMOKE_OK" in script
-    assert "tool_write_verified" in script
+    assert "FREE_LOCAL_SMOKE_OK" in script
+    assert 'connectivity_only = $true' in script
+    assert 'tool_write_required = $false' in script
+    assert "TOOL_SMOKE_FILE_OK" not in script
+    assert "tool_write_verified" not in script
     assert "WaitForExit($TimeoutSeconds * 1000)" in script
     assert "taskkill.exe /PID $process.Id /T /F" in script
     assert 'status = "timeout"' in script
     assert "raw_model_output_included = $false" in script
     assert "cancel-in-progress: true" in workflow
-    assert "-TimeoutSeconds 300" in workflow
+    assert "-TimeoutSeconds 240" in workflow
     assert "Parse free OpenCode PowerShell scripts" in workflow
     assert "System.Management.Automation.Language.Parser" in workflow
 
@@ -140,7 +143,7 @@ def test_free_opencode_smoke_does_not_depend_on_shared_service_or_session_state(
     assert "raw_model_output_included = $false" in script
 
 
-def test_free_opencode_smoke_requires_stdout_marker_and_verified_edit_tool():
+def test_free_opencode_smoke_requires_stdout_marker_without_tool_write():
     script = Path(
         "scripts/smoke_free_opencode_ollama.ps1"
     ).read_text(encoding="utf-8")
@@ -151,6 +154,7 @@ def test_free_opencode_smoke_requires_stdout_marker_and_verified_edit_tool():
     assert "model_invocation_explicit = $true" in script
     assert "local_model_present = $true" in script
     assert 'if (-not $markerSeenStdout) {' in script
-    assert "tool smoke completed but expected response marker" in script
-    assert 'if (-not $toolWriteVerified) {' in script
-    assert "did not complete the isolated edit-tool smoke" in script
+    assert "connectivity smoke completed but expected response marker" in script
+    assert 'connectivity_only = $true' in script
+    assert 'tool_write_required = $false' in script
+    assert "did not complete the isolated edit-tool smoke" not in script

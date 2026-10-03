@@ -51,7 +51,7 @@ jobs:
       - name: Smoke OpenCode with local qwen3 8b only
         shell: powershell
         run: |
-          & .\scripts\smoke_free_opencode_ollama.ps1 -ExpectedComputerName "DESKTOP-MVV1FD4" -Version "1.18.29" -Model "ollama/qwen3:8b" -TimeoutSeconds 300
+          & .\scripts\smoke_free_opencode_ollama.ps1 -ExpectedComputerName "DESKTOP-MVV1FD4" -Version "1.18.29" -Model "ollama/qwen3:8b" -TimeoutSeconds 240
 
       - name: Publish sanitized free-stack validation
         if: always()
