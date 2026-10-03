@@ -50,6 +50,8 @@ jobs:
 
       - name: Audit auth and smoke exact free Nemotron
         shell: powershell
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         run: |
           & .\scripts\audit_free_nemotron_opencode.ps1 -ExpectedComputerName "DESKTOP-MVV1FD4" -Version "1.18.29" -Model "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free" -TimeoutSeconds 240
 
