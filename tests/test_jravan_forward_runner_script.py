@@ -50,7 +50,10 @@ def test_forward_runner_heartbeat_path_and_fields():
 
     assert "artifacts/jravan_forward_runner_heartbeat.json" in script
     assert "stage" in script
+    assert "started_at_utc" in script
     assert "updated_at_utc" in script
+    assert "elapsed_seconds" in script
+    assert "$RunnerStartedAt = [DateTimeOffset]::UtcNow" in script
     assert "computer_name" in script
     assert "forward_paper_executed" in script
     assert "residual_v12_paper_executed" in script
