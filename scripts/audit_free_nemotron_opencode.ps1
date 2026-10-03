@@ -210,3 +210,4 @@ if ($status -ne "success") {
     throw "Nemotron 3 Ultra free smoke failed with status=$status."
 }
 Write-Host "Free Nemotron 3 Ultra OpenCode smoke PASS."
+$global:LASTEXITCODE = 0

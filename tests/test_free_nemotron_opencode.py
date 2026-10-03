@@ -90,3 +90,11 @@ def test_nemotron_workflows_receive_only_actions_secret_for_openrouter():
     assert secret_line in audit
     assert benchmark.count(secret_line) == 2
     assert "OPENROUTER_API_KEY:" not in benchmark.replace(secret_line, "")
+
+
+def test_free_nemotron_smoke_clears_stale_native_exit_code():
+    script = Path("scripts/audit_free_nemotron_opencode.ps1").read_text(
+        encoding="utf-8"
+    )
+    assert "$global:LASTEXITCODE = 0" in script
+    assert script.strip().endswith("$global:LASTEXITCODE = 0")
