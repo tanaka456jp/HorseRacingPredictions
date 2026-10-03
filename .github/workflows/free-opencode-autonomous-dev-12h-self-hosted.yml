@@ -1,4 +1,4 @@
-name: Autonomous Development 12h (PC1 Free OpenCode)
+name: Autonomous Development 12h (PC2 Free OpenCode)
 
 on:
   workflow_dispatch:
@@ -26,7 +26,8 @@ concurrency:
 
 jobs:
   develop:
-    name: Run guarded free Nemotron development on PC1
+    name: Run guarded free Nemotron development on PC2
+    # DESKTOP-MVV1FD4 is PC2. PC1 identity/failover will be wired separately.
     runs-on: [self-hosted, Windows]
     timeout-minutes: 780
 
