@@ -80,7 +80,8 @@ function Write-Validation {
         [bool]$MarkerSeen = $false,
         [int]$ExitCode = -1,
         [int64]$StdoutBytes = 0,
-        [int64]$StderrBytes = 0
+        [int64]$StderrBytes = 0,
+        [int]$AttemptsUsed = 0
     )
     @{
         status = $Status
@@ -103,6 +104,7 @@ function Write-Validation {
         exit_code = $ExitCode
         stdout_bytes = $StdoutBytes
         stderr_bytes = $StderrBytes
+        smoke_attempts = $AttemptsUsed
         raw_model_output_included = $false
         secrets_included = $false
     } | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $validationPath -Encoding UTF8
@@ -161,53 +163,79 @@ $env:OPENCODE_DISABLE_AUTOUPDATE = "1"
 
 $stdoutPath = Join-Path $smokeRoot "stdout.log"
 $stderrPath = Join-Path $smokeRoot "stderr.log"
-$prompt = "/no_think Reply exactly FREE_NEMOTRON_SMOKE_OK. Do not call tools. Do not create or edit files."
-$sessionTitle = "HRP_FREE_NEMOTRON_$([DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds())"
-$escapedModel = '"' + $Model.Replace('"', '\"') + '"'
-$escapedPrompt = '"' + $prompt.Replace('"', '\"') + '"'
-$escapedTitle = '"' + $sessionTitle.Replace('"', '\"') + '"'
-$escapedDir = '"' + $smokeRoot.Replace('"', '\"') + '"'
-$argumentString = "--pure run --agent build --format json --dir $escapedDir --model $escapedModel --title $escapedTitle $escapedPrompt"
+$prompt = "Reply exactly FREE_NEMOTRON_SMOKE_OK. Do not call tools. Do not create or edit files."
 
-$process = Start-Process -FilePath $binaryPath -ArgumentList $argumentString -WorkingDirectory $smokeRoot -NoNewWindow -RedirectStandardOutput $stdoutPath -RedirectStandardError $stderrPath -PassThru
-$completed = $process.WaitForExit($TimeoutSeconds * 1000)
-if (-not $completed) {
-    & taskkill.exe /PID $process.Id /T /F *> $null
-    $process.WaitForExit()
+$status = "not_run"
+$markerSeen = $false
+$exitCode = -1
+$stdoutBytes = 0
+$stderrBytes = 0
+$attemptsUsed = 0
+
+for ($attempt = 1; $attempt -le 2; $attempt++) {
+    $attemptsUsed = $attempt
+    Remove-Item -LiteralPath $stdoutPath -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $stderrPath -Force -ErrorAction SilentlyContinue
+
+    $sessionTitle = "HRP_FREE_NEMOTRON_$([DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds())"
+    $escapedModel = '"' + $Model.Replace('"', '\"') + '"'
+    $escapedPrompt = '"' + $prompt.Replace('"', '\"') + '"'
+    $escapedTitle = '"' + $sessionTitle.Replace('"', '\"') + '"'
+    $escapedDir = '"' + $smokeRoot.Replace('"', '\"') + '"'
+    $argumentString = "--pure run --agent build --format json --dir $escapedDir --model $escapedModel --title $escapedTitle $escapedPrompt"
+
+    $process = Start-Process -FilePath $binaryPath -ArgumentList $argumentString -WorkingDirectory $smokeRoot -NoNewWindow -RedirectStandardOutput $stdoutPath -RedirectStandardError $stderrPath -PassThru
+    $completed = $process.WaitForExit($TimeoutSeconds * 1000)
+
+    if (-not $completed) {
+        & taskkill.exe /PID $process.Id /T /F *> $null
+        $process.WaitForExit()
+        $exitCode = -1
+        $markerSeen = $false
+        $status = "timeout"
+    } else {
+        $exitCode = [int]$process.ExitCode
+        $stdoutText = if (Test-Path -LiteralPath $stdoutPath) { Get-Content -LiteralPath $stdoutPath -Raw -Encoding UTF8 } else { "" }
+        $markerSeen = $stdoutText -match "FREE_NEMOTRON_SMOKE_OK"
+        $status = "success"
+        if ($exitCode -ne 0) {
+            $status = "failed_exit_code"
+        } elseif (-not $markerSeen) {
+            $status = "missing_response_marker"
+        }
+    }
+
     $stdoutBytes = if (Test-Path -LiteralPath $stdoutPath) { (Get-Item -LiteralPath $stdoutPath).Length } else { 0 }
     $stderrBytes = if (Test-Path -LiteralPath $stderrPath) { (Get-Item -LiteralPath $stderrPath).Length } else { 0 }
-    Write-Validation -Status "timeout" -ExitCode -1 -StdoutBytes $stdoutBytes -StderrBytes $stderrBytes
-    throw "Nemotron 3 Ultra free smoke timed out after $TimeoutSeconds seconds."
+    Remove-Item -LiteralPath $stdoutPath -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $stderrPath -Force -ErrorAction SilentlyContinue
+
+    $unexpectedFiles = @(Get-ChildItem -LiteralPath $smokeRoot -File -Recurse -ErrorAction SilentlyContinue)
+    if ($status -eq "success" -and $unexpectedFiles.Count -gt 0) {
+        $status = "unexpected_file_write"
+    }
+
+    Write-Host "smoke_attempt=$attempt status=$status marker_seen=$markerSeen"
+    if ($status -eq "success") {
+        break
+    }
+    if ($attempt -lt 2) {
+        Write-Host "Retrying exact free Nemotron smoke after 30 seconds."
+        Start-Sleep -Seconds 30
+    }
 }
 
-$exitCode = [int]$process.ExitCode
-$stdoutText = if (Test-Path -LiteralPath $stdoutPath) { Get-Content -LiteralPath $stdoutPath -Raw -Encoding UTF8 } else { "" }
-$markerSeen = $stdoutText -match "FREE_NEMOTRON_SMOKE_OK"
-$stdoutBytes = if (Test-Path -LiteralPath $stdoutPath) { (Get-Item -LiteralPath $stdoutPath).Length } else { 0 }
-$stderrBytes = if (Test-Path -LiteralPath $stderrPath) { (Get-Item -LiteralPath $stderrPath).Length } else { 0 }
-
-Remove-Item -LiteralPath $stdoutPath -Force -ErrorAction SilentlyContinue
-Remove-Item -LiteralPath $stderrPath -Force -ErrorAction SilentlyContinue
-$unexpectedFiles = @(Get-ChildItem -LiteralPath $smokeRoot -File -Recurse -ErrorAction SilentlyContinue)
-
-$status = "success"
-if ($exitCode -ne 0) {
-    $status = "failed_exit_code"
-} elseif (-not $markerSeen) {
-    $status = "missing_response_marker"
-} elseif ($unexpectedFiles.Count -gt 0) {
-    $status = "unexpected_file_write"
-}
-Write-Validation -Status $status -MarkerSeen $markerSeen -ExitCode $exitCode -StdoutBytes $stdoutBytes -StderrBytes $stderrBytes
+Write-Validation -Status $status -MarkerSeen $markerSeen -ExitCode $exitCode -StdoutBytes $stdoutBytes -StderrBytes $stderrBytes -AttemptsUsed $attemptsUsed
 
 Write-Host "openrouter_authenticated=True"
 Write-Host "target_model=$Model"
 Write-Host "paid_provider_used=False"
 Write-Host "paid_fallback_allowed=False"
 Write-Host "marker_seen=$markerSeen"
+Write-Host "smoke_attempts=$attemptsUsed"
 
 if ($status -ne "success") {
-    throw "Nemotron 3 Ultra free smoke failed with status=$status."
+    throw "Nemotron 3 Ultra free smoke failed with status=$status after $attemptsUsed attempt(s)."
 }
 Write-Host "Free Nemotron 3 Ultra OpenCode smoke PASS."
 $global:LASTEXITCODE = 0
