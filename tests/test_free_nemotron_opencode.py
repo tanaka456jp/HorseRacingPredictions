@@ -42,6 +42,7 @@ def test_free_nemotron_audit_workflow_is_pc2_marker_triggered():
     assert "runs-on: [self-hosted, Windows]" in workflow
     assert "Audit Free Nemotron OpenCode (PC2)" in workflow
     assert "DESKTOP-MVV1FD4 is PC2" in workflow
+    assert "horse-racing-free-nemotron-audit-pc2" in workflow
     assert "persist-credentials: false" in workflow
     assert "audit_free_nemotron_opencode.ps1" in workflow
     assert "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free" in workflow
@@ -73,7 +74,7 @@ def test_free_nemotron_microtask_benchmark_preempts_qwen_autonomous_run():
     assert "Nemotron Free Microtask Benchmark (PC2)" in workflow
     assert "Run one guarded Nemotron free microtask on PC2" in workflow
     assert "DESKTOP-MVV1FD4 is PC2" in workflow
-    assert "horse-racing-autonomous-development-pc1" in workflow
+    assert "horse-racing-autonomous-development-pc2" in workflow
     assert "cancel-in-progress: true" in workflow
     assert "audit_free_nemotron_opencode.ps1" in workflow
     assert "run_free_opencode_dev_cycle.ps1" in workflow
@@ -136,3 +137,19 @@ def test_free_nemotron_smoke_retries_without_qwen_no_think_directive():
     assert "Start-Sleep -Seconds 30" in script
     assert "smoke_attempts = $AttemptsUsed" in script
     assert "smoke_attempts=$attemptsUsed" in script
+
+
+def test_free_nemotron_smoke_accepts_successful_json_stream_without_text_marker():
+    script = Path("scripts/audit_free_nemotron_opencode.ps1").read_text(
+        encoding="utf-8"
+    )
+
+    assert '\"type\"\\s*:\\s*\"step_start\"' in script
+    assert '\"type\"\\s*:\\s*\"text\"' in script
+    assert '\"type\"\\s*:\\s*\"error\"' in script
+    assert '$status = "missing_step_start"' in script
+    assert '$status = "error_event"' in script
+    assert 'stream_started = [bool]$StreamStarted' in script
+    assert 'text_event_seen = [bool]$TextEventSeen' in script
+    assert 'error_event_seen = [bool]$ErrorEventSeen' in script
+    assert 'elseif (-not $markerSeen)' not in script

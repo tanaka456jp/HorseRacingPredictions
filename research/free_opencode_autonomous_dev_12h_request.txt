@@ -1,1 +1,1 @@
-free_opencode_autonomous_dev_12h_v17_resilient_nemotron_smoke_20261003
+free_opencode_autonomous_dev_12h_v18_json_stream_smoke_20261003

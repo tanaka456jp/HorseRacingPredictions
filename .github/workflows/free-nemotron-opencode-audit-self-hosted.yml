@@ -12,7 +12,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: horse-racing-free-nemotron-audit-pc1
+  group: horse-racing-free-nemotron-audit-pc2
   cancel-in-progress: true
 
 jobs:
