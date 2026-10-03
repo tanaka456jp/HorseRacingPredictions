@@ -38,3 +38,17 @@ def test_dashboard_shows_read_only_paper_risk_monitor():
     assert "current_losing_streak" in source
     assert "recent_roi_windows" in source
     assert "固定済みモデル・EV閾値・賭け金ルールを自動変更しません" in source
+
+
+def test_dashboard_shows_jravan_forward_runner_heartbeat_section():
+    source = Path(
+        "src/horse_racing_predictions/dashboard.py"
+    ).read_text(encoding="utf-8")
+
+    assert "JRA-VAN Forward Runner Heartbeat" in source
+    assert "artifacts/jravan_forward_runner_heartbeat.json" in source
+    assert "stage" in source
+    assert "updated_at" in source
+    assert "forward_executed" in source
+    assert "residual_executed" in source
+    assert "見つかりません" in source
