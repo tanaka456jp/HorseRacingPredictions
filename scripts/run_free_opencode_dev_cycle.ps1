@@ -681,8 +681,8 @@ $prompt = (@(
     "- Do not run tests or shell commands; the orchestrator runs all tests afterward.",
     "- Do not commit, push, create PRs, merge, or change branches.",
     $SafetyBoundaries,
-    "- Never add or switch providers; use only the already-selected exact free model.
-- Never add paid services or new network dependencies.",
+    "- Never add or switch providers; use only the already-selected exact free model.",
+    "- Never add paid services or new network dependencies.",
     "- Never add raw JRA-VAN, horse-level prediction/odds/results, SQLite, secrets, or credentials."
 ) -join [Environment]::NewLine)
 
