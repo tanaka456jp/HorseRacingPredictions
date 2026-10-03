@@ -1,5 +1,6 @@
 import json
 import sqlite3
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pandas as pd
@@ -17,17 +18,38 @@ st.caption("EV中心・無料データ優先・Paper Trading")
 st.subheader("JRA-VAN Forward Runner Heartbeat")
 heartbeat_path = Path("artifacts/jravan_forward_runner_heartbeat.json")
 if heartbeat_path.exists():
-    with heartbeat_path.open("r", encoding="utf-8") as f:
-        hb = json.load(f)
-    h1, h2, h3 = st.columns(3)
-    h1.metric("Stage", hb.get("stage", "—"))
-    h2.metric("Updated", hb.get("updated_at_utc", "—"))
-    forward_executed = hb.get("forward_paper_executed", False)
-    residual_executed = hb.get("residual_v12_paper_executed", False)
-    h3.metric(
-        "Paper Stages",
-        f"Forward: {'✓' if forward_executed else '✗'} / Residual: {'✓' if residual_executed else '✗'}",
-    )
+    hb = None
+    stale = False
+    try:
+        with heartbeat_path.open("r", encoding="utf-8") as f:
+            hb = json.load(f)
+        updated_str = hb.get("updated_at_utc")
+        if updated_str:
+            try:
+                updated_dt = datetime.fromisoformat(updated_str.replace("Z", "+00:00"))
+                if updated_dt.tzinfo is None:
+                    updated_dt = updated_dt.replace(tzinfo=timezone.utc)
+                now = datetime.now(timezone.utc)
+                if (now - updated_dt).total_seconds() > 1800:
+                    stale = True
+            except ValueError:
+                pass
+    except json.JSONDecodeError:
+        st.warning("Heartbeat JSON が不正です。")
+        hb = None
+
+    if hb is not None:
+        h1, h2, h3 = st.columns(3)
+        h1.metric("Stage", hb.get("stage", "—"))
+        h2.metric("Updated", hb.get("updated_at_utc", "—"))
+        forward_executed = hb.get("forward_paper_executed", False)
+        residual_executed = hb.get("residual_v12_paper_executed", False)
+        h3.metric(
+            "Paper Stages",
+            f"Forward: {'✓' if forward_executed else '✗'} / Residual: {'✓' if residual_executed else '✗'}",
+        )
+        if stale:
+            st.warning("Heartbeat が 30 分以上更新されていません。")
 else:
     st.info(
         "artifacts/jravan_forward_runner_heartbeat.json が見つかりません。"

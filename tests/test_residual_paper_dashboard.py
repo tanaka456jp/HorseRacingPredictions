@@ -52,3 +52,23 @@ def test_dashboard_shows_jravan_forward_runner_heartbeat_section():
     assert "forward_paper_executed" in source
     assert "residual_v12_paper_executed" in source
     assert "見つかりません" in source
+
+
+def test_dashboard_heartbeat_handles_malformed_json():
+    source = Path(
+        "src/horse_racing_predictions/dashboard.py"
+    ).read_text(encoding="utf-8")
+
+    assert "JSONDecodeError" in source
+    assert "Heartbeat JSON が不正です" in source
+
+
+def test_dashboard_heartbeat_handles_stale_timestamp():
+    source = Path(
+        "src/horse_racing_predictions/dashboard.py"
+    ).read_text(encoding="utf-8")
+
+    assert "datetime" in source
+    assert "timezone" in source
+    assert "1800" in source
+    assert "30 分以上更新されていません" in source
