@@ -88,7 +88,7 @@ def test_free_opencode_bootstrap_repairs_broken_same_version_wrapper():
     assert "existing_install_healthy = [bool]$existingHealthy" in script
 
 
-def test_free_opencode_smoke_is_bounded_and_persistent():
+def test_free_opencode_smoke_is_bounded_and_standalone():
     script = Path(
         "scripts/smoke_free_opencode_ollama.ps1"
     ).read_text(encoding="utf-8")
@@ -97,12 +97,15 @@ def test_free_opencode_smoke_is_bounded_and_persistent():
     ).read_text(encoding="utf-8")
 
     assert "[int]$TimeoutSeconds = 180" in script
-    assert "run --standalone --model" not in script
-    assert '$argumentString = "run --model $escapedModel --title $escapedTitle $escapedPrompt"' in script
-    assert 'session_persistence_required = $true' in script
-    assert '"OPENCODE_SERVER_PASSWORD"' in script
-    assert '"OPENCODE_SERVER_USERNAME"' in script
-    assert 'output_format = "default"' in script
+    assert "run --standalone --auto --agent build --format json" in script
+    assert "--dir $escapedDir" in script
+    assert 'standalone = $true' in script
+    assert 'session_persistence_required = $false' in script
+    assert 'output_format = "json"' in script
+    assert '$env:OPENCODE_CONFIG = $configPath' in script
+    assert '$env:OPENCODE_DISABLE_AUTOUPDATE = "true"' in script
+    assert '$env:OPENCODE_AUTO_SHARE = "false"' in script
+    assert '"share": "disabled"' in script
     assert "/no_think Reply with exactly FREE_LOCAL_SMOKE_OK" in script
     assert "WaitForExit($TimeoutSeconds * 1000)" in script
     assert "taskkill.exe /PID $process.Id /T /F" in script
@@ -112,36 +115,30 @@ def test_free_opencode_smoke_is_bounded_and_persistent():
     assert "-TimeoutSeconds 180" in workflow
 
 
-def test_free_opencode_smoke_verifies_exported_session_response():
+def test_free_opencode_smoke_does_not_depend_on_shared_session_state():
     script = Path(
         "scripts/smoke_free_opencode_ollama.ps1"
     ).read_text(encoding="utf-8")
 
-    assert "session list --format json --max-count 50" in script
-    assert '--title $escapedTitle' in script
-    assert "& $binaryPath export $sessionId" in script
-    assert '[string]$_.info.role -eq "assistant"' in script
-    assert '[string]$_.info.providerID -eq "ollama"' in script
-    assert '[string]$_.info.modelID -eq "qwen3:8b"' in script
-    assert "marker_seen_session_export" in script
-    assert "session_provider_matched" in script
-    assert "session_model_matched" in script
-    assert 'status = "session_not_found"' in script
-    assert 'status = "session_export_failed"' in script
-    assert 'status = "session_model_mismatch"' in script
+    assert "session list --format json" not in script
+    assert "& $binaryPath export" not in script
+    assert 'session_found = $false' in script
+    assert 'session_exported = $false' in script
+    assert 'marker_seen_session_export = $false' in script
+    assert "opencode_standalone=True" in script
+    assert "opencode_result exit_code=$exitCode" in script
     assert "raw_model_output_included = $false" in script
 
 
-def test_free_opencode_smoke_accepts_stdout_proof_before_session_fallback():
+def test_free_opencode_smoke_requires_stdout_marker():
     script = Path(
         "scripts/smoke_free_opencode_ollama.ps1"
     ).read_text(encoding="utf-8")
 
     assert '$verificationChannel = if ($markerSeenStdout)' in script
     assert '"stdout"' in script
-    assert '"session_export"' in script
     assert "verification_channel = $verificationChannel" in script
     assert "model_invocation_explicit = $true" in script
     assert "local_model_present = $true" in script
-    assert 'if (-not $markerSeen) {' in script
-    assert '$verificationChannel -eq "session_export"' in script
+    assert 'if (-not $markerSeenStdout) {' in script
+    assert "standalone smoke completed but expected stdout marker" in script
