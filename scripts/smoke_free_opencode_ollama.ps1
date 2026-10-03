@@ -153,10 +153,8 @@ $verificationChannel = if ($markerSeenStdout) { "stdout_json_events" } else { "n
 
 $toolWriteVerified = $false
 if (Test-Path -LiteralPath $toolMarkerPath -PathType Leaf) {
-    $toolWriteVerified = (
-        (Get-Content -LiteralPath $toolMarkerPath -Raw -Encoding UTF8).Trim()
-        -eq "TOOL_SMOKE_FILE_OK"
-    )
+    $toolMarkerText = (Get-Content -LiteralPath $toolMarkerPath -Raw -Encoding UTF8).Trim()
+    $toolWriteVerified = ($toolMarkerText -eq "TOOL_SMOKE_FILE_OK")
 }
 
 $stdoutBytes = if (Test-Path -LiteralPath $stdoutPath) {

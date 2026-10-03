@@ -28,6 +28,21 @@ jobs:
           clean: false
           persist-credentials: false
 
+      - name: Parse free OpenCode PowerShell scripts
+        shell: powershell
+        run: |
+          $tokens = $null
+          $errors = $null
+          [void][System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path ".\scripts\smoke_free_opencode_ollama.ps1"),
+            [ref]$tokens,
+            [ref]$errors
+          )
+          if ($errors.Count -gt 0) {
+            Write-Error "smoke_free_opencode_ollama.ps1 has $($errors.Count) PowerShell parse error(s)."
+            exit 1
+          }
+
       - name: Bootstrap free OpenCode CLI
         shell: powershell
         run: |

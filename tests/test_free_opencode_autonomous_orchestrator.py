@@ -16,6 +16,8 @@ def test_free_opencode_autonomous_workflow_is_pc1_marker_triggered():
     assert "install_free_opencode_cli.ps1" in workflow
     assert "smoke_free_opencode_ollama.ps1" in workflow
     assert "run_free_opencode_dev_12h.ps1" in workflow
+    assert "Parse free OpenCode PowerShell scripts" in workflow
+    assert "System.Management.Automation.Language.Parser" in workflow
     assert 'Model "ollama/qwen3:8b"' in workflow
     assert "I_APPROVE_PAID_CODEX" not in workflow
 
