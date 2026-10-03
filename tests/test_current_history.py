@@ -70,6 +70,10 @@ def test_clean_adjacent_supplement_is_ready():
     assert report.ready
     assert report.gap_days == 1
     assert report.merged_rows == 4
+    assert report.base_races == 1
+    assert report.supplemental_races == 1
+    assert report.merged_races == 2
+    assert report.supplemental_date_span_days == 0
 
 
 def test_unapproved_source_is_blocked():
@@ -79,6 +83,9 @@ def test_unapproved_source_is_blocked():
         _manifest(approved=False),
     )
     assert not report.ready
+    assert report.base_races == 1
+    assert report.supplemental_races == 1
+    assert report.merged_races == 0
     assert any(
         "not approved_for_modeling" in error
         for error in report.errors
@@ -176,3 +183,23 @@ def test_merge_adds_provenance_columns():
         supplemental["_source_kind"]
         == "user_supplied"
     ).all()
+
+
+
+def test_supplemental_date_span_days_uses_calendar_day_difference():
+    supplement = pd.concat(
+        [
+            _supplement("2021-08-01"),
+            _supplement("2021-08-03").assign(race_id="S2"),
+        ],
+        ignore_index=True,
+    )
+    report = validate_history_intake(
+        _base(),
+        supplement,
+        _manifest(),
+    )
+    assert report.ready
+    assert report.supplemental_races == 2
+    assert report.merged_races == 3
+    assert report.supplemental_date_span_days == 2
