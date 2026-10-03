@@ -1,7 +1,7 @@
 from pathlib import Path
 
 
-def test_free_opencode_autonomous_workflow_is_pc1_marker_triggered():
+def test_free_opencode_autonomous_workflow_is_pc2_marker_triggered():
     workflow = Path(
         ".github/workflows/free-opencode-autonomous-dev-12h-self-hosted.yml"
     ).read_text(encoding="utf-8")
@@ -10,6 +10,9 @@ def test_free_opencode_autonomous_workflow_is_pc1_marker_triggered():
     assert "workflow_dispatch:" in workflow
     assert "research/free_opencode_autonomous_dev_12h_request.txt" in workflow
     assert "runs-on: [self-hosted, Windows]" in workflow
+    assert "Autonomous Development 12h (PC2 Free OpenCode)" in workflow
+    assert "Run guarded free Nemotron development on PC2" in workflow
+    assert "DESKTOP-MVV1FD4 is PC2" in workflow
     assert "timeout-minutes: 780" in workflow
     assert "persist-credentials: false" in workflow
     assert "cancel-in-progress: true" in workflow
