@@ -88,7 +88,7 @@ def test_free_opencode_bootstrap_repairs_broken_same_version_wrapper():
     assert "existing_install_healthy = [bool]$existingHealthy" in script
 
 
-def test_free_opencode_smoke_is_bounded_and_standalone():
+def test_free_opencode_smoke_uses_v11829_in_process_run_and_tool_probe():
     script = Path(
         "scripts/smoke_free_opencode_ollama.ps1"
     ).read_text(encoding="utf-8")
@@ -96,26 +96,33 @@ def test_free_opencode_smoke_is_bounded_and_standalone():
         ".github/workflows/free-opencode-cli-bootstrap-self-hosted.yml"
     ).read_text(encoding="utf-8")
 
-    assert "[int]$TimeoutSeconds = 180" in script
-    assert "run --standalone --auto --agent build --format json" in script
+    assert "[int]$TimeoutSeconds = 300" in script
+    assert "--standalone" not in script
+    assert "--pure run --auto --agent build --format json" in script
     assert "--dir $escapedDir" in script
-    assert 'standalone = $true' in script
+    assert 'run_transport = "in_process_non_attach"' in script
+    assert 'shared_service_used = $false' in script
     assert 'session_persistence_required = $false' in script
     assert 'output_format = "json"' in script
-    assert '$env:OPENCODE_CONFIG = $configPath' in script
-    assert '$env:OPENCODE_DISABLE_AUTOUPDATE = "true"' in script
-    assert '$env:OPENCODE_AUTO_SHARE = "false"' in script
+    assert '$env:OPENCODE_CONFIG_CONTENT = $configJson' in script
+    assert '$env:OPENCODE_CONFIG_DIR = $configRoot' in script
+    assert '$env:OPENCODE_DISABLE_PROJECT_CONFIG = "1"' in script
+    assert '$env:OPENCODE_PURE = "1"' in script
+    assert '$env:OPENCODE_DISABLE_AUTOUPDATE = "1"' in script
+    assert '$env:OPENCODE_DISABLE_MODELS_FETCH = "1"' in script
     assert '"share": "disabled"' in script
-    assert "/no_think Reply with exactly FREE_LOCAL_SMOKE_OK" in script
+    assert "TOOL_SMOKE_FILE_OK" in script
+    assert "FREE_LOCAL_TOOL_SMOKE_OK" in script
+    assert "tool_write_verified" in script
     assert "WaitForExit($TimeoutSeconds * 1000)" in script
     assert "taskkill.exe /PID $process.Id /T /F" in script
     assert 'status = "timeout"' in script
     assert "raw_model_output_included = $false" in script
     assert "cancel-in-progress: true" in workflow
-    assert "-TimeoutSeconds 180" in workflow
+    assert "-TimeoutSeconds 300" in workflow
 
 
-def test_free_opencode_smoke_does_not_depend_on_shared_session_state():
+def test_free_opencode_smoke_does_not_depend_on_shared_service_or_session_state():
     script = Path(
         "scripts/smoke_free_opencode_ollama.ps1"
     ).read_text(encoding="utf-8")
@@ -125,12 +132,12 @@ def test_free_opencode_smoke_does_not_depend_on_shared_session_state():
     assert 'session_found = $false' in script
     assert 'session_exported = $false' in script
     assert 'marker_seen_session_export = $false' in script
-    assert "opencode_standalone=True" in script
+    assert "opencode_run_transport=in_process_non_attach" in script
     assert "opencode_result exit_code=$exitCode" in script
     assert "raw_model_output_included = $false" in script
 
 
-def test_free_opencode_smoke_requires_stdout_marker():
+def test_free_opencode_smoke_requires_stdout_marker_and_verified_edit_tool():
     script = Path(
         "scripts/smoke_free_opencode_ollama.ps1"
     ).read_text(encoding="utf-8")
@@ -141,4 +148,6 @@ def test_free_opencode_smoke_requires_stdout_marker():
     assert "model_invocation_explicit = $true" in script
     assert "local_model_present = $true" in script
     assert 'if (-not $markerSeenStdout) {' in script
-    assert "standalone smoke completed but expected stdout marker" in script
+    assert "tool smoke completed but expected response marker" in script
+    assert 'if (-not $toolWriteVerified) {' in script
+    assert "did not complete the isolated edit-tool smoke" in script
