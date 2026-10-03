@@ -169,13 +169,15 @@ try {
             break
         }
 
-        if ($cycle -lt $Cycles) {
+        if ($cycle -lt $Cycles -and $status -eq "success") {
             $elapsed = ([DateTimeOffset]::UtcNow - $cycleStart).TotalSeconds
             $targetSeconds = $CycleMinutes * 60
             $sleepSeconds = [math]::Max(0, [int]($targetSeconds - $elapsed))
             if ($sleepSeconds -gt 0) {
                 Start-Sleep -Seconds $sleepSeconds
             }
+        } elseif ($cycle -lt $Cycles -and $status -eq "failure") {
+            Write-Host "Skipping cycle pacing after failure for immediate diagnostic retry."
         }
     }
 
