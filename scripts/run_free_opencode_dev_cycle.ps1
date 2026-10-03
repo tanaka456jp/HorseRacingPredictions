@@ -237,16 +237,15 @@ function Get-CycleMicrotask {
                     "scripts/run_jravan_forward_runner.ps1",
                     "tests/test_jravan_forward_runner_script.py"
                 )
-                task = @"
-Add a machine-local heartbeat JSON for the JRA-VAN Forward Paper runner.
-Use artifacts/jravan_forward_runner_heartbeat.json. Add a small helper that
-writes stage, updated_at_utc, computer_name, forward_paper_executed,
-residual_v12_paper_executed, and live_execution_enabled=false. Update it at
-runner start, after input preparation, before/after Champion Paper, before/after
-Residual v12 Paper, and on normal completion. Do not include raw race/horse data.
-Extend the existing source-level tests to assert the heartbeat path, safe fields,
-and representative stage markers.
-"@
+                task = (@(
+                    "Add a machine-local heartbeat JSON for the JRA-VAN Forward Paper runner.",
+                    "Use artifacts/jravan_forward_runner_heartbeat.json.",
+                    "Add a small helper that writes stage, updated_at_utc, computer_name, forward_paper_executed, residual_v12_paper_executed, and live_execution_enabled=false.",
+                    "Update it at runner start, after input preparation, before and after Champion Paper, before and after Residual v12 Paper, and on normal completion.",
+                    "Do not include raw race or horse data.",
+                    "Extend the existing source-level tests to assert the heartbeat path, safe fields, and representative stage markers."
+                ) -join " ")
+            }
         }
         2 {
             return @{
@@ -254,12 +253,13 @@ and representative stage markers.
                     "scripts/run_jravan_forward_runner.ps1",
                     "tests/test_jravan_forward_runner_script.py"
                 )
-                task = @"
-Extend the existing forward-runner heartbeat with started_at_utc and
-elapsed_seconds so a stalled run can be distinguished from a slow run. Keep the
-values operational-only and machine-local. Add source-level tests for both fields.
-Do not change betting behavior.
-"@
+                task = (@(
+                    "Extend the existing forward-runner heartbeat with started_at_utc and elapsed_seconds so a stalled run can be distinguished from a slow run.",
+                    "Keep the values operational-only and machine-local.",
+                    "Add source-level tests for both fields.",
+                    "Do not change betting behavior."
+                ) -join " ")
+            }
         }
         3 {
             return @{
@@ -267,13 +267,14 @@ Do not change betting behavior.
                     "src/horse_racing_predictions/dashboard.py",
                     "tests/test_residual_paper_dashboard.py"
                 )
-                task = @"
-Add a read-only dashboard section that loads
-artifacts/jravan_forward_runner_heartbeat.json when present and displays its stage,
-updated time, and whether forward/residual Paper stages have executed. If the file
-is absent, show an informational message. Do not alter Paper decisions or thresholds.
-Add source-level dashboard tests for the new section.
-"@
+                task = (@(
+                    "Add a read-only dashboard section that loads artifacts/jravan_forward_runner_heartbeat.json when present.",
+                    "Display its stage, updated time, and whether forward and residual Paper stages have executed.",
+                    "If the file is absent, show an informational message.",
+                    "Do not alter Paper decisions or thresholds.",
+                    "Add source-level dashboard tests for the new section."
+                ) -join " ")
+            }
         }
         4 {
             return @{
@@ -281,12 +282,13 @@ Add source-level dashboard tests for the new section.
                     "src/horse_racing_predictions/dashboard.py",
                     "tests/test_residual_paper_dashboard.py"
                 )
-                task = @"
-Harden the dashboard heartbeat display: if the heartbeat JSON is malformed or its
-updated_at_utc is older than 30 minutes, show a warning instead of crashing. Keep
-this read-only and non-adaptive. Add source-level tests that cover malformed/stale
-handling markers in the dashboard source.
-"@
+                task = (@(
+                    "Harden the dashboard heartbeat display.",
+                    "If the heartbeat JSON is malformed or updated_at_utc is older than 30 minutes, show a warning instead of crashing.",
+                    "Keep this read-only and non-adaptive.",
+                    "Add source-level tests that cover malformed and stale handling markers in the dashboard source."
+                ) -join " ")
+            }
         }
         5 {
             return @{
@@ -294,11 +296,12 @@ handling markers in the dashboard source.
                     "src/horse_racing_predictions/current_history.py",
                     "tests/test_current_history.py"
                 )
-                task = @"
-Extend HistoryIntakeReport with base_races, supplemental_races, and merged_races
-counts. Compute them from race_id without changing intake acceptance rules. Add
-tests for the clean adjacent supplement case and keep blocked reports safe.
-"@
+                task = (@(
+                    "Extend HistoryIntakeReport with base_races, supplemental_races, and merged_races counts.",
+                    "Compute them from race_id without changing intake acceptance rules.",
+                    "Add tests for the clean adjacent supplement case and keep blocked reports safe."
+                ) -join " ")
+            }
         }
         6 {
             return @{
@@ -306,11 +309,14 @@ tests for the clean adjacent supplement case and keep blocked reports safe.
                     "src/horse_racing_predictions/current_history.py",
                     "tests/test_current_history.py"
                 )
-                task = @"
-Extend HistoryIntakeReport with supplemental_date_span_days, defined as the
-inclusive calendar span minus one between supplemental min/max race_date; use 0
-for a single day and None when unavailable. This is observability only. Add tests.
-"@
+                task = (@(
+                    "Extend HistoryIntakeReport with supplemental_date_span_days.",
+                    "Define it as the calendar-day difference between supplemental minimum and maximum race_date.",
+                    "Use 0 for a single day and None when unavailable.",
+                    "This is observability only.",
+                    "Add tests."
+                ) -join " ")
+            }
         }
         7 {
             return @{
@@ -318,11 +324,13 @@ for a single day and None when unavailable. This is observability only. Add test
                     "src/horse_racing_predictions/jravan_forward.py",
                     "tests/test_jravan_forward.py"
                 )
-                task = @"
-Extend TrialForwardInputSummary with complete_odds_coverage_rate, calculated as
-odds_races / future_entry_races when future_entry_races > 0, otherwise None.
-Do not change capture or eligibility behavior. Add focused tests.
-"@
+                task = (@(
+                    "Extend TrialForwardInputSummary with complete_odds_coverage_rate.",
+                    "Calculate it as odds_races divided by future_entry_races when future_entry_races is greater than zero, otherwise None.",
+                    "Do not change capture or eligibility behavior.",
+                    "Add focused tests."
+                ) -join " ")
+            }
         }
         8 {
             return @{
@@ -330,11 +338,13 @@ Do not change capture or eligibility behavior. Add focused tests.
                     "src/horse_racing_predictions/jravan_forward.py",
                     "tests/test_jravan_forward.py"
                 )
-                task = @"
-Extend TrialForwardInputSummary with complete_odds_coverage, true only when there
-is at least one future race and every future race has a complete odds race. This
-is diagnostic-only. Add focused tests for complete and empty/incomplete cases.
-"@
+                task = (@(
+                    "Extend TrialForwardInputSummary with complete_odds_coverage.",
+                    "It is true only when there is at least one future race and every future race has a complete odds race.",
+                    "This is diagnostic-only.",
+                    "Add focused tests for complete and empty or incomplete cases."
+                ) -join " ")
+            }
         }
         9 {
             return @{
@@ -342,11 +352,13 @@ is diagnostic-only. Add focused tests for complete and empty/incomplete cases.
                     "src/horse_racing_predictions/paper_input.py",
                     "tests/test_future_pipeline.py"
                 )
-                task = @"
-Fail closed in prepare_paper_input when predictions contain duplicate
-(race_id, horse_id) rows. Raise a clear ValueError before resolving odds. Add a
-test proving duplicate rows are rejected. Do not alter valid-row behavior.
-"@
+                task = (@(
+                    "Fail closed in prepare_paper_input when predictions contain duplicate (race_id, horse_id) rows.",
+                    "Raise a clear ValueError before resolving odds.",
+                    "Add a test proving duplicate rows are rejected.",
+                    "Do not alter valid-row behavior."
+                ) -join " ")
+            }
         }
         10 {
             return @{
@@ -354,11 +366,12 @@ test proving duplicate rows are rejected. Do not alter valid-row behavior.
                     "src/horse_racing_predictions/paper_input.py",
                     "tests/test_future_pipeline.py"
                 )
-                task = @"
-Fail closed in prepare_paper_input when horse_name is blank or whitespace after
-conversion to string. Raise a clear ValueError before odds resolution and add a
-focused test. Do not alter valid-row behavior.
-"@
+                task = (@(
+                    "Fail closed in prepare_paper_input when horse_name is blank or whitespace after conversion to string.",
+                    "Raise a clear ValueError before odds resolution and add a focused test.",
+                    "Do not alter valid-row behavior."
+                ) -join " ")
+            }
         }
         11 {
             return @{
@@ -366,12 +379,13 @@ focused test. Do not alter valid-row behavior.
                     "src/horse_racing_predictions/forward_pipeline.py",
                     "tests/test_future_pipeline.py"
                 )
-                task = @"
-Add prediction_rows, prediction_races, paper_input_rows, and paper_input_races to
-the forward_paper_summary.json payload. These are sanitized aggregate counts only.
-Add lightweight source-level assertions in tests/test_future_pipeline.py. Do not
-change inference, staking, or Paper behavior.
-"@
+                task = (@(
+                    "Add prediction_rows, prediction_races, paper_input_rows, and paper_input_races to the forward_paper_summary.json payload.",
+                    "These are sanitized aggregate counts only.",
+                    "Add lightweight source-level assertions in tests/test_future_pipeline.py.",
+                    "Do not change inference, staking, or Paper behavior."
+                ) -join " ")
+            }
         }
         default {
             return @{
@@ -379,11 +393,13 @@ change inference, staking, or Paper behavior.
                     "scripts/run_jravan_forward_runner.ps1",
                     "tests/test_jravan_forward_runner_script.py"
                 )
-                task = @"
-Add run_duration_seconds to the final JRA-VAN Forward Paper validation payload,
-measured from runner start to final validation write. It is operational telemetry
-only. Add source-level tests and do not change betting behavior.
-"@
+                task = (@(
+                    "Add run_duration_seconds to the final JRA-VAN Forward Paper validation payload.",
+                    "Measure it from runner start to final validation write.",
+                    "It is operational telemetry only.",
+                    "Add source-level tests and do not change betting behavior."
+                ) -join " ")
+            }
         }
     }
 }
@@ -572,50 +588,51 @@ if ($LASTEXITCODE -ne 0) {
     throw "Unable to create autonomous branch."
 }
 
-$SafetyBoundaries = @"
-Frozen safety boundaries:
-- gamma=4.0
-- EV=1.15
-- min probability=0.03
-- fractional Kelly=0.25
-- max race exposure=2%
-- max day exposure=8%
-- max single bet=10000 yen
-- Evidence Gate=500 evaluated races + 200 settled Paper bets
-- Never reuse/rerun the opened 2025-2026 holdout.
-- Never enable live/real-money betting or automatic live promotion.
-- Do not adapt strategy/model thresholds to prospective outcomes.
-"@
+$SafetyBoundaries = (@(
+    "Frozen safety boundaries:",
+    "- gamma=4.0",
+    "- EV=1.15",
+    "- min probability=0.03",
+    "- fractional Kelly=0.25",
+    "- max race exposure=2%",
+    "- max day exposure=8%",
+    "- max single bet=10000 yen",
+    "- Evidence Gate=500 evaluated races + 200 settled Paper bets",
+    "- Never reuse/rerun the opened 2025-2026 holdout.",
+    "- Never enable live/real-money betting or automatic live promotion.",
+    "- Do not adapt strategy/model thresholds to prospective outcomes."
+) -join [Environment]::NewLine)
 
 $microtask = Get-CycleMicrotask -Number $Cycle
 $AllowedCycleFiles = @($microtask.files)
 $allowedText = ($AllowedCycleFiles -join ", ")
-$prompt = @"
-Make exactly one small repository edit for HorseRacingPredictions.
-
-Task:
-$($microtask.task)
-
-Allowed files only:
-$allowedText
-
-Rules:
-- Read only the allowed files. Do not explore git history or unrelated files.
-- Edit the allowed implementation file(s) and test file(s), then stop.
-- Do not run tests or shell commands; the orchestrator runs all tests afterward.
-- Do not commit, push, create PRs, merge, or change branches.
-$SafetyBoundaries
-- Never add paid/cloud/API-key providers or network dependencies.
-- Never add raw JRA-VAN, horse-level prediction/odds/results, SQLite, secrets, or credentials.
-"@
+$prompt = (@(
+    "Make exactly one small repository edit for HorseRacingPredictions.",
+    "",
+    "Task:",
+    [string]$microtask.task,
+    "",
+    "Allowed files only:",
+    $allowedText,
+    "",
+    "Rules:",
+    "- Read only the allowed files. Do not explore git history or unrelated files.",
+    "- Edit the allowed implementation file(s) and test file(s), then stop.",
+    "- Do not run tests or shell commands; the orchestrator runs all tests afterward.",
+    "- Do not commit, push, create PRs, merge, or change branches.",
+    $SafetyBoundaries,
+    "- Never add paid/cloud/API-key providers or network dependencies.",
+    "- Never add raw JRA-VAN, horse-level prediction/odds/results, SQLite, secrets, or credentials."
+) -join [Environment]::NewLine)
 
 Invoke-FreeOpenCode -Prompt $prompt -Label "new-cycle-$Cycle"
 if ((Get-RepositoryChangeCount) -eq 0) {
-    $retryPrompt = @"
-The first attempt made no repository changes.
-Complete only the previously assigned microtask using only: $allowedText
-Do not run tests or shell commands. Make the code/test edits now, then stop.
-"@
+    $retryPrompt = (@(
+        "The first attempt made no repository changes.",
+        "Complete only the previously assigned microtask using only: $allowedText",
+        "Do not run tests or shell commands. Make the code and test edits now, then stop."
+    ) -join [Environment]::NewLine)
+
     Invoke-FreeOpenCode -Prompt $retryPrompt -Label "new-cycle-$Cycle-retry"
 }
 if ((Get-RepositoryChangeCount) -eq 0) {
