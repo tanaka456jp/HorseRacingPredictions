@@ -4,6 +4,7 @@ param(
     [string]$ExpectedComputerName = "DESKTOP-MVV1FD4",
     [string]$Version = "1.18.29",
     [string]$Model = "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free",
+    [string]$FallbackModel = "ollama/qwen3:8b",
     [int]$MaxConsecutiveFailures = 2,
     [string]$SummaryOutput = "artifacts/free_opencode_autonomous_dev_12h_summary.json"
 )
@@ -29,6 +30,10 @@ $isNemotronFree = $Model -eq $NemotronFreeModel
 if (-not ($isOllama -or $isNemotronFree)) {
     throw "Only ollama/qwen3:8b or the exact Nemotron 3 Ultra :free model is allowed."
 }
+if ($FallbackModel -ne $QwenModel) {
+    throw "Only the local ollama/qwen3:8b model is allowed as a fallback."
+}
+$freeFallbackAllowed = [bool]($isNemotronFree -and $FallbackModel -eq $QwenModel)
 $providerName = if ($isNemotronFree) { "openrouter_free" } else { "ollama_local" }
 $apiKeyUsed = [bool]$isNemotronFree
 if ($MaxConsecutiveFailures -lt 1 -or $MaxConsecutiveFailures -gt 4) {
@@ -81,6 +86,7 @@ $lockStream = $null
 $results = @()
 $consecutiveFailures = 0
 $failedFast = $false
+$fallbackCycles = 0
 $started = [DateTimeOffset]::UtcNow
 $summaryPath = Join-Path $ProjectRoot $SummaryOutput
 New-Item -ItemType Directory -Force -Path (Split-Path -Parent $summaryPath) | Out-Null
@@ -118,15 +124,36 @@ try {
         $cycleStart = [DateTimeOffset]::UtcNow
         $status = "success"
         $message = ""
+        $cycleModel = $Model
+        $fallbackUsed = $false
         try {
             & (Join-Path $PSScriptRoot "run_free_opencode_dev_cycle.ps1") -Cycle $cycle -ExpectedComputerName $ExpectedComputerName -Version $Version -Model $Model
             if ($LASTEXITCODE -ne 0) {
                 throw "Cycle script exited with code $LASTEXITCODE."
             }
         } catch {
-            $status = "failure"
-            $message = $_.Exception.Message
-            Write-Error -ErrorAction Continue "Cycle $cycle failed: $message"
+            $primaryMessage = $_.Exception.Message
+            if ($freeFallbackAllowed) {
+                Write-Host "cycle=$cycle primary_free_model_failed=True local_free_fallback=$FallbackModel"
+                try {
+                    & (Join-Path $PSScriptRoot "run_free_opencode_dev_cycle.ps1") -Cycle $cycle -ExpectedComputerName $ExpectedComputerName -Version $Version -Model $FallbackModel
+                    if ($LASTEXITCODE -ne 0) {
+                        throw "Fallback cycle script exited with code $LASTEXITCODE."
+                    }
+                    $cycleModel = $FallbackModel
+                    $fallbackUsed = $true
+                    $fallbackCycles += 1
+                    $message = "primary free model failed; local free fallback succeeded"
+                } catch {
+                    $status = "failure"
+                    $message = "primary free model failed: $primaryMessage; local free fallback failed: $($_.Exception.Message)"
+                    Write-Error -ErrorAction Continue "Cycle $cycle failed after local free fallback: $message"
+                }
+            } else {
+                $status = "failure"
+                $message = $primaryMessage
+                Write-Error -ErrorAction Continue "Cycle $cycle failed: $message"
+            }
         }
 
         if ($status -eq "failure") {
@@ -143,6 +170,8 @@ try {
             started_at_utc = $cycleStart.ToString("o")
             finished_at_utc = $cycleEnd.ToString("o")
             duration_seconds = [math]::Round(($cycleEnd - $cycleStart).TotalSeconds, 3)
+            model_used = $cycleModel
+            free_fallback_used = [bool]$fallbackUsed
         }
 
         @{
@@ -154,9 +183,13 @@ try {
             cycles_completed = $results.Count
             provider = $providerName
             model = $Model
+            model_selection_reason = [string]$env:SELECTED_FREE_MODEL_REASON
+            fallback_model = if ($freeFallbackAllowed) { $FallbackModel } else { $null }
+            free_fallback_allowed = $freeFallbackAllowed
+            free_fallback_cycles = $fallbackCycles
             opencode_version = $Version
             paid_provider_used = $false
-        paid_fallback_allowed = $false
+            paid_fallback_allowed = $false
             api_key_used = $apiKeyUsed
             codex_used = $false
             live_execution_enabled = $false
@@ -206,9 +239,13 @@ try {
         failed_cycles = $failedCycles
         provider = $providerName
         model = $Model
+        model_selection_reason = [string]$env:SELECTED_FREE_MODEL_REASON
+        fallback_model = if ($freeFallbackAllowed) { $FallbackModel } else { $null }
+        free_fallback_allowed = $freeFallbackAllowed
+        free_fallback_cycles = $fallbackCycles
         opencode_version = $Version
         paid_provider_used = $false
-            paid_fallback_allowed = $false
+        paid_fallback_allowed = $false
         api_key_used = $apiKeyUsed
         codex_used = $false
         live_execution_enabled = $false
