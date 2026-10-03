@@ -122,3 +122,17 @@ def test_12h_autonomous_workflow_uses_exact_free_nemotron_and_secret():
     assert 'provider = $providerName' in orchestrator
     assert 'api_key_used = $apiKeyUsed' in orchestrator
     assert "I_APPROVE_PAID_CODEX" not in workflow
+
+
+def test_free_nemotron_smoke_retries_without_qwen_no_think_directive():
+    script = Path("scripts/audit_free_nemotron_opencode.ps1").read_text(
+        encoding="utf-8"
+    )
+
+    assert '$prompt = "Reply exactly FREE_NEMOTRON_SMOKE_OK.' in script
+    assert "/no_think Reply exactly FREE_NEMOTRON_SMOKE_OK" not in script
+    assert "for ($attempt = 1; $attempt -le 2; $attempt++)" in script
+    assert "Retrying exact free Nemotron smoke after 30 seconds." in script
+    assert "Start-Sleep -Seconds 30" in script
+    assert "smoke_attempts = $AttemptsUsed" in script
+    assert "smoke_attempts=$attemptsUsed" in script
