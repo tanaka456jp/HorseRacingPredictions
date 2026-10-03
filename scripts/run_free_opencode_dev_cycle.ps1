@@ -298,10 +298,10 @@ function Get-CycleMicrotask {
                     "tests/test_jravan_forward.py"
                 )
                 task = (@(
-                    "Extend TrialForwardInputSummary with complete_odds_coverage_rate.",
-                    "Calculate it as odds_races divided by future_entry_races when future_entry_races is greater than zero, otherwise None.",
-                    "Do not change capture or eligibility behavior.",
-                    "Add focused tests."
+                    "Add a focused regression test proving write_trial_forward_summary serializes complete_odds_coverage_rate.",
+                    "Cover both a numeric rate and None when no future races are available.",
+                    "The production implementation already computes this field; do not redesign it.",
+                    "Do not change capture or eligibility behavior."
                 ) -join " ")
             }
         }
