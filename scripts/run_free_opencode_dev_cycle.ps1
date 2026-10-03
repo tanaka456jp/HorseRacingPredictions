@@ -572,6 +572,21 @@ if ($LASTEXITCODE -ne 0) {
     throw "Unable to create autonomous branch."
 }
 
+$SafetyBoundaries = @"
+Frozen safety boundaries:
+- gamma=4.0
+- EV=1.15
+- min probability=0.03
+- fractional Kelly=0.25
+- max race exposure=2%
+- max day exposure=8%
+- max single bet=10000 yen
+- Evidence Gate=500 evaluated races + 200 settled Paper bets
+- Never reuse/rerun the opened 2025-2026 holdout.
+- Never enable live/real-money betting or automatic live promotion.
+- Do not adapt strategy/model thresholds to prospective outcomes.
+"@
+
 $microtask = Get-CycleMicrotask -Number $Cycle
 $AllowedCycleFiles = @($microtask.files)
 $allowedText = ($AllowedCycleFiles -join ", ")
@@ -589,7 +604,7 @@ Rules:
 - Edit the allowed implementation file(s) and test file(s), then stop.
 - Do not run tests or shell commands; the orchestrator runs all tests afterward.
 - Do not commit, push, create PRs, merge, or change branches.
-- Never touch holdout code/data, frozen model/strategy thresholds, or live betting.
+$SafetyBoundaries
 - Never add paid/cloud/API-key providers or network dependencies.
 - Never add raw JRA-VAN, horse-level prediction/odds/results, SQLite, secrets, or credentials.
 "@
