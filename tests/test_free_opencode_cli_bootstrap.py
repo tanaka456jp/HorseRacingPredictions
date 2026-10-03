@@ -30,7 +30,8 @@ def test_free_opencode_smoke_uses_only_local_ollama_qwen():
     assert "FREE_LOCAL_SMOKE_OK" in script
     assert "paid_provider_used = $false" in script
     assert "api_key_used = $false" in script
-    assert "repository_modified = $false" in script
+    assert "repository_modified = [bool]$workspaceModifiedUnexpectedly" in script
+    assert "connectivity smoke created unexpected files" in script
     assert "workspaceModifiedUnexpectedly" in script
 
 
