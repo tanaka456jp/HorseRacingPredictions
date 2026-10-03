@@ -2,7 +2,7 @@ param(
     [string]$ExpectedComputerName = "DESKTOP-MVV1FD4",
     [string]$Version = "1.18.29",
     [string]$Model = "ollama/qwen3:8b",
-    [int]$TimeoutSeconds = 300,
+    [int]$TimeoutSeconds = 240,
     [string]$ValidationOutput = "artifacts/free_opencode_ollama_smoke_validation.json"
 )
 
@@ -75,11 +75,11 @@ $configJson = @'
     "build": {
       "mode": "primary",
       "permission": {
-        "read": "allow",
-        "edit": "allow",
-        "glob": "allow",
-        "grep": "allow",
-        "list": "allow",
+        "read": "deny",
+        "edit": "deny",
+        "glob": "deny",
+        "grep": "deny",
+        "list": "deny",
         "bash": "deny",
         "task": "deny",
         "external_directory": "deny",
@@ -116,22 +116,17 @@ $env:OPENCODE_DISABLE_MODELS_FETCH = "1"
 
 $stdoutPath = Join-Path $smokeRoot "stdout.log"
 $stderrPath = Join-Path $smokeRoot "stderr.log"
-$toolMarkerPath = Join-Path $smokeRoot "tool-smoke-marker.txt"
-$prompt = @"
- /no_think Create a file named tool-smoke-marker.txt in the current directory.
-The file must contain exactly TOOL_SMOKE_FILE_OK followed by a newline.
-Use a file editing/writing tool; do not use a shell command.
-After the file is created, reply exactly FREE_LOCAL_TOOL_SMOKE_OK.
-"@.Trim()
-$sessionTitle = "HRP_FREE_LOCAL_TOOL_SMOKE_$([DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds())"
+$prompt = "/no_think Reply exactly FREE_LOCAL_SMOKE_OK. Do not call tools. Do not create or edit files."
+$sessionTitle = "HRP_FREE_LOCAL_SMOKE_$([DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds())"
 $escapedModel = '"' + $Model.Replace('"', '\"') + '"'
-$escapedPrompt = '"' + $prompt.Replace('"', '\"').Replace([Environment]::NewLine, " ") + '"'
+$escapedPrompt = '"' + $prompt.Replace('"', '\"') + '"'
 $escapedTitle = '"' + $sessionTitle.Replace('"', '\"') + '"'
 $escapedDir = '"' + $smokeRoot.Replace('"', '\"') + '"'
 
-# OpenCode 1.18.29 has no --standalone flag. Its non-attach run path already
-# uses an in-process server. --pure disables external plugins.
-$argumentString = "--pure run --auto --agent build --format json --dir $escapedDir --model $escapedModel --title $escapedTitle $escapedPrompt"
+# OpenCode 1.18.29 non-attach run uses its in-process server. This smoke only
+# proves local model connectivity. Repository editing is verified by the
+# guarded autonomous cycle itself via repo_changes + fail-fast.
+$argumentString = "--pure run --agent build --format json --dir $escapedDir --model $escapedModel --title $escapedTitle $escapedPrompt"
 
 $process = Start-Process -FilePath $binaryPath -ArgumentList $argumentString -WorkingDirectory $smokeRoot -NoNewWindow -RedirectStandardOutput $stdoutPath -RedirectStandardError $stderrPath -PassThru
 $completed = $process.WaitForExit($TimeoutSeconds * 1000)
@@ -148,14 +143,8 @@ $stdoutText = ""
 if (Test-Path -LiteralPath $stdoutPath -PathType Leaf) {
     $stdoutText = Get-Content -LiteralPath $stdoutPath -Raw -Encoding UTF8
 }
-$markerSeenStdout = $stdoutText -match "FREE_LOCAL_TOOL_SMOKE_OK"
+$markerSeenStdout = $stdoutText -match "FREE_LOCAL_SMOKE_OK"
 $verificationChannel = if ($markerSeenStdout) { "stdout_json_events" } else { "none" }
-
-$toolWriteVerified = $false
-if (Test-Path -LiteralPath $toolMarkerPath -PathType Leaf) {
-    $toolMarkerText = (Get-Content -LiteralPath $toolMarkerPath -Raw -Encoding UTF8).Trim()
-    $toolWriteVerified = ($toolMarkerText -eq "TOOL_SMOKE_FILE_OK")
-}
 
 $stdoutBytes = if (Test-Path -LiteralPath $stdoutPath) {
     (Get-Item -LiteralPath $stdoutPath).Length
@@ -170,7 +159,6 @@ $stderrBytes = if (Test-Path -LiteralPath $stderrPath) {
 
 Remove-Item -LiteralPath $stdoutPath -Force -ErrorAction SilentlyContinue
 Remove-Item -LiteralPath $stderrPath -Force -ErrorAction SilentlyContinue
-Remove-Item -LiteralPath $toolMarkerPath -Force -ErrorAction SilentlyContinue
 
 $unexpectedFiles = @(
     Get-ChildItem -LiteralPath $smokeRoot -File -Recurse -ErrorAction SilentlyContinue
@@ -184,8 +172,6 @@ if ($timedOut) {
     $status = "failed_exit_code"
 } elseif (-not $markerSeenStdout) {
     $status = "missing_response_marker"
-} elseif (-not $toolWriteVerified) {
-    $status = "tool_write_not_verified"
 } elseif ($workspaceModifiedUnexpectedly) {
     $status = "unexpected_file_write"
 }
@@ -210,8 +196,9 @@ $validation = @{
     stdout_bytes = [int64]$stdoutBytes
     stderr_bytes = [int64]$stderrBytes
     marker_seen = [bool]$markerSeenStdout
-    tool_write_verified = [bool]$toolWriteVerified
     verification_channel = $verificationChannel
+    connectivity_only = $true
+    tool_write_required = $false
     model_invocation_explicit = $true
     local_model_present = $true
     isolated_config_dir = $true
@@ -220,7 +207,7 @@ $validation = @{
     paid_provider_used = $false
     api_key_used = $false
     codex_used = $false
-    repository_modified = $false
+    repository_modified = [bool]$workspaceModifiedUnexpectedly
     raw_model_output_included = $false
     secrets_included = $false
     live_execution_enabled = $false
@@ -233,26 +220,23 @@ $validation | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $validationPath
 Write-Host "opencode_run_transport=in_process_non_attach"
 Write-Host "opencode_pure=True"
 Write-Host "opencode_agent=build"
-Write-Host "opencode_result exit_code=$exitCode stdout_bytes=$stdoutBytes stderr_bytes=$stderrBytes marker_seen=$markerSeenStdout tool_write_verified=$toolWriteVerified"
+Write-Host "smoke_scope=connectivity_only"
+Write-Host "opencode_result exit_code=$exitCode stdout_bytes=$stdoutBytes stderr_bytes=$stderrBytes marker_seen=$markerSeenStdout"
 
 if ($timedOut) {
-    throw "OpenCode local Ollama tool smoke timed out after $TimeoutSeconds seconds."
+    throw "OpenCode local Ollama connectivity smoke timed out after $TimeoutSeconds seconds."
 }
 if ($exitCode -ne 0) {
-    throw "OpenCode local Ollama tool smoke failed with exit code $exitCode."
+    throw "OpenCode local Ollama connectivity smoke failed with exit code $exitCode."
 }
 if (-not $markerSeenStdout) {
-    throw "OpenCode local Ollama tool smoke completed but expected response marker was not returned."
-}
-if (-not $toolWriteVerified) {
-    throw "OpenCode local Ollama responded but did not complete the isolated edit-tool smoke."
+    throw "OpenCode local Ollama connectivity smoke completed but expected response marker was not returned."
 }
 if ($workspaceModifiedUnexpectedly) {
-    throw "OpenCode tool smoke left unexpected files in the isolated smoke workspace."
+    throw "OpenCode connectivity smoke created unexpected files despite all tools being denied."
 }
 
-Write-Host "Free OpenCode + Ollama edit-tool smoke PASS."
+Write-Host "Free OpenCode + Ollama connectivity smoke PASS."
 Write-Host "model=$Model"
 Write-Host "marker_seen=$markerSeenStdout"
-Write-Host "tool_write_verified=$toolWriteVerified"
 Write-Host "paid_provider_used=False"
