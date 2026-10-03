@@ -3,7 +3,7 @@ param(
     [int]$CycleMinutes = 60,
     [string]$ExpectedComputerName = "DESKTOP-MVV1FD4",
     [string]$Version = "1.18.29",
-    [string]$Model = "ollama/qwen3:8b",
+    [string]$Model = "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free",
     [int]$MaxConsecutiveFailures = 2,
     [string]$SummaryOutput = "artifacts/free_opencode_autonomous_dev_12h_summary.json"
 )
@@ -22,9 +22,15 @@ if ($CycleMinutes -lt 30 -or $CycleMinutes -gt 120) {
 if ($Version -ne "1.18.29") {
     throw "Only the pinned free OpenCode CLI version 1.18.29 is allowed."
 }
-if ($Model -ne "ollama/qwen3:8b") {
-    throw "Only the local model ollama/qwen3:8b is allowed."
+$QwenModel = "ollama/qwen3:8b"
+$NemotronFreeModel = "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free"
+$isOllama = $Model -eq $QwenModel
+$isNemotronFree = $Model -eq $NemotronFreeModel
+if (-not ($isOllama -or $isNemotronFree)) {
+    throw "Only ollama/qwen3:8b or the exact Nemotron 3 Ultra :free model is allowed."
 }
+$providerName = if ($isNemotronFree) { "openrouter_free" } else { "ollama_local" }
+$apiKeyUsed = [bool]$isNemotronFree
 if ($MaxConsecutiveFailures -lt 1 -or $MaxConsecutiveFailures -gt 4) {
     throw "MaxConsecutiveFailures must be between 1 and 4."
 }
@@ -56,10 +62,14 @@ if ((Get-Item -LiteralPath $OpenCodePath).Length -lt 1000000) {
     throw "FREE_OPENCODE_CLI_BINARY_IS_PLACEHOLDER"
 }
 
-$tags = Invoke-RestMethod -Uri "http://127.0.0.1:11434/api/tags" -Method Get -TimeoutSec 5
-$modelNames = @($tags.models | ForEach-Object { [string]$_.name })
-if ($modelNames -notcontains "qwen3:8b") {
-    throw "Required local model qwen3:8b is not available."
+if ($isOllama) {
+    $tags = Invoke-RestMethod -Uri "http://127.0.0.1:11434/api/tags" -Method Get -TimeoutSec 5
+    $modelNames = @($tags.models | ForEach-Object { [string]$_.name })
+    if ($modelNames -notcontains "qwen3:8b") {
+        throw "Required local model qwen3:8b is not available."
+    }
+} elseif ([string]::IsNullOrWhiteSpace($env:OPENROUTER_API_KEY)) {
+    throw "OPENROUTER_API_KEY is required for the exact Nemotron :free model."
 }
 
 & gh auth status --hostname github.com *> $null
@@ -90,7 +100,7 @@ try {
     Remove-Item -LiteralPath $stopPath -Force -ErrorAction SilentlyContinue
 
     if (-not [string]::IsNullOrWhiteSpace($env:GITHUB_STEP_SUMMARY)) {
-        Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Value "### Free OpenCode autonomous cycles"
+        Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Value "### Free OpenCode autonomous cycles ($Model)"
         Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Value "| Cycle | Status | Consecutive failures |"
         Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Value "|---:|---|---:|"
     }
@@ -142,11 +152,12 @@ try {
             updated_at_utc = [DateTimeOffset]::UtcNow.ToString("o")
             cycles_requested = $Cycles
             cycles_completed = $results.Count
-            provider = "ollama_local"
+            provider = $providerName
             model = $Model
             opencode_version = $Version
             paid_provider_used = $false
-            api_key_used = $false
+        paid_fallback_allowed = $false
+            api_key_used = $apiKeyUsed
             codex_used = $false
             live_execution_enabled = $false
             consecutive_failures = $consecutiveFailures
@@ -193,11 +204,12 @@ try {
         cycles_completed = $results.Count
         successful_cycles = $successfulCycles
         failed_cycles = $failedCycles
-        provider = "ollama_local"
+        provider = $providerName
         model = $Model
         opencode_version = $Version
         paid_provider_used = $false
-        api_key_used = $false
+            paid_fallback_allowed = $false
+        api_key_used = $apiKeyUsed
         codex_used = $false
         live_execution_enabled = $false
         consecutive_failures = $consecutiveFailures

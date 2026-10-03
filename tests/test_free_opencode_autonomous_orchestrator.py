@@ -14,11 +14,12 @@ def test_free_opencode_autonomous_workflow_is_pc1_marker_triggered():
     assert "persist-credentials: false" in workflow
     assert "cancel-in-progress: true" in workflow
     assert "install_free_opencode_cli.ps1" in workflow
-    assert "smoke_free_opencode_ollama.ps1" in workflow
+    assert "audit_free_nemotron_opencode.ps1" in workflow
     assert "run_free_opencode_dev_12h.ps1" in workflow
     assert "Parse free OpenCode PowerShell scripts" in workflow
     assert "System.Management.Automation.Language.Parser" in workflow
-    assert 'Model "ollama/qwen3:8b"' in workflow
+    assert 'Model "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free"' in workflow
+    assert "OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}" in workflow
     assert "I_APPROVE_PAID_CODEX" not in workflow
 
 
@@ -120,9 +121,12 @@ def test_free_opencode_12h_summary_proves_free_only_execution():
 
     assert "orchestrator.lock" in script
     assert 'Join-Path $ControlRoot "STOP"' in script
-    assert 'provider = "ollama_local"' in script
+    assert '"openrouter_free"' in script
+    assert 'provider = $providerName' in script
     assert "paid_provider_used = $false" in script
-    assert "api_key_used = $false" in script
+    assert "paid_fallback_allowed = $false" in script
+    assert "api_key_used = $apiKeyUsed" in script
+    assert 'OPENROUTER_API_KEY is required for the exact Nemotron :free model.' in script
     assert "codex_used = $false" in script
     assert "live_execution_enabled = $false" in script
     assert "completed_with_failures" in script
@@ -153,7 +157,8 @@ def test_free_opencode_microtasks_are_narrow_and_deterministic():
         "scripts/run_free_opencode_dev_cycle.ps1"
     ).read_text(encoding="utf-8")
 
-    assert "Add a machine-local heartbeat JSON" in script
+    assert "Extend the existing forward-runner heartbeat with started_at_utc" in script
+    assert "safely defers because input status is not ready" in script
     assert "complete_odds_coverage_rate" in script
     assert "duplicate" in script
     assert "(race_id, horse_id)" in script

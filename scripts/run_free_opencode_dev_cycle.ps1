@@ -298,23 +298,6 @@ function Get-CycleMicrotask {
                     "tests/test_jravan_forward_runner_script.py"
                 )
                 task = (@(
-                    "Add a machine-local heartbeat JSON for the JRA-VAN Forward Paper runner.",
-                    "Use artifacts/jravan_forward_runner_heartbeat.json.",
-                    "Add a small helper that writes stage, updated_at_utc, computer_name, forward_paper_executed, residual_v12_paper_executed, and live_execution_enabled=false.",
-                    "Update it at runner start, after input preparation, before and after Champion Paper, before and after Residual v12 Paper, and on normal completion.",
-                    "Do not include raw race or horse data.",
-                    "Extend the existing source-level tests to assert the heartbeat path, safe fields, and representative stage markers.",
-                    "In Python source tests, assert the literal text live_execution_enabled = $false exactly; do not put a backslash before the dollar sign."
-                ) -join " ")
-            }
-        }
-        2 {
-            return @{
-                files = @(
-                    "scripts/run_jravan_forward_runner.ps1",
-                    "tests/test_jravan_forward_runner_script.py"
-                )
-                task = (@(
                     "Extend the existing forward-runner heartbeat with started_at_utc and elapsed_seconds so a stalled run can be distinguished from a slow run.",
                     "Keep the values operational-only and machine-local.",
                     "Add source-level tests for both fields.",
@@ -322,7 +305,7 @@ function Get-CycleMicrotask {
                 ) -join " ")
             }
         }
-        3 {
+        2 {
             return @{
                 files = @(
                     "src/horse_racing_predictions/dashboard.py",
@@ -337,7 +320,7 @@ function Get-CycleMicrotask {
                 ) -join " ")
             }
         }
-        4 {
+        3 {
             return @{
                 files = @(
                     "src/horse_racing_predictions/dashboard.py",
@@ -351,7 +334,7 @@ function Get-CycleMicrotask {
                 ) -join " ")
             }
         }
-        5 {
+        4 {
             return @{
                 files = @(
                     "src/horse_racing_predictions/current_history.py",
@@ -364,7 +347,7 @@ function Get-CycleMicrotask {
                 ) -join " ")
             }
         }
-        6 {
+        5 {
             return @{
                 files = @(
                     "src/horse_racing_predictions/current_history.py",
@@ -379,7 +362,7 @@ function Get-CycleMicrotask {
                 ) -join " ")
             }
         }
-        7 {
+        6 {
             return @{
                 files = @(
                     "src/horse_racing_predictions/jravan_forward.py",
@@ -393,7 +376,7 @@ function Get-CycleMicrotask {
                 ) -join " ")
             }
         }
-        8 {
+        7 {
             return @{
                 files = @(
                     "src/horse_racing_predictions/jravan_forward.py",
@@ -407,7 +390,7 @@ function Get-CycleMicrotask {
                 ) -join " ")
             }
         }
-        9 {
+        8 {
             return @{
                 files = @(
                     "src/horse_racing_predictions/paper_input.py",
@@ -421,7 +404,7 @@ function Get-CycleMicrotask {
                 ) -join " ")
             }
         }
-        10 {
+        9 {
             return @{
                 files = @(
                     "src/horse_racing_predictions/paper_input.py",
@@ -434,7 +417,7 @@ function Get-CycleMicrotask {
                 ) -join " ")
             }
         }
-        11 {
+        10 {
             return @{
                 files = @(
                     "src/horse_racing_predictions/forward_pipeline.py",
@@ -448,7 +431,7 @@ function Get-CycleMicrotask {
                 ) -join " ")
             }
         }
-        default {
+        11 {
             return @{
                 files = @(
                     "scripts/run_jravan_forward_runner.ps1",
@@ -461,6 +444,24 @@ function Get-CycleMicrotask {
                     "Add source-level tests and do not change betting behavior."
                 ) -join " ")
             }
+        }
+        12 {
+            return @{
+                files = @(
+                    "scripts/run_jravan_forward_runner.ps1",
+                    "tests/test_jravan_forward_runner_script.py"
+                )
+                task = (@(
+                    "When the JRA-VAN forward runner safely defers because input status is not ready, update the heartbeat before exit.",
+                    "Use a clear deferred stage and keep forward_paper_executed=false, residual_v12_paper_executed=false, and live_execution_enabled=false.",
+                    "Do not include raw race or horse data.",
+                    "Add source-level tests for the deferred heartbeat behavior.",
+                    "Do not change betting behavior."
+                ) -join " ")
+            }
+        }
+        default {
+            throw "No deterministic microtask is defined for cycle $Number."
         }
     }
 }

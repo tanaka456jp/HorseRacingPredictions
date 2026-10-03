@@ -98,3 +98,22 @@ def test_free_nemotron_smoke_clears_stale_native_exit_code():
     )
     assert "$global:LASTEXITCODE = 0" in script
     assert script.strip().endswith("$global:LASTEXITCODE = 0")
+
+
+def test_12h_autonomous_workflow_uses_exact_free_nemotron_and_secret():
+    workflow = Path(
+        ".github/workflows/free-opencode-autonomous-dev-12h-self-hosted.yml"
+    ).read_text(encoding="utf-8")
+    orchestrator = Path("scripts/run_free_opencode_dev_12h.ps1").read_text(
+        encoding="utf-8"
+    )
+
+    model = "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free"
+    assert model in workflow
+    assert model in orchestrator
+    assert "audit_free_nemotron_opencode.ps1" in workflow
+    assert "OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}" in workflow
+    assert "paid_fallback_allowed = $false" in orchestrator
+    assert 'provider = $providerName' in orchestrator
+    assert 'api_key_used = $apiKeyUsed' in orchestrator
+    assert "I_APPROVE_PAID_CODEX" not in workflow
