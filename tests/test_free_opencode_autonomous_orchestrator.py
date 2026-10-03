@@ -35,12 +35,16 @@ def test_free_opencode_cycle_uses_only_pinned_local_model_and_git_pr_flow():
     assert '"GOOGLE_API_KEY"' in script
     assert '"GROQ_API_KEY"' in script
     assert '"OLLAMA_API_KEY"' in script
-    assert "run --standalone --auto --agent build --format json --dir $escapedDir --model $escapedModel" in script
-    assert '$env:OPENCODE_CONFIG = $configPath' in script
-    assert '$env:OPENCODE_DISABLE_AUTOUPDATE = "true"' in script
-    assert '$env:OPENCODE_AUTO_SHARE = "false"' in script
+    assert "--standalone" not in script
+    assert "--pure run --auto --agent build --format json --dir $escapedDir --model $escapedModel" in script
+    assert '$env:OPENCODE_CONFIG_CONTENT = $configJson' in script
+    assert '$env:OPENCODE_CONFIG_DIR = $ConfigRoot' in script
+    assert '$env:OPENCODE_DISABLE_PROJECT_CONFIG = "1"' in script
+    assert '$env:OPENCODE_PURE = "1"' in script
+    assert '$env:OPENCODE_DISABLE_AUTOUPDATE = "1"' in script
+    assert '$env:OPENCODE_DISABLE_MODELS_FETCH = "1"' in script
     assert '"share": "disabled"' in script
-    assert "opencode_standalone=True" in script
+    assert "opencode_run_transport=in_process_non_attach" in script
     assert "opencode_result label=$Label" in script
     assert "repo_changes=$repoChangeCount" in script
     assert '"default_agent": "build"' in script
@@ -91,8 +95,8 @@ def test_free_opencode_cycle_has_bounded_retry_and_local_config_integrity():
     assert "[int]$ModelTimeoutSeconds = 1200" in script
     assert "WaitForExit($ModelTimeoutSeconds * 1000)" in script
     assert "taskkill.exe /PID $process.Id /T /F" in script
-    assert "Get-FileHash" in script
-    assert "OpenCode local-only configuration was modified" in script
+    assert '$env:OPENCODE_CONFIG_CONTENT -ne $configJson' in script
+    assert "OpenCode local-only inline configuration changed" in script
     assert "new-cycle-$Cycle-retry" in script
     assert "produced no repository changes after one retry" in script
 
