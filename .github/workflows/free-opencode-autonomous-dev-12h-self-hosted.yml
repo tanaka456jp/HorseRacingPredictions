@@ -26,7 +26,7 @@ concurrency:
 
 jobs:
   develop:
-    name: Run guarded free Nemotron development on PC2
+    name: Run guarded free autonomous development on PC2
     # DESKTOP-MVV1FD4 is PC2. PC1 identity/failover will be wired separately.
     runs-on: [self-hosted, Windows]
     timeout-minutes: 780
@@ -72,11 +72,30 @@ jobs:
           & .\scripts\install_free_opencode_cli.ps1 -ExpectedComputerName "DESKTOP-MVV1FD4" -Version "1.18.29"
 
       - name: Verify exact free Nemotron endpoint
+        id: nemotron_smoke
+        continue-on-error: true
         shell: powershell
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         run: |
           & .\scripts\audit_free_nemotron_opencode.ps1 -ExpectedComputerName "DESKTOP-MVV1FD4" -Version "1.18.29" -Model "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free" -TimeoutSeconds 240
+
+      - name: Select free autonomous model
+        shell: powershell
+        run: |
+          $smokeOutcome = "${{ steps.nemotron_smoke.outcome }}"
+          if ($smokeOutcome -eq "success") {
+              $selected = "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free"
+              $reason = "nemotron_smoke_passed"
+          } else {
+              $selected = "ollama/qwen3:8b"
+              $reason = "nemotron_smoke_failed_local_fallback"
+          }
+          "SELECTED_FREE_MODEL=$selected" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "SELECTED_FREE_MODEL_REASON=$reason" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "selected_free_model=$selected"
+          Write-Host "selected_free_model_reason=$reason"
+          Write-Host "paid_fallback_allowed=False"
 
       - name: Run free autonomous development cycles
         shell: powershell
@@ -85,7 +104,7 @@ jobs:
           REQUESTED_CYCLE_MINUTES: ${{ github.event.inputs.cycle_minutes || '60' }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         run: |
-          & .\scripts\run_free_opencode_dev_12h.ps1 -Cycles ([int]$env:REQUESTED_CYCLES) -CycleMinutes ([int]$env:REQUESTED_CYCLE_MINUTES) -ExpectedComputerName "DESKTOP-MVV1FD4" -Version "1.18.29" -Model "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free"
+          & .\scripts\run_free_opencode_dev_12h.ps1 -Cycles ([int]$env:REQUESTED_CYCLES) -CycleMinutes ([int]$env:REQUESTED_CYCLE_MINUTES) -ExpectedComputerName "DESKTOP-MVV1FD4" -Version "1.18.29" -Model "$env:SELECTED_FREE_MODEL" -FallbackModel "ollama/qwen3:8b"
 
       - name: Publish sanitized autonomous-development summary
         if: always()
