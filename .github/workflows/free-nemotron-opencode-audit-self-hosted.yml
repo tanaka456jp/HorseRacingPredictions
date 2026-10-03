@@ -1,0 +1,63 @@
+name: Audit Free Nemotron OpenCode (PC1)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "research/free_nemotron_opencode_request.txt"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: horse-racing-free-nemotron-audit-pc1
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    name: Check OpenRouter auth and smoke Nemotron 3 Ultra free
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          clean: false
+          persist-credentials: false
+
+      - name: Parse PowerShell
+        shell: powershell
+        run: |
+          $tokens = $null
+          $errors = $null
+          [void][System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path ".\scripts\audit_free_nemotron_opencode.ps1"),
+            [ref]$tokens,
+            [ref]$errors
+          )
+          if ($errors.Count -gt 0) {
+            Write-Error "audit_free_nemotron_opencode.ps1 has $($errors.Count) PowerShell parse error(s)."
+            exit 1
+          }
+
+      - name: Bootstrap pinned free OpenCode CLI
+        shell: powershell
+        run: |
+          & .\scripts\install_free_opencode_cli.ps1 -ExpectedComputerName "DESKTOP-MVV1FD4" -Version "1.18.29"
+
+      - name: Audit auth and smoke exact free Nemotron
+        shell: powershell
+        run: |
+          & .\scripts\audit_free_nemotron_opencode.ps1 -ExpectedComputerName "DESKTOP-MVV1FD4" -Version "1.18.29" -Model "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free" -TimeoutSeconds 240
+
+      - name: Publish sanitized validation
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: free-nemotron-opencode-validation
+          path: artifacts/free_nemotron_opencode_validation.json
+          if-no-files-found: warn
+          retention-days: 14
