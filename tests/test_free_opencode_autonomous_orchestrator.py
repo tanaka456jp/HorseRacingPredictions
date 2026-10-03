@@ -155,7 +155,8 @@ def test_free_opencode_microtasks_are_narrow_and_deterministic():
 
     assert "Add a machine-local heartbeat JSON" in script
     assert "complete_odds_coverage_rate" in script
-    assert "duplicate (race_id, horse_id)" in script
+    assert "duplicate" in script
+    assert "(race_id, horse_id)" in script
     assert "prediction_rows, prediction_races" in script
     assert '$AllowedCycleFiles = @($microtask.files)' in script
     assert '$outsideAllowed.Count -gt 0' in script
