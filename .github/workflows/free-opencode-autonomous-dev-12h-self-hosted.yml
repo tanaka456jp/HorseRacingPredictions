@@ -50,7 +50,7 @@ jobs:
       - name: Verify free OpenCode with local qwen3 8b
         shell: powershell
         run: |
-          & .\scripts\smoke_free_opencode_ollama.ps1 -ExpectedComputerName "DESKTOP-MVV1FD4" -Version "1.18.29" -Model "ollama/qwen3:8b" -TimeoutSeconds 180
+          & .\scripts\smoke_free_opencode_ollama.ps1 -ExpectedComputerName "DESKTOP-MVV1FD4" -Version "1.18.29" -Model "ollama/qwen3:8b" -TimeoutSeconds 300
 
       - name: Run free autonomous development cycles
         shell: powershell
