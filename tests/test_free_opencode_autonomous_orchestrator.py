@@ -58,9 +58,7 @@ def test_free_opencode_cycle_uses_only_pinned_local_model_and_git_pr_flow():
     assert '"websearch": "deny"' in script
     assert '"question": "deny"' in script
     assert '"doom_loop": "deny"' in script
-    assert '"git commit *": "deny"' in script
-    assert '"git push *": "deny"' in script
-    assert '"gh *": "deny"' in script
+    assert '"bash": "deny"' in script
     assert 'opencode_agent=build' in script
     assert "codex.exe" not in script.lower()
     assert "verify_autonomous_dev_guard.py" in script
@@ -69,6 +67,18 @@ def test_free_opencode_cycle_uses_only_pinned_local_model_and_git_pr_flow():
     assert "gh pr merge" in script
     assert "auto/free-opencode-dev-" in script
     assert "origin/main" in script
+    assert "Get-CycleMicrotask" in script
+    assert "Get-RepositoryChangedPaths" in script
+    assert "Allowed files only:" in script
+    assert "Do not run tests or shell commands" in script
+    assert "microtask_changed_files=" in script
+    assert "outside the assigned microtask" in script
+    assert "scripts/run_jravan_forward_runner.ps1" in script
+    assert "src/horse_racing_predictions/dashboard.py" in script
+    assert "src/horse_racing_predictions/current_history.py" in script
+    assert "src/horse_racing_predictions/jravan_forward.py" in script
+    assert "src/horse_racing_predictions/paper_input.py" in script
+    assert "src/horse_racing_predictions/forward_pipeline.py" in script
 
 
 def test_free_opencode_cycle_preserves_frozen_betting_boundaries():
@@ -136,3 +146,19 @@ def test_autonomous_guard_includes_untracked_files_and_free_control_files():
     assert '"research/free_opencode_autonomous_dev_12h_request.txt"' in guard
     assert '".opencode/"' in guard
     assert "Autonomous agent produced no repository changes." in guard
+
+
+def test_free_opencode_microtasks_are_narrow_and_deterministic():
+    script = Path(
+        "scripts/run_free_opencode_dev_cycle.ps1"
+    ).read_text(encoding="utf-8")
+
+    assert "Add a machine-local heartbeat JSON" in script
+    assert "complete_odds_coverage_rate" in script
+    assert "duplicate" in script
+    assert "(race_id, horse_id)" in script
+    assert "prediction_rows, prediction_races" in script
+    assert '$AllowedCycleFiles = @($microtask.files)' in script
+    assert '$outsideAllowed.Count -gt 0' in script
+    assert 'Read only the allowed files.' in script
+    assert 'Do not run tests or shell commands' in script
