@@ -1,1 +1,1 @@
-free_opencode_autonomous_dev_12h_v4_standalone_fast_retry_20261003
+free_opencode_autonomous_dev_12h_v5_standalone_smoke_20261003

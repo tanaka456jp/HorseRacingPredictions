@@ -57,6 +57,23 @@ $configPath = Join-Path $smokeRoot "opencode.json"
 {
   "$schema": "https://opencode.ai/config.json",
   "model": "ollama/qwen3:8b",
+  "share": "disabled",
+  "default_agent": "build",
+  "agent": {
+    "build": {
+      "mode": "primary",
+      "permission": {
+        "read": "allow",
+        "edit": "deny",
+        "bash": "deny",
+        "external_directory": "deny",
+        "webfetch": "deny",
+        "websearch": "deny",
+        "question": "deny",
+        "doom_loop": "deny"
+      }
+    }
+  },
   "provider": {
     "ollama": {
       "npm": "@ai-sdk/openai-compatible",
@@ -74,30 +91,9 @@ $configPath = Join-Path $smokeRoot "opencode.json"
 }
 '@ | Set-Content -LiteralPath $configPath -Encoding UTF8
 
-function Get-SessionList {
-    Push-Location $smokeRoot
-    try {
-        $raw = @(& $binaryPath session list --format json --max-count 50 2>$null)
-        $code = [int]$LASTEXITCODE
-    } finally {
-        Pop-Location
-    }
-    if ($code -ne 0) {
-        return @()
-    }
-    $text = [string](($raw | Out-String).Trim())
-    if ([string]::IsNullOrWhiteSpace($text)) {
-        return @()
-    }
-    try {
-        return @($text | ConvertFrom-Json)
-    } catch {
-        return @()
-    }
-}
-
-$beforeSessions = @(Get-SessionList)
-$beforeIds = @($beforeSessions | ForEach-Object { [string]$_.id })
+$env:OPENCODE_CONFIG = $configPath
+$env:OPENCODE_DISABLE_AUTOUPDATE = "true"
+$env:OPENCODE_AUTO_SHARE = "false"
 
 $stdoutPath = Join-Path $smokeRoot "stdout.log"
 $stderrPath = Join-Path $smokeRoot "stderr.log"
@@ -106,7 +102,8 @@ $sessionTitle = "HRP_FREE_LOCAL_SMOKE_$([DateTimeOffset]::UtcNow.ToUnixTimeMilli
 $escapedModel = '"' + $Model.Replace('"', '\"') + '"'
 $escapedPrompt = '"' + $prompt.Replace('"', '\"') + '"'
 $escapedTitle = '"' + $sessionTitle.Replace('"', '\"') + '"'
-$argumentString = "run --model $escapedModel --title $escapedTitle $escapedPrompt"
+$escapedDir = '"' + $smokeRoot.Replace('"', '\"') + '"'
+$argumentString = "run --standalone --auto --agent build --format json --dir $escapedDir --model $escapedModel --title $escapedTitle $escapedPrompt"
 
 $process = Start-Process -FilePath $binaryPath -ArgumentList $argumentString -WorkingDirectory $smokeRoot -NoNewWindow -RedirectStandardOutput $stdoutPath -RedirectStandardError $stderrPath -PassThru
 
@@ -130,87 +127,17 @@ if (Test-Path -LiteralPath $stderrPath -PathType Leaf) {
 }
 $outputText = [string]($stdoutText + [Environment]::NewLine + $stderrText)
 $markerSeenStdout = $outputText -match "FREE_LOCAL_SMOKE_OK"
+$verificationChannel = if ($markerSeenStdout) { "stdout" } else { "none" }
 
-$sessionFound = $false
-$sessionExported = $false
-$markerSeenSession = $false
-$sessionProviderMatched = $false
-$sessionModelMatched = $false
-$assistantTextPartCount = 0
-$sessionId = $null
-
-if (-not $timedOut -and $exitCode -eq 0) {
-    $afterSessions = @(Get-SessionList)
-    $candidate = @(
-        $afterSessions | Where-Object {
-            $id = [string]$_.id
-            $title = [string]$_.title
-            $directory = [string]$_.directory
-            ($beforeIds -notcontains $id) -and
-            ($title -eq $sessionTitle) -and
-            ($directory -eq $smokeRoot)
-        }
-    ) | Sort-Object -Property updated -Descending | Select-Object -First 1
-
-    if ($null -ne $candidate) {
-        $sessionFound = $true
-        $sessionId = [string]$candidate.id
-
-        Push-Location $smokeRoot
-        try {
-            $exportRaw = @(& $binaryPath export $sessionId 2>$null)
-            $exportExitCode = [int]$LASTEXITCODE
-        } finally {
-            Pop-Location
-        }
-
-        $exportText = [string](($exportRaw | Out-String).Trim())
-        if ($exportExitCode -eq 0 -and -not [string]::IsNullOrWhiteSpace($exportText)) {
-            try {
-                $exportData = $exportText | ConvertFrom-Json
-                $sessionExported = $true
-                $assistantMessages = @(
-                    $exportData.messages | Where-Object {
-                        [string]$_.info.role -eq "assistant"
-                    }
-                )
-                $assistantTexts = @(
-                    $assistantMessages | ForEach-Object {
-                        $_.parts | Where-Object {
-                            [string]$_.type -eq "text"
-                        } | ForEach-Object {
-                            [string]$_.text
-                        }
-                    }
-                )
-                $assistantTextPartCount = $assistantTexts.Count
-                $markerSeenSession = (
-                    [string](($assistantTexts -join [Environment]::NewLine)) -match "FREE_LOCAL_SMOKE_OK"
-                )
-                $sessionProviderMatched = @(
-                    $assistantMessages | Where-Object {
-                        [string]$_.info.providerID -eq "ollama"
-                    }
-                ).Count -gt 0
-                $sessionModelMatched = @(
-                    $assistantMessages | Where-Object {
-                        [string]$_.info.modelID -eq "qwen3:8b"
-                    }
-                ).Count -gt 0
-            } catch {
-                $sessionExported = $false
-            }
-        }
-    }
-}
-
-$markerSeen = $markerSeenStdout -or $markerSeenSession
-$verificationChannel = if ($markerSeenStdout) {
-    "stdout"
-} elseif ($markerSeenSession) {
-    "session_export"
+$stdoutBytes = if (Test-Path -LiteralPath $stdoutPath) {
+    (Get-Item -LiteralPath $stdoutPath).Length
 } else {
-    "none"
+    0
+}
+$stderrBytes = if (Test-Path -LiteralPath $stderrPath) {
+    (Get-Item -LiteralPath $stderrPath).Length
+} else {
+    0
 }
 
 Remove-Item -LiteralPath $stdoutPath -Force -ErrorAction SilentlyContinue
@@ -227,18 +154,8 @@ if ($timedOut) {
     $status = "timeout"
 } elseif ($exitCode -ne 0) {
     $status = "failed_exit_code"
-} elseif (-not $markerSeen) {
-    if (-not $sessionFound) {
-        $status = "session_not_found"
-    } elseif (-not $sessionExported) {
-        $status = "session_export_failed"
-    } elseif (-not $sessionProviderMatched -or -not $sessionModelMatched) {
-        $status = "session_model_mismatch"
-    } else {
-        $status = "missing_marker"
-    }
-} elseif ($verificationChannel -eq "session_export" -and (-not $sessionProviderMatched -or -not $sessionModelMatched)) {
-    $status = "session_model_mismatch"
+} elseif (-not $markerSeenStdout) {
+    $status = "missing_marker"
 } elseif ($repositoryModified) {
     $status = "unexpected_file_write"
 }
@@ -252,23 +169,25 @@ $validation = @{
     provider = "ollama_local"
     model = $Model
     ollama_endpoint = "http://127.0.0.1:11434"
-    standalone = $false
-    session_persistence_required = $true
-    output_format = "default"
+    standalone = $true
+    session_persistence_required = $false
+    output_format = "json"
     timeout_seconds = $TimeoutSeconds
     timed_out = [bool]$timedOut
     exit_code = $exitCode
-    marker_seen = [bool]$markerSeen
+    stdout_bytes = [int64]$stdoutBytes
+    stderr_bytes = [int64]$stderrBytes
+    marker_seen = [bool]$markerSeenStdout
     verification_channel = $verificationChannel
     model_invocation_explicit = $true
     local_model_present = $true
     marker_seen_stdout = [bool]$markerSeenStdout
-    marker_seen_session_export = [bool]$markerSeenSession
-    session_found = [bool]$sessionFound
-    session_exported = [bool]$sessionExported
-    assistant_text_part_count = [int]$assistantTextPartCount
-    session_provider_matched = [bool]$sessionProviderMatched
-    session_model_matched = [bool]$sessionModelMatched
+    marker_seen_session_export = $false
+    session_found = $false
+    session_exported = $false
+    assistant_text_part_count = 0
+    session_provider_matched = $false
+    session_model_matched = $false
     paid_provider_used = $false
     api_key_used = $false
     codex_used = $false
@@ -282,35 +201,25 @@ $validationPath = Join-Path $ProjectRoot $ValidationOutput
 New-Item -ItemType Directory -Force -Path (Split-Path -Parent $validationPath) | Out-Null
 $validation | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $validationPath -Encoding UTF8
 
+Write-Host "opencode_standalone=True"
+Write-Host "opencode_agent=build"
+Write-Host "opencode_result exit_code=$exitCode stdout_bytes=$stdoutBytes stderr_bytes=$stderrBytes marker_seen=$markerSeenStdout"
+
 if ($timedOut) {
     throw "OpenCode local Ollama smoke timed out after $TimeoutSeconds seconds."
 }
 if ($exitCode -ne 0) {
     throw "OpenCode local Ollama smoke failed with exit code $exitCode."
 }
-if (-not $markerSeen) {
-    if (-not $sessionFound) {
-        throw "OpenCode local Ollama smoke produced no marker and no new smoke session was found."
-    }
-    if (-not $sessionExported) {
-        throw "OpenCode local Ollama smoke produced no marker and the smoke session could not be exported."
-    }
-    if (-not $sessionProviderMatched -or -not $sessionModelMatched) {
-        throw "OpenCode smoke session did not confirm the local Ollama qwen3:8b model."
-    }
-    throw "OpenCode local Ollama smoke completed but expected marker was not returned."
-}
-if ($verificationChannel -eq "session_export" -and (-not $sessionProviderMatched -or -not $sessionModelMatched)) {
-    throw "OpenCode smoke session did not confirm the local Ollama qwen3:8b model."
+if (-not $markerSeenStdout) {
+    throw "OpenCode local Ollama standalone smoke completed but expected stdout marker was not returned."
 }
 if ($repositoryModified) {
     throw "Smoke created unexpected files despite the no-edit instruction."
 }
 
-Write-Host "Free OpenCode + Ollama smoke PASS."
+Write-Host "Free OpenCode + Ollama standalone smoke PASS."
 Write-Host "model=$Model"
-Write-Host "marker_seen=$markerSeen"
-Write-Host "marker_seen_session_export=$markerSeenSession"
+Write-Host "marker_seen=$markerSeenStdout"
 Write-Host "verification_channel=$verificationChannel"
-Write-Host "session_model_matched=$sessionModelMatched"
 Write-Host "paid_provider_used=False"
