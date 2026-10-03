@@ -43,3 +43,36 @@ def test_free_nemotron_audit_workflow_is_pc1_marker_triggered():
     assert "persist-credentials: false" in workflow
     assert "audit_free_nemotron_opencode.ps1" in workflow
     assert "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free" in workflow
+
+
+def test_free_opencode_cycle_supports_exact_nemotron_free_model():
+    script = Path("scripts/run_free_opencode_dev_cycle.ps1").read_text(
+        encoding="utf-8"
+    )
+
+    model = "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free"
+    assert '$NemotronFreeModel = "' + model + '"' in script
+    assert "OPENROUTER_NOT_AUTHENTICATED" in script
+    assert "OPENROUTER_API_KEY" in script
+    assert 'Remove-Item "Env:OPENROUTER_API_KEY"' not in script
+    assert '"model": "' + model + '"' in script
+    assert '$fullPrompt = if ($isOllama)' in script
+    assert "Invoking free OpenCode model=$Model" in script
+    assert "switch away from the selected free model" in script
+
+
+def test_free_nemotron_microtask_benchmark_preempts_qwen_autonomous_run():
+    workflow = Path(
+        ".github/workflows/free-nemotron-microtask-benchmark-self-hosted.yml"
+    ).read_text(encoding="utf-8")
+
+    assert "research/free_nemotron_microtask_benchmark_request.txt" in workflow
+    assert "runs-on: [self-hosted, Windows]" in workflow
+    assert "horse-racing-autonomous-development-pc1" in workflow
+    assert "cancel-in-progress: true" in workflow
+    assert "audit_free_nemotron_opencode.ps1" in workflow
+    assert "run_free_opencode_dev_cycle.ps1" in workflow
+    assert 'Cycle 1' in workflow
+    assert 'ModelTimeoutSeconds 600' in workflow
+    assert "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free" in workflow
+    assert "I_APPROVE_PAID_CODEX" not in workflow
