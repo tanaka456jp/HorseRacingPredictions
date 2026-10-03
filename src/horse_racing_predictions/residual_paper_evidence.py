@@ -17,6 +17,7 @@ MIN_BOOTSTRAP_RACE_CLUSTERS = 20
 ROI_BOOTSTRAP_REPLICATES = 5_000
 ROI_BOOTSTRAP_SEED = 20260930
 ROI_CONFIDENCE_LEVEL = 0.95
+RECENT_ROI_WINDOWS = (20, 50, 100)
 
 
 def _percentile(values: list[float], quantile: float) -> float:
@@ -125,6 +126,91 @@ def _race_clustered_roi_bootstrap(ledger: Ledger) -> dict:
     }
 
 
+
+def _settled_risk_diagnostics(ledger: Ledger) -> dict:
+    rows = ledger.conn.execute(
+        """
+        SELECT
+            b.id,
+            b.stake_yen,
+            COALESCE(b.payout_yen,0),
+            b.result,
+            b.decimal_odds
+        FROM bets b
+        JOIN paper_bet_evidence be
+          ON be.bet_id=b.id
+        JOIN predictions p
+          ON p.id=be.prediction_id
+        WHERE p.model_version=?
+          AND b.stake_yen > 0
+          AND b.result IS NOT NULL
+        ORDER BY b.id
+        """,
+        (PAPER_MODEL_VERSION,),
+    ).fetchall()
+
+    settled_count = len(rows)
+    if settled_count == 0:
+        return {
+            "settled_hit_rate": None,
+            "average_settled_odds": None,
+            "longest_losing_streak": 0,
+            "current_losing_streak": 0,
+            "recent_roi_windows": [
+                {
+                    "window_bets": window,
+                    "sample_bets": 0,
+                    "roi": None,
+                }
+                for window in RECENT_ROI_WINDOWS
+            ],
+        }
+
+    wins = 0
+    longest_losing_streak = 0
+    current_losing_streak = 0
+    decimal_odds: list[float] = []
+
+    for _, _, _, result, odds in rows:
+        if str(result).upper() == "WIN":
+            wins += 1
+            current_losing_streak = 0
+        else:
+            current_losing_streak += 1
+            longest_losing_streak = max(
+                longest_losing_streak,
+                current_losing_streak,
+            )
+        if odds is not None:
+            decimal_odds.append(float(odds))
+
+    recent_roi_windows: list[dict] = []
+    for window in RECENT_ROI_WINDOWS:
+        sample = rows[-window:]
+        stake_yen = sum(int(row[1]) for row in sample)
+        payout_yen = sum(int(row[2] or 0) for row in sample)
+        recent_roi_windows.append({
+            "window_bets": int(window),
+            "sample_bets": int(len(sample)),
+            "roi": (
+                float(payout_yen / stake_yen - 1.0)
+                if stake_yen > 0
+                else None
+            ),
+        })
+
+    return {
+        "settled_hit_rate": float(wins / settled_count),
+        "average_settled_odds": (
+            float(sum(decimal_odds) / len(decimal_odds))
+            if decimal_odds
+            else None
+        ),
+        "longest_losing_streak": int(longest_losing_streak),
+        "current_losing_streak": int(current_losing_streak),
+        "recent_roi_windows": recent_roi_windows,
+    }
+
 def build_residual_v12_paper_evidence_report(
     ledger_path: str | Path,
 ) -> dict:
@@ -144,6 +230,7 @@ def build_residual_v12_paper_evidence_report(
         )
         performance = summarize_residual_v12_paper(ledger)
         bootstrap = _race_clustered_roi_bootstrap(ledger)
+        risk = _settled_risk_diagnostics(ledger)
     finally:
         ledger.close()
 
@@ -219,6 +306,12 @@ def build_residual_v12_paper_evidence_report(
         "profit_yen": int(performance["profit_yen"]),
         "roi": roi,
         "max_drawdown_yen": int(performance["max_drawdown_yen"]),
+        "settled_hit_rate": risk["settled_hit_rate"],
+        "average_settled_odds": risk["average_settled_odds"],
+        "longest_losing_streak": risk["longest_losing_streak"],
+        "current_losing_streak": risk["current_losing_streak"],
+        "recent_roi_windows": risk["recent_roi_windows"],
+        "risk_diagnostics_adaptive": False,
         "live_execution_enabled": False,
         "automatic_live_promotion": False,
     }
