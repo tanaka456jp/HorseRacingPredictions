@@ -21,7 +21,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: horse-racing-autonomous-development-pc1
+  group: horse-racing-autonomous-development-pc2
   cancel-in-progress: true
 
 jobs:
