@@ -122,6 +122,8 @@ def test_free_opencode_smoke_uses_v11829_in_process_run_and_tool_probe():
     assert "raw_model_output_included = $false" in script
     assert "cancel-in-progress: true" in workflow
     assert "-TimeoutSeconds 300" in workflow
+    assert "Parse free OpenCode PowerShell scripts" in workflow
+    assert "System.Management.Automation.Language.Parser" in workflow
 
 
 def test_free_opencode_smoke_does_not_depend_on_shared_service_or_session_state():
