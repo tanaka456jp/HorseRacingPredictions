@@ -95,6 +95,7 @@ $configPath = Join-Path $DevRoot "opencode.json"
 {
   "$schema": "https://opencode.ai/config.json",
   "model": "ollama/qwen3:8b",
+  "share": "disabled",
   "default_agent": "build",
   "agent": {
     "build": {
@@ -150,6 +151,9 @@ $configPath = Join-Path $DevRoot "opencode.json"
 }
 '@ | Set-Content -LiteralPath $configPath -Encoding UTF8
 $configHash = (Get-FileHash -LiteralPath $configPath -Algorithm SHA256).Hash
+$env:OPENCODE_CONFIG = $configPath
+$env:OPENCODE_DISABLE_AUTOUPDATE = "true"
+$env:OPENCODE_AUTO_SHARE = "false"
 
 function Assert-LocalConfigUnchanged {
     if (-not (Test-Path -LiteralPath $configPath -PathType Leaf)) {
@@ -175,11 +179,14 @@ function Invoke-FreeOpenCode {
     $escapedModel = '"' + $Model.Replace('"', '\"') + '"'
     $escapedPrompt = '"' + $fullPrompt.Replace('"', '\"') + '"'
     $escapedTitle = '"' + $sessionTitle.Replace('"', '\"') + '"'
-    $argumentString = "run --auto --agent build --model $escapedModel --title $escapedTitle $escapedPrompt"
+    $escapedDir = '"' + $DevRoot.Replace('"', '\"') + '"'
+    $argumentString = "run --standalone --auto --agent build --format json --dir $escapedDir --model $escapedModel --title $escapedTitle $escapedPrompt"
 
     Write-Host "Invoking free OpenCode + local Ollama: $Label"
+    Write-Host "opencode_standalone=True"
     Write-Host "opencode_auto_approve=True"
     Write-Host "opencode_agent=build"
+    Write-Host "opencode_config=$configPath"
     $process = Start-Process -FilePath $OpenCodePath -ArgumentList $argumentString -WorkingDirectory $DevRoot -NoNewWindow -RedirectStandardOutput $stdoutPath -RedirectStandardError $stderrPath -PassThru
     $completed = $process.WaitForExit($ModelTimeoutSeconds * 1000)
     if (-not $completed) {
@@ -189,6 +196,22 @@ function Invoke-FreeOpenCode {
     }
     $exitCode = [int]$process.ExitCode
     Assert-LocalConfigUnchanged
+    $stdoutBytes = if (Test-Path -LiteralPath $stdoutPath) {
+        (Get-Item -LiteralPath $stdoutPath).Length
+    } else {
+        0
+    }
+    $stderrBytes = if (Test-Path -LiteralPath $stderrPath) {
+        (Get-Item -LiteralPath $stderrPath).Length
+    } else {
+        0
+    }
+    $repoChangeCount = Get-RepositoryChangeCount
+    Write-Host (
+        "opencode_result label=$Label exit_code=$exitCode " +
+        "stdout_bytes=$stdoutBytes stderr_bytes=$stderrBytes " +
+        "repo_changes=$repoChangeCount"
+    )
     if ($exitCode -ne 0) {
         throw "OpenCode failed for $Label with exit code $exitCode. Local logs: $stdoutPath ; $stderrPath"
     }
