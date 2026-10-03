@@ -41,3 +41,31 @@ def test_forward_runner_runs_residual_v12_paper_on_same_snapshot():
     assert "$baseValidation.residual_v12_paper_executed = $true" in script
     assert "$baseValidation.residual_v12_paper_stale_odds_rows" in script
     assert "$baseValidation.residual_v12_live_execution_enabled" in script
+
+
+def test_forward_runner_heartbeat_path_and_fields():
+    script = Path("scripts/run_jravan_forward_runner.ps1").read_text(
+        encoding="utf-8"
+    )
+
+    assert "artifacts/jravan_forward_runner_heartbeat.json" in script
+    assert "stage" in script
+    assert "updated_at_utc" in script
+    assert "computer_name" in script
+    assert "forward_paper_executed" in script
+    assert "residual_v12_paper_executed" in script
+    assert 'live_execution_enabled = $false' in script
+
+
+def test_forward_runner_heartbeat_stage_markers():
+    script = Path("scripts/run_jravan_forward_runner.ps1").read_text(
+        encoding="utf-8"
+    )
+
+    assert 'Write-Heartbeat -Stage "runner_start"' in script
+    assert 'Write-Heartbeat -Stage "input_prepared"' in script
+    assert 'Write-Heartbeat -Stage "champion_paper_start"' in script
+    assert 'Write-Heartbeat -Stage "champion_paper_complete"' in script
+    assert 'Write-Heartbeat -Stage "residual_v12_paper_start"' in script
+    assert 'Write-Heartbeat -Stage "residual_v12_paper_complete"' in script
+    assert 'Write-Heartbeat -Stage "runner_complete"' in script
