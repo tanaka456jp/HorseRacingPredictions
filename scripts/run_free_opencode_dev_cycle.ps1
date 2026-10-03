@@ -773,6 +773,8 @@ $prompt = (@(
     "Rules:",
     "- Read only the allowed files. Do not explore git history or unrelated files.",
     "- Edit the allowed implementation file(s) and test file(s), then stop.",
+    "- Preserve existing functions and tests; do not replace whole files for a small microtask.",
+    "- Keep the patch narrow. Do not delete more than 20 existing test lines or 80 existing lines total.",
     "- Do not run tests or shell commands; the orchestrator runs all tests afterward.",
     "- Do not commit, push, create PRs, merge, or change branches.",
     $SafetyBoundaries,
@@ -794,6 +796,8 @@ if ((Get-RepositoryChangeCount) -eq 0) {
         $allowedText,
         "",
         "Read the allowed files, make the required code and test edits, then stop.",
+        "Preserve existing functions and tests; do not replace whole files for a small microtask.",
+        "Keep the patch narrow. Do not delete more than 20 existing test lines or 80 existing lines total.",
         "Do not run tests or shell commands.",
         "Do not commit, push, create PRs, merge, or change branches."
     ) -join [Environment]::NewLine)

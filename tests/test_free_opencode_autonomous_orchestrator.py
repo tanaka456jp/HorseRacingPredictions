@@ -175,6 +175,12 @@ def test_autonomous_guard_includes_untracked_files_and_free_control_files():
     assert '"research/free_opencode_autonomous_dev_12h_request.txt"' in guard
     assert '".opencode/"' in guard
     assert "Autonomous agent produced no repository changes." in guard
+    assert "MAX_AUTONOMOUS_DIFF_LINES = 240" in guard
+    assert "MAX_AUTONOMOUS_DELETIONS = 80" in guard
+    assert "MAX_TEST_FILE_DELETIONS = 20" in guard
+    assert '"diff", "--numstat", "origin/main"' in guard
+    assert "Autonomous diff is too large for one microtask" in guard
+    assert "Autonomous diff removes too much test coverage" in guard
 
 
 def test_free_opencode_microtasks_are_narrow_and_deterministic():
@@ -198,3 +204,5 @@ def test_free_opencode_microtasks_are_narrow_and_deterministic():
     assert '$outsideAllowed.Count -gt 0' in script
     assert 'Read only the allowed files.' in script
     assert 'Do not run tests or shell commands' in script
+    assert "Preserve existing functions and tests" in script
+    assert "Do not delete more than 20 existing test lines or 80 existing lines total." in script

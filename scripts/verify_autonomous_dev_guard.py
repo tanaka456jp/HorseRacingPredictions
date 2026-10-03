@@ -34,6 +34,9 @@ FORBIDDEN_SUFFIXES = (
     ".sqlite3",
     ".db",
 )
+MAX_AUTONOMOUS_DIFF_LINES = 240
+MAX_AUTONOMOUS_DELETIONS = 80
+MAX_TEST_FILE_DELETIONS = 20
 EXPECTED_CONSTANTS = {
     "src/horse_racing_predictions/residual_shadow_paper.py": {
         "PAPER_MIN_EV": 1.15,
@@ -82,6 +85,26 @@ def _changed_files(repo: Path) -> list[str]:
     return sorted(changed)
 
 
+def _diff_numstat(repo: Path) -> dict[str, tuple[int, int]]:
+    output = _git(repo, "diff", "--numstat", "origin/main")
+    stats: dict[str, tuple[int, int]] = {}
+    for line in output.splitlines():
+        if not line.strip():
+            continue
+        additions_text, deletions_text, rel = line.split("\t", 2)
+        if additions_text == "-" or deletions_text == "-":
+            stats[rel.replace("\\", "/")] = (
+                MAX_AUTONOMOUS_DIFF_LINES + 1,
+                MAX_AUTONOMOUS_DELETIONS + 1,
+            )
+            continue
+        stats[rel.replace("\\", "/")] = (
+            int(additions_text),
+            int(deletions_text),
+        )
+    return stats
+
+
 def _assignments(path: Path) -> dict[str, object]:
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
     values: dict[str, object] = {}
@@ -105,7 +128,29 @@ def main() -> int:
     repo = Path(args.repo).resolve()
 
     changed = _changed_files(repo)
+    diff_stats = _diff_numstat(repo)
     errors: list[str] = []
+    total_additions = sum(value[0] for value in diff_stats.values())
+    total_deletions = sum(value[1] for value in diff_stats.values())
+    total_diff_lines = total_additions + total_deletions
+
+    if total_diff_lines > MAX_AUTONOMOUS_DIFF_LINES:
+        errors.append(
+            "Autonomous diff is too large for one microtask: "
+            f"{total_diff_lines} changed lines > {MAX_AUTONOMOUS_DIFF_LINES}."
+        )
+    if total_deletions > MAX_AUTONOMOUS_DELETIONS:
+        errors.append(
+            "Autonomous diff deletes too much existing code: "
+            f"{total_deletions} lines > {MAX_AUTONOMOUS_DELETIONS}."
+        )
+    for rel, (_, deletions) in diff_stats.items():
+        if rel.startswith("tests/") and deletions > MAX_TEST_FILE_DELETIONS:
+            errors.append(
+                f"Autonomous diff removes too much test coverage from {rel}: "
+                f"{deletions} lines > {MAX_TEST_FILE_DELETIONS}."
+            )
+
     if not changed:
         errors.append("Autonomous agent produced no repository changes.")
 
@@ -148,6 +193,12 @@ def main() -> int:
     report = {
         "status": "pass" if not errors else "fail",
         "changed_files": changed,
+        "diff_stats": {
+            rel: {"additions": values[0], "deletions": values[1]}
+            for rel, values in diff_stats.items()
+        },
+        "total_diff_lines": total_diff_lines,
+        "total_deletions": total_deletions,
         "errors": errors,
         "frozen_policy_preserved": not errors,
         "live_execution_enabled": False,
