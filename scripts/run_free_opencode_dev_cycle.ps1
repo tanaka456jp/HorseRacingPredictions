@@ -31,7 +31,11 @@ foreach ($name in @(
     "GROQ_API_KEY",
     "OLLAMA_API_KEY",
     "OPENCODE_SERVER_PASSWORD",
-    "OPENCODE_SERVER_USERNAME"
+    "OPENCODE_SERVER_USERNAME",
+    "OPENCODE_CONFIG",
+    "OPENCODE_CONFIG_CONTENT",
+    "OPENCODE_CONFIG_DIR",
+    "OPENCODE_PERMISSION"
 )) {
     Remove-Item "Env:$name" -ErrorAction SilentlyContinue
 }
@@ -81,17 +85,13 @@ Set-Location $DevRoot
 & git fetch origin main --prune
 & git checkout -B main origin/main
 
-$excludePath = Join-Path $DevRoot ".git\info\exclude"
-$excludeText = ""
-if (Test-Path -LiteralPath $excludePath -PathType Leaf) {
-    $excludeText = Get-Content -LiteralPath $excludePath -Raw -Encoding UTF8
+$ConfigRoot = Join-Path $ControlRoot "free-opencode-cycle-config"
+if (Test-Path -LiteralPath $ConfigRoot) {
+    Remove-Item -LiteralPath $ConfigRoot -Recurse -Force
 }
-if ($excludeText -notmatch "(?m)^opencode\.json$") {
-    Add-Content -LiteralPath $excludePath -Value "opencode.json" -Encoding UTF8
-}
+New-Item -ItemType Directory -Force -Path $ConfigRoot | Out-Null
 
-$configPath = Join-Path $DevRoot "opencode.json"
-@'
+$configJson = @'
 {
   "$schema": "https://opencode.ai/config.json",
   "model": "ollama/qwen3:8b",
@@ -149,19 +149,22 @@ $configPath = Join-Path $DevRoot "opencode.json"
     }
   }
 }
-'@ | Set-Content -LiteralPath $configPath -Encoding UTF8
-$configHash = (Get-FileHash -LiteralPath $configPath -Algorithm SHA256).Hash
-$env:OPENCODE_CONFIG = $configPath
-$env:OPENCODE_DISABLE_AUTOUPDATE = "true"
-$env:OPENCODE_AUTO_SHARE = "false"
+'@
+
+$env:OPENCODE_CONFIG_CONTENT = $configJson
+$env:OPENCODE_CONFIG_DIR = $ConfigRoot
+$env:OPENCODE_DISABLE_PROJECT_CONFIG = "1"
+$env:OPENCODE_PURE = "1"
+$env:OPENCODE_DISABLE_AUTOUPDATE = "1"
+$env:OPENCODE_DISABLE_MODELS_FETCH = "1"
+Remove-Item "Env:OPENCODE_CONFIG" -ErrorAction SilentlyContinue
 
 function Assert-LocalConfigUnchanged {
-    if (-not (Test-Path -LiteralPath $configPath -PathType Leaf)) {
-        throw "OpenCode local-only configuration was removed."
+    if ($env:OPENCODE_CONFIG_CONTENT -ne $configJson) {
+        throw "OpenCode local-only inline configuration changed during the agent run."
     }
-    $currentHash = (Get-FileHash -LiteralPath $configPath -Algorithm SHA256).Hash
-    if ($currentHash -ne $configHash) {
-        throw "OpenCode local-only configuration was modified during the agent run."
+    if ($env:OPENCODE_CONFIG_DIR -ne $ConfigRoot) {
+        throw "OpenCode isolated configuration directory changed during the agent run."
     }
 }
 
@@ -180,13 +183,14 @@ function Invoke-FreeOpenCode {
     $escapedPrompt = '"' + $fullPrompt.Replace('"', '\"') + '"'
     $escapedTitle = '"' + $sessionTitle.Replace('"', '\"') + '"'
     $escapedDir = '"' + $DevRoot.Replace('"', '\"') + '"'
-    $argumentString = "run --standalone --auto --agent build --format json --dir $escapedDir --model $escapedModel --title $escapedTitle $escapedPrompt"
+    $argumentString = "--pure run --auto --agent build --format json --dir $escapedDir --model $escapedModel --title $escapedTitle $escapedPrompt"
 
     Write-Host "Invoking free OpenCode + local Ollama: $Label"
-    Write-Host "opencode_standalone=True"
+    Write-Host "opencode_run_transport=in_process_non_attach"
+    Write-Host "opencode_pure=True"
     Write-Host "opencode_auto_approve=True"
     Write-Host "opencode_agent=build"
-    Write-Host "opencode_config=$configPath"
+    Write-Host "opencode_config_mode=inline_isolated"
     $process = Start-Process -FilePath $OpenCodePath -ArgumentList $argumentString -WorkingDirectory $DevRoot -NoNewWindow -RedirectStandardOutput $stdoutPath -RedirectStandardError $stderrPath -PassThru
     $completed = $process.WaitForExit($ModelTimeoutSeconds * 1000)
     if (-not $completed) {
