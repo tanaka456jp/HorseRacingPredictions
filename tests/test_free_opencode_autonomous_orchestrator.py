@@ -11,7 +11,7 @@ def test_free_opencode_autonomous_workflow_is_pc2_marker_triggered():
     assert "research/free_opencode_autonomous_dev_12h_request.txt" in workflow
     assert "runs-on: [self-hosted, Windows]" in workflow
     assert "Autonomous Development 12h (PC2 Free OpenCode)" in workflow
-    assert "Run guarded free Nemotron development on PC2" in workflow
+    assert "Run guarded free autonomous development on PC2" in workflow
     assert "DESKTOP-MVV1FD4 is PC2" in workflow
     assert "timeout-minutes: 780" in workflow
     assert "persist-credentials: false" in workflow
@@ -21,7 +21,15 @@ def test_free_opencode_autonomous_workflow_is_pc2_marker_triggered():
     assert "run_free_opencode_dev_12h.ps1" in workflow
     assert "Parse free OpenCode PowerShell scripts" in workflow
     assert "System.Management.Automation.Language.Parser" in workflow
-    assert 'Model "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free"' in workflow
+    assert "id: nemotron_smoke" in workflow
+    assert "continue-on-error: true" in workflow
+    assert "Select free autonomous model" in workflow
+    assert "SELECTED_FREE_MODEL" in workflow
+    assert "nemotron_smoke_failed_local_fallback" in workflow
+    assert 'openrouter/nvidia/nemotron-3-ultra-550b-a55b:free' in workflow
+    assert 'ollama/qwen3:8b' in workflow
+    assert '-Model "$env:SELECTED_FREE_MODEL"' in workflow
+    assert '-FallbackModel "ollama/qwen3:8b"' in workflow
     assert "OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}" in workflow
     assert "I_APPROVE_PAID_CODEX" not in workflow
 
@@ -126,6 +134,11 @@ def test_free_opencode_12h_summary_proves_free_only_execution():
     assert "orchestrator.lock" in script
     assert 'Join-Path $ControlRoot "STOP"' in script
     assert '"openrouter_free"' in script
+    assert '[string]$FallbackModel = "ollama/qwen3:8b"' in script
+    assert '$freeFallbackAllowed' in script
+    assert 'local_free_fallback=$FallbackModel' in script
+    assert 'free_fallback_used = [bool]$fallbackUsed' in script
+    assert 'free_fallback_cycles = $fallbackCycles' in script
     assert 'provider = $providerName' in script
     assert "paid_provider_used = $false" in script
     assert "paid_fallback_allowed = $false" in script
