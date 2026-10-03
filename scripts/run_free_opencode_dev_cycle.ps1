@@ -303,7 +303,8 @@ function Get-CycleMicrotask {
                     "Add a small helper that writes stage, updated_at_utc, computer_name, forward_paper_executed, residual_v12_paper_executed, and live_execution_enabled=false.",
                     "Update it at runner start, after input preparation, before and after Champion Paper, before and after Residual v12 Paper, and on normal completion.",
                     "Do not include raw race or horse data.",
-                    "Extend the existing source-level tests to assert the heartbeat path, safe fields, and representative stage markers."
+                    "Extend the existing source-level tests to assert the heartbeat path, safe fields, and representative stage markers.",
+                    "In Python source tests, assert the literal text live_execution_enabled = $false exactly; do not put a backslash before the dollar sign."
                 ) -join " ")
             }
         }
