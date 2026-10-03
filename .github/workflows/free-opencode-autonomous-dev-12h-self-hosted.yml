@@ -26,7 +26,7 @@ concurrency:
 
 jobs:
   develop:
-    name: Run guarded free OpenCode development on PC1
+    name: Run guarded free Nemotron development on PC1
     runs-on: [self-hosted, Windows]
     timeout-minutes: 780
 
@@ -47,7 +47,7 @@ jobs:
         run: |
           $failed = $false
           foreach ($path in @(
-            ".\scripts\smoke_free_opencode_ollama.ps1",
+            ".\scripts\audit_free_nemotron_opencode.ps1",
             ".\scripts\run_free_opencode_dev_cycle.ps1",
             ".\scripts\run_free_opencode_dev_12h.ps1"
           )) {
@@ -70,18 +70,21 @@ jobs:
         run: |
           & .\scripts\install_free_opencode_cli.ps1 -ExpectedComputerName "DESKTOP-MVV1FD4" -Version "1.18.29"
 
-      - name: Verify free OpenCode with local qwen3 8b
+      - name: Verify exact free Nemotron endpoint
         shell: powershell
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         run: |
-          & .\scripts\smoke_free_opencode_ollama.ps1 -ExpectedComputerName "DESKTOP-MVV1FD4" -Version "1.18.29" -Model "ollama/qwen3:8b" -TimeoutSeconds 240
+          & .\scripts\audit_free_nemotron_opencode.ps1 -ExpectedComputerName "DESKTOP-MVV1FD4" -Version "1.18.29" -Model "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free" -TimeoutSeconds 240
 
       - name: Run free autonomous development cycles
         shell: powershell
         env:
           REQUESTED_CYCLES: ${{ github.event.inputs.cycles || '12' }}
           REQUESTED_CYCLE_MINUTES: ${{ github.event.inputs.cycle_minutes || '60' }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         run: |
-          & .\scripts\run_free_opencode_dev_12h.ps1 -Cycles ([int]$env:REQUESTED_CYCLES) -CycleMinutes ([int]$env:REQUESTED_CYCLE_MINUTES) -ExpectedComputerName "DESKTOP-MVV1FD4" -Version "1.18.29" -Model "ollama/qwen3:8b"
+          & .\scripts\run_free_opencode_dev_12h.ps1 -Cycles ([int]$env:REQUESTED_CYCLES) -CycleMinutes ([int]$env:REQUESTED_CYCLE_MINUTES) -ExpectedComputerName "DESKTOP-MVV1FD4" -Version "1.18.29" -Model "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free"
 
       - name: Publish sanitized autonomous-development summary
         if: always()
