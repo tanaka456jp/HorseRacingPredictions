@@ -74,9 +74,13 @@ class HistoryIntakeReport:
     base_rows: int
     supplemental_rows: int
     merged_rows: int
+    base_races: int
+    supplemental_races: int
+    merged_races: int
     base_end: str | None
     supplemental_start: str | None
     supplemental_end: str | None
+    supplemental_date_span_days: int | None
     gap_days: int | None
     duplicate_keys: int
     overlapping_keys: int
@@ -155,6 +159,15 @@ def validate_history_intake(
         and supplemental_dates.notna().any()
         else None
     )
+
+    supplemental_date_span_days = None
+    if supplemental_start is not None and supplemental_end is not None:
+        supplemental_date_span_days = int(
+            (
+                supplemental_end.normalize()
+                - supplemental_start.normalize()
+            ).days
+        )
 
     gap_days = None
     if base_end is not None and supplemental_start is not None:
@@ -260,8 +273,22 @@ def validate_history_intake(
         )
 
     status = "ready" if not errors else "blocked"
+    base_races = int(base["race_id"].nunique(dropna=True)) if "race_id" in base else 0
+    supplemental_races = (
+        int(supplemental["race_id"].nunique(dropna=True))
+        if "race_id" in supplemental
+        else 0
+    )
     merged_rows = (
         len(base) + len(supplemental)
+        if status == "ready"
+        else 0
+    )
+    merged_races = (
+        len(
+            set(base["race_id"].dropna().astype(str))
+            | set(supplemental["race_id"].dropna().astype(str))
+        )
         if status == "ready"
         else 0
     )
@@ -271,9 +298,13 @@ def validate_history_intake(
         base_rows=int(len(base)),
         supplemental_rows=int(len(supplemental)),
         merged_rows=int(merged_rows),
+        base_races=base_races,
+        supplemental_races=supplemental_races,
+        merged_races=int(merged_races),
         base_end=_date_text(base_end),
         supplemental_start=_date_text(supplemental_start),
         supplemental_end=_date_text(supplemental_end),
+        supplemental_date_span_days=supplemental_date_span_days,
         gap_days=gap_days,
         duplicate_keys=duplicate_keys,
         overlapping_keys=overlapping_keys,
