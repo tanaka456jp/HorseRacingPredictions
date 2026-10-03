@@ -156,7 +156,7 @@ try {
             model = $Model
             opencode_version = $Version
             paid_provider_used = $false
-            paid_fallback_allowed = $false
+        paid_fallback_allowed = $false
             api_key_used = $apiKeyUsed
             codex_used = $false
             live_execution_enabled = $false
