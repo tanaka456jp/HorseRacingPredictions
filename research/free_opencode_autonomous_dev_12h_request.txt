@@ -1,1 +1,1 @@
-free_opencode_autonomous_dev_12h_v19_local_free_fallback_20261003
+free_opencode_autonomous_dev_12h_v20_local_pytest_auto_repair_20261003
