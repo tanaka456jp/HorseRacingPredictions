@@ -76,3 +76,17 @@ def test_free_nemotron_microtask_benchmark_preempts_qwen_autonomous_run():
     assert 'ModelTimeoutSeconds 600' in workflow
     assert "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free" in workflow
     assert "I_APPROVE_PAID_CODEX" not in workflow
+
+
+def test_nemotron_workflows_receive_only_actions_secret_for_openrouter():
+    audit = Path(
+        ".github/workflows/free-nemotron-opencode-audit-self-hosted.yml"
+    ).read_text(encoding="utf-8")
+    benchmark = Path(
+        ".github/workflows/free-nemotron-microtask-benchmark-self-hosted.yml"
+    ).read_text(encoding="utf-8")
+
+    secret_line = "OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}"
+    assert secret_line in audit
+    assert benchmark.count(secret_line) == 2
+    assert "OPENROUTER_API_KEY:" not in benchmark.replace(secret_line, "")
