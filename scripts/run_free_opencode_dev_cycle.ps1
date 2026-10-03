@@ -17,8 +17,12 @@ if ($env:COMPUTERNAME -ne $ExpectedComputerName) {
 if ($Version -ne "1.18.29") {
     throw "Only the pinned free OpenCode CLI version 1.18.29 is allowed."
 }
-if ($Model -ne "ollama/qwen3:8b") {
-    throw "Only the local model ollama/qwen3:8b is allowed."
+$QwenModel = "ollama/qwen3:8b"
+$NemotronFreeModel = "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free"
+$isOllama = $Model -eq $QwenModel
+$isNemotronFree = $Model -eq $NemotronFreeModel
+if (-not ($isOllama -or $isNemotronFree)) {
+    throw "Only ollama/qwen3:8b or the exact Nemotron 3 Ultra :free model is allowed."
 }
 if ($ModelTimeoutSeconds -lt 60 -or $ModelTimeoutSeconds -gt 1800) {
     throw "ModelTimeoutSeconds must be between 60 and 1800."
@@ -55,10 +59,37 @@ if ((Get-Item -LiteralPath $OpenCodePath).Length -lt 1000000) {
     throw "FREE_OPENCODE_CLI_BINARY_IS_PLACEHOLDER"
 }
 
-$tags = Invoke-RestMethod -Uri "http://127.0.0.1:11434/api/tags" -Method Get -TimeoutSec 5
-$modelNames = @($tags.models | ForEach-Object { [string]$_.name })
-if ($modelNames -notcontains "qwen3:8b") {
-    throw "Required local model qwen3:8b is not available."
+if ($isOllama) {
+    $tags = Invoke-RestMethod -Uri "http://127.0.0.1:11434/api/tags" -Method Get -TimeoutSec 5
+    $modelNames = @($tags.models | ForEach-Object { [string]$_.name })
+    if ($modelNames -notcontains "qwen3:8b") {
+        throw "Required local model qwen3:8b is not available."
+    }
+} else {
+    $envKeyPresent = -not [string]::IsNullOrWhiteSpace($env:OPENROUTER_API_KEY)
+    $authText = ""
+    try {
+        $authRaw = @(& $OpenCodePath auth list --format json 2>$null)
+        if ($LASTEXITCODE -eq 0) {
+            $authText = [string](($authRaw | Out-String).Trim())
+        }
+    } catch {
+        $authText = ""
+    }
+    if ([string]::IsNullOrWhiteSpace($authText)) {
+        try {
+            $authRaw = @(& $OpenCodePath auth list 2>$null)
+            if ($LASTEXITCODE -eq 0) {
+                $authText = [string](($authRaw | Out-String).Trim())
+            }
+        } catch {
+            $authText = ""
+        }
+    }
+    $storedOpenRouterAuth = $authText -match "(?i)openrouter"
+    if (-not ($envKeyPresent -or $storedOpenRouterAuth)) {
+        throw "OPENROUTER_NOT_AUTHENTICATED"
+    }
 }
 
 & gh auth status --hostname github.com *> $null
@@ -91,7 +122,8 @@ if (Test-Path -LiteralPath $ConfigRoot) {
 }
 New-Item -ItemType Directory -Force -Path $ConfigRoot | Out-Null
 
-$configJson = @'
+if ($isOllama) {
+    $configJson = @'
 {
   "$schema": "https://opencode.ai/config.json",
   "model": "ollama/qwen3:8b",
@@ -132,7 +164,35 @@ $configJson = @'
   }
 }
 '@
-
+} else {
+    $configJson = @'
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free",
+  "share": "disabled",
+  "default_agent": "build",
+  "agent": {
+    "build": {
+      "mode": "primary",
+      "permission": {
+        "read": "allow",
+        "edit": "allow",
+        "glob": "allow",
+        "grep": "allow",
+        "list": "allow",
+        "bash": "deny",
+        "task": "deny",
+        "external_directory": "deny",
+        "webfetch": "deny",
+        "websearch": "deny",
+        "question": "deny",
+        "doom_loop": "deny"
+      }
+    }
+  }
+}
+'@
+}
 $env:OPENCODE_CONFIG_CONTENT = $configJson
 $env:OPENCODE_CONFIG_DIR = $ConfigRoot
 $env:OPENCODE_DISABLE_PROJECT_CONFIG = "1"
@@ -160,14 +220,14 @@ function Invoke-FreeOpenCode {
     $stdoutPath = Join-Path $LogDir "$stamp-$Label.stdout.txt"
     $stderrPath = Join-Path $LogDir "$stamp-$Label.stderr.txt"
     $sessionTitle = "HRP_FREE_AUTO_$($Label)_$([DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds())"
-    $fullPrompt = "/no_think " + $Prompt
+    $fullPrompt = if ($isOllama) { "/no_think " + $Prompt } else { $Prompt }
     $escapedModel = '"' + $Model.Replace('"', '\"') + '"'
     $escapedPrompt = '"' + $fullPrompt.Replace('"', '\"') + '"'
     $escapedTitle = '"' + $sessionTitle.Replace('"', '\"') + '"'
     $escapedDir = '"' + $DevRoot.Replace('"', '\"') + '"'
     $argumentString = "--pure run --auto --agent build --format json --dir $escapedDir --model $escapedModel --title $escapedTitle $escapedPrompt"
 
-    Write-Host "Invoking free OpenCode + local Ollama: $Label"
+    Write-Host "Invoking free OpenCode model=$Model label=$Label"
     Write-Host "opencode_run_transport=in_process_non_attach"
     Write-Host "opencode_pure=True"
     Write-Host "opencode_auto_approve=True"
@@ -529,7 +589,7 @@ scripts/run_free_opencode_dev_cycle.ps1,
 scripts/run_free_opencode_dev_12h.ps1,
 or research/free_opencode_autonomous_dev_12h_request.txt.
 Do not enable live betting, change frozen Paper thresholds, reuse holdout data,
-upload raw JRA-VAN/horse-level data, add paid services, or add cloud/API-key providers.
+upload raw JRA-VAN/horse-level data, add paid services, or switch away from the selected free model.
 
 Failed CI excerpt:
 $ciExcerpt
@@ -621,7 +681,8 @@ $prompt = (@(
     "- Do not run tests or shell commands; the orchestrator runs all tests afterward.",
     "- Do not commit, push, create PRs, merge, or change branches.",
     $SafetyBoundaries,
-    "- Never add paid/cloud/API-key providers or network dependencies.",
+    "- Never add or switch providers; use only the already-selected exact free model.
+- Never add paid services or new network dependencies.",
     "- Never add raw JRA-VAN, horse-level prediction/odds/results, SQLite, secrets, or credentials."
 ) -join [Environment]::NewLine)
 
@@ -672,11 +733,12 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 $body = @"
-Automated PC1 free OpenCode + local Ollama qwen3:8b development cycle $Cycle.
+Automated PC1 free OpenCode development cycle $Cycle using exact model $Model.
 
 Safety boundaries:
 - paid provider usage disabled
-- API-key LLM usage disabled
+- paid LLM usage disabled
+- exact free model pinned: $Model
 - Codex unused
 - frozen strategy/model/Evidence thresholds unchanged
 - 2025-2026 holdout untouched
