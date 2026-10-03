@@ -79,7 +79,6 @@ def test_free_opencode_cycle_uses_only_pinned_local_model_and_git_pr_flow():
     assert "outside the assigned microtask" in script
     assert "scripts/run_jravan_forward_runner.ps1" in script
     assert "src/horse_racing_predictions/dashboard.py" in script
-    assert "src/horse_racing_predictions/current_history.py" in script
     assert "src/horse_racing_predictions/jravan_forward.py" in script
     assert "src/horse_racing_predictions/paper_input.py" in script
     assert "src/horse_racing_predictions/forward_pipeline.py" in script
@@ -114,6 +113,8 @@ def test_free_opencode_cycle_has_bounded_retry_and_local_config_integrity():
     assert '$env:OPENCODE_CONFIG_CONTENT -ne $configJson' in script
     assert "OpenCode local-only inline configuration changed" in script
     assert "new-cycle-$Cycle-retry" in script
+    assert "Start-Sleep -Seconds 30" in script
+    assert '[string]$microtask.task' in script
     assert "produced no repository changes after one retry" in script
 
 
@@ -160,12 +161,18 @@ def test_free_opencode_microtasks_are_narrow_and_deterministic():
         "scripts/run_free_opencode_dev_cycle.ps1"
     ).read_text(encoding="utf-8")
 
-    assert "Extend the existing forward-runner heartbeat with started_at_utc" in script
-    assert "safely defers because input status is not ready" in script
     assert "complete_odds_coverage_rate" in script
+    assert "complete_odds_coverage" in script
+    assert "missing_complete_odds_races" in script
     assert "duplicate" in script
     assert "(race_id, horse_id)" in script
+    assert "horse_name is blank or whitespace" in script
+    assert "race_id is blank or whitespace" in script
+    assert "horse_id is blank or whitespace" in script
     assert "prediction_rows, prediction_races" in script
+    assert "paper_input_race_coverage_rate" in script
+    assert "safely defers because input status is not ready" in script
+    assert "started_at_utc and elapsed_seconds" in script
     assert '$AllowedCycleFiles = @($microtask.files)' in script
     assert '$outsideAllowed.Count -gt 0' in script
     assert 'Read only the allowed files.' in script
