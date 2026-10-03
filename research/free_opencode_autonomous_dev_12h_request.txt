@@ -1,1 +1,1 @@
-free_opencode_autonomous_dev_12h_v6_v11829_native_tool_smoke_20261003
+free_opencode_autonomous_dev_12h_v7_powershell_preflight_20261003
