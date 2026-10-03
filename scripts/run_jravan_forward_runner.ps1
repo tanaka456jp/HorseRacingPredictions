@@ -9,6 +9,9 @@ $ErrorActionPreference = "Stop"
 $ProjectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 Set-Location $ProjectRoot
 
+$HeartbeatPath = Join-Path $ProjectRoot "artifacts/jravan_forward_runner_heartbeat.json"
+$ComputerName = $env:COMPUTERNAME
+
 function Test-UsableFile {
     param([string]$Path)
     if ([string]::IsNullOrWhiteSpace($Path)) { return $false }
@@ -25,6 +28,29 @@ function Write-Validation {
     }
     $Payload | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $path -Encoding UTF8
 }
+
+function Write-Heartbeat {
+    param(
+        [string]$Stage,
+        [bool]$ForwardPaperExecuted = $false,
+        [bool]$ResidualV12PaperExecuted = $false
+    )
+    $hbDir = Split-Path -Parent $HeartbeatPath
+    if (-not [string]::IsNullOrWhiteSpace($hbDir)) {
+        New-Item -ItemType Directory -Force -Path $hbDir | Out-Null
+    }
+    $hb = @{
+        stage = $Stage
+        updated_at_utc = [DateTimeOffset]::UtcNow.ToString("o")
+        computer_name = $ComputerName
+        forward_paper_executed = $ForwardPaperExecuted
+        residual_v12_paper_executed = $ResidualV12PaperExecuted
+        live_execution_enabled = $false
+    }
+    $hb | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $HeartbeatPath -Encoding UTF8
+}
+
+Write-Heartbeat -Stage "runner_start"
 
 if ($BankrollYen -le 0) { throw "BankrollYen must be positive." }
 if ($MinLeadMinutes -lt 0) { throw "MinLeadMinutes must be non-negative." }
@@ -68,6 +94,8 @@ if (-not (Test-UsableFile $inputSummaryPath)) {
 }
 $inputSummary = Get-Content -LiteralPath $inputSummaryPath -Raw -Encoding UTF8 | ConvertFrom-Json
 $commit = (& git rev-parse HEAD).Trim()
+
+Write-Heartbeat -Stage "input_prepared"
 
 $baseValidation = @{
     validated_at_utc = [DateTimeOffset]::UtcNow.ToString("o")
@@ -137,6 +165,7 @@ if (-not (Test-UsableFile $oddsPath)) {
 }
 
 Write-Host "[4/5] Running Champion PaperBroker-only forward pipeline"
+Write-Heartbeat -Stage "champion_paper_start"
 $forwardOutputDir = Join-Path $ProjectRoot "artifacts\forward_paper"
 $ledgerPath = Join-Path $ProjectRoot "data\paper\paper_trading.sqlite3"
 $forwardArgs = @(
@@ -170,7 +199,10 @@ $baseValidation.paper_accepted_bets = [int]$accepted.Count
 $baseValidation.committed_stake_yen = [int]$forwardSummary.paper_result.committed_stake_yen
 $baseValidation.remaining_uncommitted_bankroll_yen = [int]$forwardSummary.paper_result.remaining_uncommitted_bankroll_yen
 
+Write-Heartbeat -Stage "champion_paper_complete" -ForwardPaperExecuted $true
+
 Write-Host "[5/5] Running frozen Residual v12 Paper v1 on the same pre-race snapshot"
+Write-Heartbeat -Stage "residual_v12_paper_start" -ForwardPaperExecuted $true
 $residualPredictionsPath = Join-Path $ProjectRoot "data\jravan\forward\residual_v12_forward_paper_predictions.csv"
 $residualSummaryPath = Join-Path $ProjectRoot "artifacts\residual_v12_forward_paper\summary.json"
 $residualModelCache = Join-Path $ProjectRoot "artifacts\residual_v12_frozen_model"
@@ -224,6 +256,8 @@ $baseValidation.residual_v12_paper_prospective_only = [bool]$residualPaper.prosp
 $baseValidation.residual_v12_historical_forward_rows_backfilled = [bool]$residualPaper.historical_forward_rows_backfilled
 $baseValidation.residual_v12_live_execution_enabled = [bool]$residualPaper.live_execution_enabled
 $baseValidation.residual_v12_result_reconciliation_executed = [bool]$residualSummary.result_reconciliation_executed
+
+Write-Heartbeat -Stage "residual_v12_paper_complete" -ForwardPaperExecuted $true -ResidualV12PaperExecuted $true
 Write-Validation -Payload $baseValidation
 
 if (-not [string]::IsNullOrWhiteSpace($env:GITHUB_STEP_SUMMARY)) {
@@ -253,6 +287,8 @@ if (-not [string]::IsNullOrWhiteSpace($env:GITHUB_STEP_SUMMARY)) {
         "- Residual result reconciliation in this forward run: false"
     ) | Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Encoding UTF8
 }
+
+Write-Heartbeat -Stage "runner_complete" -ForwardPaperExecuted $true -ResidualV12PaperExecuted $true
 
 Write-Host "JRA-VAN FREE-FIRST Forward Paper PASS."
 Write-Host "paper_evaluations=$($evaluations.Count)"
