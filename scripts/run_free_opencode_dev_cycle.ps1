@@ -294,77 +294,6 @@ function Get-CycleMicrotask {
         1 {
             return @{
                 files = @(
-                    "scripts/run_jravan_forward_runner.ps1",
-                    "tests/test_jravan_forward_runner_script.py"
-                )
-                task = (@(
-                    "Extend the existing forward-runner heartbeat with started_at_utc and elapsed_seconds so a stalled run can be distinguished from a slow run.",
-                    "Keep the values operational-only and machine-local.",
-                    "Add source-level tests for both fields.",
-                    "Do not change betting behavior."
-                ) -join " ")
-            }
-        }
-        2 {
-            return @{
-                files = @(
-                    "src/horse_racing_predictions/dashboard.py",
-                    "tests/test_residual_paper_dashboard.py"
-                )
-                task = (@(
-                    "Add a read-only dashboard section that loads artifacts/jravan_forward_runner_heartbeat.json when present.",
-                    "Display its stage, updated time, and whether forward and residual Paper stages have executed.",
-                    "If the file is absent, show an informational message.",
-                    "Do not alter Paper decisions or thresholds.",
-                    "Add source-level dashboard tests for the new section."
-                ) -join " ")
-            }
-        }
-        3 {
-            return @{
-                files = @(
-                    "src/horse_racing_predictions/dashboard.py",
-                    "tests/test_residual_paper_dashboard.py"
-                )
-                task = (@(
-                    "Harden the dashboard heartbeat display.",
-                    "If the heartbeat JSON is malformed or updated_at_utc is older than 30 minutes, show a warning instead of crashing.",
-                    "Keep this read-only and non-adaptive.",
-                    "Add source-level tests that cover malformed and stale handling markers in the dashboard source."
-                ) -join " ")
-            }
-        }
-        4 {
-            return @{
-                files = @(
-                    "src/horse_racing_predictions/current_history.py",
-                    "tests/test_current_history.py"
-                )
-                task = (@(
-                    "Extend HistoryIntakeReport with base_races, supplemental_races, and merged_races counts.",
-                    "Compute them from race_id without changing intake acceptance rules.",
-                    "Add tests for the clean adjacent supplement case and keep blocked reports safe."
-                ) -join " ")
-            }
-        }
-        5 {
-            return @{
-                files = @(
-                    "src/horse_racing_predictions/current_history.py",
-                    "tests/test_current_history.py"
-                )
-                task = (@(
-                    "Extend HistoryIntakeReport with supplemental_date_span_days.",
-                    "Define it as the calendar-day difference between supplemental minimum and maximum race_date.",
-                    "Use 0 for a single day and None when unavailable.",
-                    "This is observability only.",
-                    "Add tests."
-                ) -join " ")
-            }
-        }
-        6 {
-            return @{
-                files = @(
                     "src/horse_racing_predictions/jravan_forward.py",
                     "tests/test_jravan_forward.py"
                 )
@@ -376,7 +305,7 @@ function Get-CycleMicrotask {
                 ) -join " ")
             }
         }
-        7 {
+        2 {
             return @{
                 files = @(
                     "src/horse_racing_predictions/jravan_forward.py",
@@ -390,7 +319,7 @@ function Get-CycleMicrotask {
                 ) -join " ")
             }
         }
-        8 {
+        3 {
             return @{
                 files = @(
                     "src/horse_racing_predictions/paper_input.py",
@@ -404,7 +333,7 @@ function Get-CycleMicrotask {
                 ) -join " ")
             }
         }
-        9 {
+        4 {
             return @{
                 files = @(
                     "src/horse_racing_predictions/paper_input.py",
@@ -417,7 +346,7 @@ function Get-CycleMicrotask {
                 ) -join " ")
             }
         }
-        10 {
+        5 {
             return @{
                 files = @(
                     "src/horse_racing_predictions/forward_pipeline.py",
@@ -431,7 +360,7 @@ function Get-CycleMicrotask {
                 ) -join " ")
             }
         }
-        11 {
+        6 {
             return @{
                 files = @(
                     "scripts/run_jravan_forward_runner.ps1",
@@ -445,7 +374,7 @@ function Get-CycleMicrotask {
                 ) -join " ")
             }
         }
-        12 {
+        7 {
             return @{
                 files = @(
                     "scripts/run_jravan_forward_runner.ps1",
@@ -457,6 +386,73 @@ function Get-CycleMicrotask {
                     "Do not include raw race or horse data.",
                     "Add source-level tests for the deferred heartbeat behavior.",
                     "Do not change betting behavior."
+                ) -join " ")
+            }
+        }
+        8 {
+            return @{
+                files = @(
+                    "src/horse_racing_predictions/jravan_forward.py",
+                    "tests/test_jravan_forward.py"
+                )
+                task = (@(
+                    "Extend TrialForwardInputSummary with missing_complete_odds_races.",
+                    "Set it to max(future_entry_races minus odds_races, 0).",
+                    "This is diagnostic-only and must not change capture or eligibility behavior.",
+                    "Add focused tests."
+                ) -join " ")
+            }
+        }
+        9 {
+            return @{
+                files = @(
+                    "src/horse_racing_predictions/paper_input.py",
+                    "tests/test_future_pipeline.py"
+                )
+                task = (@(
+                    "Fail closed in prepare_paper_input when race_id is blank or whitespace after conversion to string.",
+                    "Raise a clear ValueError before odds resolution.",
+                    "Add a focused test and do not alter valid-row behavior."
+                ) -join " ")
+            }
+        }
+        10 {
+            return @{
+                files = @(
+                    "src/horse_racing_predictions/paper_input.py",
+                    "tests/test_future_pipeline.py"
+                )
+                task = (@(
+                    "Fail closed in prepare_paper_input when horse_id is blank or whitespace after conversion to string.",
+                    "Raise a clear ValueError before odds resolution.",
+                    "Add a focused test and do not alter valid-row behavior."
+                ) -join " ")
+            }
+        }
+        11 {
+            return @{
+                files = @(
+                    "src/horse_racing_predictions/forward_pipeline.py",
+                    "tests/test_future_pipeline.py"
+                )
+                task = (@(
+                    "Add paper_input_race_coverage_rate to forward_paper_summary.json.",
+                    "Define it as paper_input_races divided by prediction_races when prediction_races is greater than zero, otherwise None.",
+                    "This is sanitized observability only.",
+                    "Add lightweight tests and do not change Paper decisions."
+                ) -join " ")
+            }
+        }
+        12 {
+            return @{
+                files = @(
+                    "src/horse_racing_predictions/dashboard.py",
+                    "tests/test_residual_paper_dashboard.py"
+                )
+                task = (@(
+                    "Extend the read-only forward-runner heartbeat dashboard section to display started_at_utc and elapsed_seconds when present.",
+                    "Do not infer missing values and do not alter Paper decisions.",
+                    "Add source-level dashboard tests for both fields."
                 ) -join " ")
             }
         }
@@ -690,10 +686,19 @@ $prompt = (@(
 
 Invoke-FreeOpenCode -Prompt $prompt -Label "new-cycle-$Cycle"
 if ((Get-RepositoryChangeCount) -eq 0) {
+    Start-Sleep -Seconds 30
     $retryPrompt = (@(
         "The first attempt made no repository changes.",
-        "Complete only the previously assigned microtask using only: $allowedText",
-        "Do not run tests or shell commands. Make the code and test edits now, then stop."
+        "",
+        "Task:",
+        [string]$microtask.task,
+        "",
+        "Allowed files only:",
+        $allowedText,
+        "",
+        "Read the allowed files, make the required code and test edits, then stop.",
+        "Do not run tests or shell commands.",
+        "Do not commit, push, create PRs, merge, or change branches."
     ) -join [Environment]::NewLine)
 
     Invoke-FreeOpenCode -Prompt $retryPrompt -Label "new-cycle-$Cycle-retry"
@@ -735,7 +740,7 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 $body = @"
-Automated PC1 free OpenCode development cycle $Cycle using exact model $Model.
+Automated self-hosted free OpenCode development cycle $Cycle using exact model $Model.
 
 Safety boundaries:
 - paid provider usage disabled
