@@ -1,1 +1,1 @@
-free_opencode_autonomous_dev_12h_v18_json_stream_smoke_20261003
+free_opencode_autonomous_dev_12h_v19_local_free_fallback_20261003

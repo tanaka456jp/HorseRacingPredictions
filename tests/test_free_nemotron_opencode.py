@@ -118,7 +118,13 @@ def test_12h_autonomous_workflow_uses_exact_free_nemotron_and_secret():
     assert model in workflow
     assert model in orchestrator
     assert "audit_free_nemotron_opencode.ps1" in workflow
+    assert "id: nemotron_smoke" in workflow
+    assert "continue-on-error: true" in workflow
+    assert "SELECTED_FREE_MODEL" in workflow
+    assert "ollama/qwen3:8b" in workflow
     assert "OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}" in workflow
+    assert '[string]$FallbackModel = "ollama/qwen3:8b"' in orchestrator
+    assert "free_fallback_allowed = $freeFallbackAllowed" in orchestrator
     assert "paid_fallback_allowed = $false" in orchestrator
     assert 'provider = $providerName' in orchestrator
     assert 'api_key_used = $apiKeyUsed' in orchestrator
