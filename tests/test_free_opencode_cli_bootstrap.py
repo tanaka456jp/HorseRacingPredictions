@@ -27,7 +27,7 @@ def test_free_opencode_smoke_uses_only_local_ollama_qwen():
     assert '"provider": {' in script
     assert '"ollama": {' in script
     assert '"baseURL": "http://127.0.0.1:11434/v1"' in script
-    assert "FREE_LOCAL_SMOKE_OK" in script
+    assert "FREE_LOCAL_TOOL_SMOKE_OK" in script
     assert "paid_provider_used = $false" in script
     assert "api_key_used = $false" in script
     assert "repository_modified = [bool]$repositoryModified" in script
@@ -97,7 +97,8 @@ def test_free_opencode_smoke_uses_v11829_in_process_run_and_tool_probe():
     ).read_text(encoding="utf-8")
 
     assert "[int]$TimeoutSeconds = 300" in script
-    assert "--standalone" not in script
+    assert '$argumentString = "--pure run --auto --agent build --format json' in script
+    assert 'run --standalone' not in script
     assert "--pure run --auto --agent build --format json" in script
     assert "--dir $escapedDir" in script
     assert 'run_transport = "in_process_non_attach"' in script
@@ -129,9 +130,8 @@ def test_free_opencode_smoke_does_not_depend_on_shared_service_or_session_state(
 
     assert "session list --format json" not in script
     assert "& $binaryPath export" not in script
-    assert 'session_found = $false' in script
-    assert 'session_exported = $false' in script
-    assert 'marker_seen_session_export = $false' in script
+    assert 'shared_service_used = $false' in script
+    assert 'session_persistence_required = $false' in script
     assert "opencode_run_transport=in_process_non_attach" in script
     assert "opencode_result exit_code=$exitCode" in script
     assert "raw_model_output_included = $false" in script
@@ -143,7 +143,7 @@ def test_free_opencode_smoke_requires_stdout_marker_and_verified_edit_tool():
     ).read_text(encoding="utf-8")
 
     assert '$verificationChannel = if ($markerSeenStdout)' in script
-    assert '"stdout"' in script
+    assert '"stdout_json_events"' in script
     assert "verification_channel = $verificationChannel" in script
     assert "model_invocation_explicit = $true" in script
     assert "local_model_present = $true" in script
