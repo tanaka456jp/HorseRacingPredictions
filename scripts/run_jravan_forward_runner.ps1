@@ -11,6 +11,7 @@ Set-Location $ProjectRoot
 
 $HeartbeatPath = Join-Path $ProjectRoot "artifacts/jravan_forward_runner_heartbeat.json"
 $ComputerName = $env:COMPUTERNAME
+$RunnerStartedAt = [DateTimeOffset]::UtcNow
 
 function Test-UsableFile {
     param([string]$Path)
@@ -41,7 +42,12 @@ function Write-Heartbeat {
     }
     $hb = @{
         stage = $Stage
+        started_at_utc = $RunnerStartedAt.ToString("o")
         updated_at_utc = [DateTimeOffset]::UtcNow.ToString("o")
+        elapsed_seconds = [math]::Round(
+            ([DateTimeOffset]::UtcNow - $RunnerStartedAt).TotalSeconds,
+            3
+        )
         computer_name = $ComputerName
         forward_paper_executed = $ForwardPaperExecuted
         residual_v12_paper_executed = $ResidualV12PaperExecuted
