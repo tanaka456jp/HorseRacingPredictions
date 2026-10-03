@@ -1,3 +1,4 @@
+import json
 import sqlite3
 from pathlib import Path
 
@@ -12,6 +13,26 @@ from .residual_paper_evidence import (
 st.set_page_config(page_title="HorseRacingPredictions", layout="wide")
 st.title("HorseRacingPredictions")
 st.caption("EV中心・無料データ優先・Paper Trading")
+
+st.subheader("JRA-VAN Forward Runner Heartbeat")
+heartbeat_path = Path("artifacts/jravan_forward_runner_heartbeat.json")
+if heartbeat_path.exists():
+    with heartbeat_path.open("r", encoding="utf-8") as f:
+        hb = json.load(f)
+    h1, h2, h3 = st.columns(3)
+    h1.metric("Stage", hb.get("stage", "—"))
+    h2.metric("Updated", hb.get("updated_at", "—"))
+    forward_executed = hb.get("forward_executed", False)
+    residual_executed = hb.get("residual_executed", False)
+    h3.metric(
+        "Paper Stages",
+        f"Forward: {'✓' if forward_executed else '✗'} / Residual: {'✓' if residual_executed else '✗'}",
+    )
+else:
+    st.info(
+        "artifacts/jravan_forward_runner_heartbeat.json が見つかりません。"
+        "self-hosted forward workflow実行後に表示されます。"
+    )
 
 db_path = st.text_input(
     "SQLite DB",
