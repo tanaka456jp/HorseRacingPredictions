@@ -32,7 +32,7 @@ def test_free_nemotron_audit_never_exposes_or_falls_back_to_paid_provider():
     assert "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free" in script
 
 
-def test_free_nemotron_audit_workflow_is_pc1_marker_triggered():
+def test_free_nemotron_audit_workflow_is_pc2_marker_triggered():
     workflow = Path(
         ".github/workflows/free-nemotron-opencode-audit-self-hosted.yml"
     ).read_text(encoding="utf-8")
@@ -40,6 +40,8 @@ def test_free_nemotron_audit_workflow_is_pc1_marker_triggered():
     assert "workflow_dispatch:" in workflow
     assert "research/free_nemotron_opencode_request.txt" in workflow
     assert "runs-on: [self-hosted, Windows]" in workflow
+    assert "Audit Free Nemotron OpenCode (PC2)" in workflow
+    assert "DESKTOP-MVV1FD4 is PC2" in workflow
     assert "persist-credentials: false" in workflow
     assert "audit_free_nemotron_opencode.ps1" in workflow
     assert "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free" in workflow
@@ -68,6 +70,9 @@ def test_free_nemotron_microtask_benchmark_preempts_qwen_autonomous_run():
 
     assert "research/free_nemotron_microtask_benchmark_request.txt" in workflow
     assert "runs-on: [self-hosted, Windows]" in workflow
+    assert "Nemotron Free Microtask Benchmark (PC2)" in workflow
+    assert "Run one guarded Nemotron free microtask on PC2" in workflow
+    assert "DESKTOP-MVV1FD4 is PC2" in workflow
     assert "horse-racing-autonomous-development-pc1" in workflow
     assert "cancel-in-progress: true" in workflow
     assert "audit_free_nemotron_opencode.ps1" in workflow
