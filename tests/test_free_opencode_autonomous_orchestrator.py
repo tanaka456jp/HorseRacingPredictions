@@ -35,7 +35,14 @@ def test_free_opencode_cycle_uses_only_pinned_local_model_and_git_pr_flow():
     assert '"GOOGLE_API_KEY"' in script
     assert '"GROQ_API_KEY"' in script
     assert '"OLLAMA_API_KEY"' in script
-    assert "run --auto --agent build --model $escapedModel" in script
+    assert "run --standalone --auto --agent build --format json --dir $escapedDir --model $escapedModel" in script
+    assert '$env:OPENCODE_CONFIG = $configPath' in script
+    assert '$env:OPENCODE_DISABLE_AUTOUPDATE = "true"' in script
+    assert '$env:OPENCODE_AUTO_SHARE = "false"' in script
+    assert '"share": "disabled"' in script
+    assert "opencode_standalone=True" in script
+    assert "opencode_result label=$Label" in script
+    assert "repo_changes=$repoChangeCount" in script
     assert '"default_agent": "build"' in script
     assert '"agent": {' in script
     assert '"build": {' in script
@@ -108,6 +115,8 @@ def test_free_opencode_12h_summary_proves_free_only_execution():
     assert "failed_fast = $failedFast" in script
     assert "GITHUB_STEP_SUMMARY" in script
     assert "Stopping after $consecutiveFailures consecutive failed cycles." in script
+    assert "Skipping cycle pacing after failure for immediate diagnostic retry." in script
+    assert '$cycle -lt $Cycles -and $status -eq "success"' in script
 
 
 def test_autonomous_guard_includes_untracked_files_and_free_control_files():
