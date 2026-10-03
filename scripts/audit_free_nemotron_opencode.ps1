@@ -81,7 +81,10 @@ function Write-Validation {
         [int]$ExitCode = -1,
         [int64]$StdoutBytes = 0,
         [int64]$StderrBytes = 0,
-        [int]$AttemptsUsed = 0
+        [int]$AttemptsUsed = 0,
+        [bool]$StreamStarted = $false,
+        [bool]$TextEventSeen = $false,
+        [bool]$ErrorEventSeen = $false
     )
     @{
         status = $Status
@@ -105,6 +108,9 @@ function Write-Validation {
         stdout_bytes = $StdoutBytes
         stderr_bytes = $StderrBytes
         smoke_attempts = $AttemptsUsed
+        stream_started = [bool]$StreamStarted
+        text_event_seen = [bool]$TextEventSeen
+        error_event_seen = [bool]$ErrorEventSeen
         raw_model_output_included = $false
         secrets_included = $false
     } | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $validationPath -Encoding UTF8
@@ -171,6 +177,9 @@ $exitCode = -1
 $stdoutBytes = 0
 $stderrBytes = 0
 $attemptsUsed = 0
+$streamStarted = $false
+$textEventSeen = $false
+$errorEventSeen = $false
 
 for ($attempt = 1; $attempt -le 2; $attempt++) {
     $attemptsUsed = $attempt
@@ -197,11 +206,16 @@ for ($attempt = 1; $attempt -le 2; $attempt++) {
         $exitCode = [int]$process.ExitCode
         $stdoutText = if (Test-Path -LiteralPath $stdoutPath) { Get-Content -LiteralPath $stdoutPath -Raw -Encoding UTF8 } else { "" }
         $markerSeen = $stdoutText -match "FREE_NEMOTRON_SMOKE_OK"
+        $streamStarted = $stdoutText -match '"type"\s*:\s*"step_start"'
+        $textEventSeen = $stdoutText -match '"type"\s*:\s*"text"'
+        $errorEventSeen = $stdoutText -match '"type"\s*:\s*"error"'
         $status = "success"
         if ($exitCode -ne 0) {
             $status = "failed_exit_code"
-        } elseif (-not $markerSeen) {
-            $status = "missing_response_marker"
+        } elseif ($errorEventSeen) {
+            $status = "error_event"
+        } elseif (-not $streamStarted) {
+            $status = "missing_step_start"
         }
     }
 
@@ -215,7 +229,7 @@ for ($attempt = 1; $attempt -le 2; $attempt++) {
         $status = "unexpected_file_write"
     }
 
-    Write-Host "smoke_attempt=$attempt status=$status marker_seen=$markerSeen"
+    Write-Host "smoke_attempt=$attempt status=$status marker_seen=$markerSeen stream_started=$streamStarted text_event_seen=$textEventSeen error_event_seen=$errorEventSeen"
     if ($status -eq "success") {
         break
     }
@@ -225,7 +239,7 @@ for ($attempt = 1; $attempt -le 2; $attempt++) {
     }
 }
 
-Write-Validation -Status $status -MarkerSeen $markerSeen -ExitCode $exitCode -StdoutBytes $stdoutBytes -StderrBytes $stderrBytes -AttemptsUsed $attemptsUsed
+Write-Validation -Status $status -MarkerSeen $markerSeen -ExitCode $exitCode -StdoutBytes $stdoutBytes -StderrBytes $stderrBytes -AttemptsUsed $attemptsUsed -StreamStarted $streamStarted -TextEventSeen $textEventSeen -ErrorEventSeen $errorEventSeen
 
 Write-Host "openrouter_authenticated=True"
 Write-Host "target_model=$Model"
@@ -233,6 +247,9 @@ Write-Host "paid_provider_used=False"
 Write-Host "paid_fallback_allowed=False"
 Write-Host "marker_seen=$markerSeen"
 Write-Host "smoke_attempts=$attemptsUsed"
+Write-Host "stream_started=$streamStarted"
+Write-Host "text_event_seen=$textEventSeen"
+Write-Host "error_event_seen=$errorEventSeen"
 
 if ($status -ne "success") {
     throw "Nemotron 3 Ultra free smoke failed with status=$status after $attemptsUsed attempt(s)."
