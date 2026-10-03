@@ -1,0 +1,80 @@
+name: Nemotron Free Microtask Benchmark (PC1)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "research/free_nemotron_microtask_benchmark_request.txt"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: horse-racing-autonomous-development-pc1
+  cancel-in-progress: true
+
+jobs:
+  benchmark:
+    name: Run one guarded Nemotron free microtask on PC1
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout orchestrator source
+        uses: actions/checkout@v4
+        with:
+          clean: false
+          persist-credentials: false
+
+      - name: Install Python test dependencies
+        shell: powershell
+        run: |
+          python -m pip install -e ".[dev]"
+
+      - name: Parse Nemotron PowerShell scripts
+        shell: powershell
+        run: |
+          $failed = $false
+          foreach ($path in @(
+            ".\scripts\audit_free_nemotron_opencode.ps1",
+            ".\scripts\run_free_opencode_dev_cycle.ps1"
+          )) {
+            $tokens = $null
+            $errors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile(
+              (Resolve-Path $path),
+              [ref]$tokens,
+              [ref]$errors
+            )
+            if ($errors.Count -gt 0) {
+              $failed = $true
+              Write-Error "$path has $($errors.Count) PowerShell parse error(s)."
+            }
+          }
+          if ($failed) { exit 1 }
+
+      - name: Bootstrap pinned free OpenCode CLI
+        shell: powershell
+        run: |
+          & .\scripts\install_free_opencode_cli.ps1 -ExpectedComputerName "DESKTOP-MVV1FD4" -Version "1.18.29"
+
+      - name: Verify exact free Nemotron endpoint
+        shell: powershell
+        run: |
+          & .\scripts\audit_free_nemotron_opencode.ps1 -ExpectedComputerName "DESKTOP-MVV1FD4" -Version "1.18.29" -Model "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free" -TimeoutSeconds 240
+
+      - name: Run Nemotron microtask cycle 1
+        shell: powershell
+        run: |
+          & .\scripts\run_free_opencode_dev_cycle.ps1 -Cycle 1 -ExpectedComputerName "DESKTOP-MVV1FD4" -Version "1.18.29" -Model "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free" -ModelTimeoutSeconds 600
+
+      - name: Publish sanitized Nemotron validation
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: free-nemotron-microtask-benchmark-validation
+          path: artifacts/free_nemotron_opencode_validation.json
+          if-no-files-found: warn
+          retention-days: 14
