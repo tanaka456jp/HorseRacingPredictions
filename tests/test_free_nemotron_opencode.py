@@ -42,6 +42,7 @@ def test_free_nemotron_audit_workflow_is_pc2_marker_triggered():
     assert "runs-on: [self-hosted, Windows]" in workflow
     assert "Audit Free Nemotron OpenCode (PC2)" in workflow
     assert "DESKTOP-MVV1FD4 is PC2" in workflow
+    assert "horse-racing-free-nemotron-audit-pc2" in workflow
     assert "persist-credentials: false" in workflow
     assert "audit_free_nemotron_opencode.ps1" in workflow
     assert "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free" in workflow
