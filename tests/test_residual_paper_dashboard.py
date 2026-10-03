@@ -48,7 +48,7 @@ def test_dashboard_shows_jravan_forward_runner_heartbeat_section():
     assert "JRA-VAN Forward Runner Heartbeat" in source
     assert "artifacts/jravan_forward_runner_heartbeat.json" in source
     assert "stage" in source
-    assert "updated_at" in source
-    assert "forward_executed" in source
-    assert "residual_executed" in source
+    assert "updated_at_utc" in source
+    assert "forward_paper_executed" in source
+    assert "residual_v12_paper_executed" in source
     assert "見つかりません" in source

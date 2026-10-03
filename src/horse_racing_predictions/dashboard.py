@@ -21,9 +21,9 @@ if heartbeat_path.exists():
         hb = json.load(f)
     h1, h2, h3 = st.columns(3)
     h1.metric("Stage", hb.get("stage", "—"))
-    h2.metric("Updated", hb.get("updated_at", "—"))
-    forward_executed = hb.get("forward_executed", False)
-    residual_executed = hb.get("residual_executed", False)
+    h2.metric("Updated", hb.get("updated_at_utc", "—"))
+    forward_executed = hb.get("forward_paper_executed", False)
+    residual_executed = hb.get("residual_v12_paper_executed", False)
     h3.metric(
         "Paper Stages",
         f"Forward: {'✓' if forward_executed else '✗'} / Residual: {'✓' if residual_executed else '✗'}",
