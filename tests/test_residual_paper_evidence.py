@@ -114,6 +114,17 @@ def test_evidence_gate_stays_closed_below_frozen_thresholds(tmp_path):
     assert report["roi_bootstrap_status"] == "insufficient_race_clusters"
     assert report["roi_ci_lower"] is None
     assert report["roi_ci_upper"] is None
+    assert abs(report["settled_hit_rate"] - (1 / 3)) < 1e-12
+    assert report["average_settled_odds"] == 4.0
+    assert report["longest_losing_streak"] == 2
+    assert report["current_losing_streak"] == 2
+    assert report["risk_diagnostics_adaptive"] is False
+    recent = {
+        row["window_bets"]: row
+        for row in report["recent_roi_windows"]
+    }
+    assert recent[20]["sample_bets"] == 3
+    assert abs(recent[20]["roi"] - (1 / 3)) < 1e-12
 
 
 def test_evidence_gate_reports_positive_roi_only_after_sample_gate(tmp_path):
@@ -244,4 +255,30 @@ def test_roi_bootstrap_is_deterministic_for_same_ledger(tmp_path):
     assert (
         first["bootstrap_positive_roi_fraction"]
         == second["bootstrap_positive_roi_fraction"]
+    )
+
+
+def test_risk_diagnostics_are_empty_safe_without_settled_bets(tmp_path):
+    ledger_path = tmp_path / "paper.sqlite3"
+    ledger = Ledger(ledger_path)
+    try:
+        _insert_evaluation(
+            ledger,
+            race_id="U0",
+            stake_yen=0,
+            won=False,
+        )
+    finally:
+        ledger.close()
+
+    report = build_residual_v12_paper_evidence_report(ledger_path)
+
+    assert report["settled_paper_bets"] == 0
+    assert report["settled_hit_rate"] is None
+    assert report["average_settled_odds"] is None
+    assert report["longest_losing_streak"] == 0
+    assert report["current_losing_streak"] == 0
+    assert all(
+        row["sample_bets"] == 0 and row["roi"] is None
+        for row in report["recent_roi_windows"]
     )

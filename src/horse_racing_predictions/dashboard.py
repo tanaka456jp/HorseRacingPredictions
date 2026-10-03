@@ -139,6 +139,55 @@ r2.metric("勝 / 敗", f"{evidence['wins']:,} / {evidence['losses']:,}")
 r3.metric("決済済み損益", f"¥{evidence['profit_yen']:,}")
 r4.metric("未決済", f"{evidence['unsettled_bets']:,}")
 
+st.subheader("Residual Paper Risk Monitor")
+q1, q2, q3, q4 = st.columns(4)
+q1.metric(
+    "決済済み的中率",
+    (
+        f"{float(evidence['settled_hit_rate']):.1%}"
+        if evidence["settled_hit_rate"] is not None
+        else "—"
+    ),
+)
+q2.metric(
+    "決済済み平均オッズ",
+    (
+        f"{float(evidence['average_settled_odds']):.2f}"
+        if evidence["average_settled_odds"] is not None
+        else "—"
+    ),
+)
+q3.metric(
+    "最大連敗",
+    f"{evidence['longest_losing_streak']:,}",
+)
+q4.metric(
+    "現在連敗",
+    f"{evidence['current_losing_streak']:,}",
+)
+
+recent_roi = pd.DataFrame(evidence["recent_roi_windows"]).rename(
+    columns={
+        "window_bets": "直近対象件数",
+        "sample_bets": "利用可能件数",
+        "roi": "ROI",
+    }
+)
+if not recent_roi.empty:
+    recent_roi["ROI"] = recent_roi["ROI"].map(
+        lambda value: (
+            f"{float(value):.1%}"
+            if pd.notna(value)
+            else "—"
+        )
+    )
+st.dataframe(recent_roi, use_container_width=True, hide_index=True)
+st.caption(
+    "Risk Monitorは読み取り専用です。"
+    "直近ROI・連敗・的中率を監視しますが、"
+    "固定済みモデル・EV閾値・賭け金ルールを自動変更しません。"
+)
+
 conn = sqlite3.connect(path)
 bets = pd.read_sql_query("SELECT * FROM bets ORDER BY id", conn)
 pred = pd.read_sql_query("SELECT * FROM predictions ORDER BY id", conn)

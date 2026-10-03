@@ -24,3 +24,17 @@ def test_dashboard_uses_only_settled_bets_for_realized_roi():
     assert "settled_stake" in source
     assert "settled_payout" in source
     assert "settled_roi" in source
+
+
+def test_dashboard_shows_read_only_paper_risk_monitor():
+    source = Path(
+        "src/horse_racing_predictions/dashboard.py"
+    ).read_text(encoding="utf-8")
+
+    assert "Residual Paper Risk Monitor" in source
+    assert "settled_hit_rate" in source
+    assert "average_settled_odds" in source
+    assert "longest_losing_streak" in source
+    assert "current_losing_streak" in source
+    assert "recent_roi_windows" in source
+    assert "固定済みモデル・EV閾値・賭け金ルールを自動変更しません" in source
