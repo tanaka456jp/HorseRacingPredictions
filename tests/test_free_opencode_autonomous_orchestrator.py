@@ -124,6 +124,14 @@ def test_free_opencode_cycle_has_bounded_retry_and_local_config_integrity():
     assert "Start-Sleep -Seconds 30" in script
     assert '[string]$microtask.task' in script
     assert "produced no repository changes after one retry" in script
+    assert "Invoke-GuardTestsWithLocalRepair" in script
+    assert "local_pytest_repair_attempt=1" in script
+    assert "repair-local-pytest-cycle-$Cycle" in script
+    assert "Pytest failure excerpt:" in script
+    assert "Read and edit only the allowed files." in script
+    assert "Assert-CycleChangedPathsAllowed" in script
+    assert "Local pytest still failed after one repair attempt." in script
+    assert "local_pytest_repair_result=success" in script
 
 
 def test_free_opencode_12h_summary_proves_free_only_execution():

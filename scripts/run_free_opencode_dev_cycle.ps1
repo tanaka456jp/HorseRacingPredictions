@@ -557,6 +557,103 @@ function Invoke-GuardAndTests {
     }
 }
 
+function Get-TextTail {
+    param(
+        [string]$Text,
+        [int]$MaxChars = 12000
+    )
+
+    if ([string]::IsNullOrEmpty($Text)) {
+        return ""
+    }
+    if ($Text.Length -le $MaxChars) {
+        return $Text
+    }
+    return $Text.Substring($Text.Length - $MaxChars)
+}
+
+function Assert-CycleChangedPathsAllowed {
+    param([string[]]$AllowedFiles)
+
+    $changedPaths = @(Get-RepositoryChangedPaths)
+    $outsideAllowed = @(
+        $changedPaths | Where-Object { $AllowedFiles -notcontains [string]$_ }
+    )
+    if ($outsideAllowed.Count -gt 0) {
+        throw (
+            "Free OpenCode changed files outside the assigned microtask: " +
+            ($outsideAllowed -join ", ")
+        )
+    }
+    return $changedPaths
+}
+
+function Invoke-GuardTestsWithLocalRepair {
+    param(
+        [string[]]$AllowedFiles,
+        [string]$AllowedText,
+        [string]$TaskText
+    )
+
+    $guardPath = Join-Path $PSScriptRoot "verify_autonomous_dev_guard.py"
+    & python $guardPath --repo $DevRoot
+    if ($LASTEXITCODE -ne 0) {
+        throw "Autonomous development safety guard failed."
+    }
+
+    $pytestText = (& python -m pytest -q 2>&1 | Out-String)
+    $pytestExitCode = $LASTEXITCODE
+    if ($pytestExitCode -eq 0) {
+        Write-Host "local_pytest_repair=not_needed"
+        return
+    }
+
+    $pytestExcerpt = Get-TextTail -Text $pytestText -MaxChars 12000
+    Write-Host "local_pytest_repair_attempt=1"
+    Write-Host "local_pytest_first_failure_excerpt_chars=$($pytestExcerpt.Length)"
+
+    $repairPrompt = (@(
+        "The assigned HorseRacingPredictions microtask changes failed local pytest.",
+        "Repair only the existing changes for this same microtask.",
+        "",
+        "Task:",
+        $TaskText,
+        "",
+        "Allowed files only:",
+        $AllowedText,
+        "",
+        "Pytest failure excerpt:",
+        $pytestExcerpt,
+        "",
+        "Rules:",
+        "- Read and edit only the allowed files.",
+        "- Make the minimum correction needed for the pytest failure.",
+        "- Do not run tests or shell commands; the orchestrator reruns all tests.",
+        "- Do not commit, push, create PRs, merge, or change branches.",
+        "- Do not change betting thresholds, holdout behavior, live execution, providers, or dependencies."
+    ) -join [Environment]::NewLine)
+
+    Invoke-FreeOpenCode -Prompt $repairPrompt -Label "repair-local-pytest-cycle-$Cycle"
+    $repairChangedPaths = @(Assert-CycleChangedPathsAllowed -AllowedFiles $AllowedFiles)
+    Write-Host "local_pytest_repair_changed_files=$($repairChangedPaths.Count)"
+
+    & python $guardPath --repo $DevRoot
+    if ($LASTEXITCODE -ne 0) {
+        throw "Autonomous development safety guard failed after local pytest repair."
+    }
+
+    $pytestRetryText = (& python -m pytest -q 2>&1 | Out-String)
+    $pytestRetryExitCode = $LASTEXITCODE
+    if ($pytestRetryExitCode -ne 0) {
+        $retryExcerpt = Get-TextTail -Text $pytestRetryText -MaxChars 12000
+        Write-Host "local_pytest_repair_result=failure"
+        Write-Host "local_pytest_retry_failure_excerpt_chars=$($retryExcerpt.Length)"
+        throw "Local pytest still failed after one repair attempt."
+    }
+
+    Write-Host "local_pytest_repair_result=success"
+}
+
 function Repair-OpenPr {
     param($Pr)
 
@@ -707,20 +804,14 @@ if ((Get-RepositoryChangeCount) -eq 0) {
     throw "Free OpenCode cycle produced no repository changes after one retry."
 }
 
-$changedPaths = @(Get-RepositoryChangedPaths)
-$outsideAllowed = @(
-    $changedPaths | Where-Object { $AllowedCycleFiles -notcontains [string]$_ }
-)
-if ($outsideAllowed.Count -gt 0) {
-    throw (
-        "Free OpenCode changed files outside the assigned microtask: " +
-        ($outsideAllowed -join ", ")
-    )
-}
+$changedPaths = @(Assert-CycleChangedPathsAllowed -AllowedFiles $AllowedCycleFiles)
 Write-Host "microtask_changed_files=$($changedPaths.Count)"
 Write-Host "microtask_allowed_files=$allowedText"
 
-Invoke-GuardAndTests
+Invoke-GuardTestsWithLocalRepair `
+    -AllowedFiles $AllowedCycleFiles `
+    -AllowedText $allowedText `
+    -TaskText ([string]$microtask.task)
 
 & git add -A
 & git diff --cached --quiet
