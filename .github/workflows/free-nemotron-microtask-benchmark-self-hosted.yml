@@ -1,4 +1,4 @@
-name: Nemotron Free Microtask Benchmark (PC1)
+name: Nemotron Free Microtask Benchmark (PC2)
 
 on:
   workflow_dispatch:
@@ -17,7 +17,8 @@ concurrency:
 
 jobs:
   benchmark:
-    name: Run one guarded Nemotron free microtask on PC1
+    name: Run one guarded Nemotron free microtask on PC2
+    # DESKTOP-MVV1FD4 is PC2.
     runs-on: [self-hosted, Windows]
     timeout-minutes: 45
 
