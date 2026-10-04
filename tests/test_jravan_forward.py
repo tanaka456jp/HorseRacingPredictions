@@ -9,6 +9,7 @@ from horse_racing_predictions.jravan_forward import (
     capture_complete_win_odds,
     parse_o1_win_odds,
     TrialForwardInputSummary,
+    write_trial_forward_summary,
 )
 
 
@@ -345,3 +346,57 @@ def test_trial_forward_summary_coverage_is_none_without_future_races():
     )
 
     assert summary.complete_odds_coverage_rate is None
+
+
+def test_write_trial_forward_summary_serializes_coverage_rate_numeric(tmp_path):
+    summary = TrialForwardInputSummary(
+        status="ready",
+        history_cutoff="2026-09-22",
+        captured_at="2026-09-27T09:00:00+09:00",
+        decision_time="2026-09-27T09:00:00+09:00",
+        current_week_rows=2,
+        current_week_races=1,
+        future_entry_rows=2,
+        future_entry_races=1,
+        odds_rows=2,
+        odds_races=1,
+        skipped_races_no_complete_odds=0,
+        earliest_post_time="2026-09-27T10:00:00+09:00",
+        latest_post_time="2026-09-27T10:00:00+09:00",
+        entries_path="entries.jsonl",
+        odds_path="odds.jsonl",
+        complete_odds_coverage_rate=1.0,
+    )
+
+    path = tmp_path / "summary.json"
+    write_trial_forward_summary(summary, path)
+
+    data = json.loads(path.read_text(encoding="utf-8"))
+    assert data["complete_odds_coverage_rate"] == 1.0
+
+
+def test_write_trial_forward_summary_serializes_coverage_rate_none(tmp_path):
+    summary = TrialForwardInputSummary(
+        status="empty",
+        history_cutoff="2026-09-22",
+        captured_at="2026-09-27T09:00:00+09:00",
+        decision_time=None,
+        current_week_rows=0,
+        current_week_races=0,
+        future_entry_rows=0,
+        future_entry_races=0,
+        odds_rows=0,
+        odds_races=0,
+        skipped_races_no_complete_odds=0,
+        earliest_post_time=None,
+        latest_post_time=None,
+        entries_path=None,
+        odds_path=None,
+        complete_odds_coverage_rate=None,
+    )
+
+    path = tmp_path / "summary.json"
+    write_trial_forward_summary(summary, path)
+
+    data = json.loads(path.read_text(encoding="utf-8"))
+    assert data["complete_odds_coverage_rate"] is None
