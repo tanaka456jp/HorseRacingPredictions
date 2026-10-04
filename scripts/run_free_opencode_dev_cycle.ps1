@@ -294,20 +294,6 @@ function Get-CycleMicrotask {
         1 {
             return @{
                 files = @(
-                    "src/horse_racing_predictions/forward_pipeline.py",
-                    "tests/test_future_pipeline.py"
-                )
-                task = (@(
-                    "Add prediction_rows, prediction_races, paper_input_rows, and paper_input_races to the forward_paper_summary.json payload.",
-                    "These are sanitized aggregate counts only.",
-                    "Add lightweight source-level assertions in tests/test_future_pipeline.py.",
-                    "Do not change inference, staking, or Paper behavior."
-                ) -join " ")
-            }
-        }
-        2 {
-            return @{
-                files = @(
                     "scripts/run_jravan_forward_runner.ps1",
                     "tests/test_jravan_forward_runner_script.py"
                 )
@@ -319,7 +305,7 @@ function Get-CycleMicrotask {
                 ) -join " ")
             }
         }
-        3 {
+        2 {
             return @{
                 files = @(
                     "scripts/run_jravan_forward_runner.ps1",
@@ -334,7 +320,7 @@ function Get-CycleMicrotask {
                 ) -join " ")
             }
         }
-        4 {
+        3 {
             return @{
                 files = @(
                     "src/horse_racing_predictions/jravan_forward.py",
@@ -348,7 +334,7 @@ function Get-CycleMicrotask {
                 ) -join " ")
             }
         }
-        5 {
+        4 {
             return @{
                 files = @(
                     "src/horse_racing_predictions/paper_input.py",
@@ -361,7 +347,7 @@ function Get-CycleMicrotask {
                 ) -join " ")
             }
         }
-        6 {
+        5 {
             return @{
                 files = @(
                     "src/horse_racing_predictions/paper_input.py",
@@ -374,7 +360,7 @@ function Get-CycleMicrotask {
                 ) -join " ")
             }
         }
-        7 {
+        6 {
             return @{
                 files = @(
                     "src/horse_racing_predictions/forward_pipeline.py",
@@ -388,7 +374,7 @@ function Get-CycleMicrotask {
                 ) -join " ")
             }
         }
-        8 {
+        7 {
             return @{
                 files = @(
                     "src/horse_racing_predictions/dashboard.py",
@@ -401,7 +387,7 @@ function Get-CycleMicrotask {
                 ) -join " ")
             }
         }
-        9 {
+        8 {
             return @{
                 files = @(
                     "src/horse_racing_predictions/paper_input.py",
@@ -414,7 +400,7 @@ function Get-CycleMicrotask {
                 ) -join " ")
             }
         }
-        10 {
+        9 {
             return @{
                 files = @(
                     "src/horse_racing_predictions/paper_input.py",
@@ -427,7 +413,7 @@ function Get-CycleMicrotask {
                 ) -join " ")
             }
         }
-        11 {
+        10 {
             return @{
                 files = @(
                     "src/horse_racing_predictions/paper_input.py",
@@ -440,7 +426,7 @@ function Get-CycleMicrotask {
                 ) -join " ")
             }
         }
-        12 {
+        11 {
             return @{
                 files = @(
                     "src/horse_racing_predictions/paper_input.py",
@@ -450,6 +436,19 @@ function Get-CycleMicrotask {
                     "Fail closed in prepare_paper_input when race_id or horse_id is null before string conversion.",
                     "Validate before grouping or odds resolution and raise a clear ValueError.",
                     "Add focused tests and do not alter valid-row behavior."
+                ) -join " ")
+            }
+        }
+        12 {
+            return @{
+                files = @(
+                    "src/horse_racing_predictions/paper_input.py",
+                    "tests/test_future_pipeline.py"
+                )
+                task = (@(
+                    "Fail closed in prepare_paper_input when model_version is null before string conversion.",
+                    "Validate before odds resolution and raise a clear ValueError.",
+                    "Add a focused test and do not alter valid-row behavior."
                 ) -join " ")
             }
         }
