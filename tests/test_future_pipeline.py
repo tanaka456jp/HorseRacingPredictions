@@ -298,3 +298,68 @@ def test_prepare_paper_input_accepts_probability_endpoints(
     )
 
     assert out.loc[0, "predicted_win_probability"] == probability
+
+
+@pytest.mark.parametrize(
+    "invalid_confidence",
+    [float("nan"), float("inf"), float("-inf"), -0.01, 1.01],
+)
+def test_prepare_paper_input_rejects_invalid_confidence_before_odds_resolution(
+    tmp_path,
+    invalid_confidence,
+):
+    odds_path = tmp_path / "odds.csv"
+    odds_path.write_text(
+        "race_id,horse_id,horse_name,decimal_odds,observed_at,"
+        "scheduled_post_time\n",
+        encoding="utf-8",
+    )
+    prediction = pd.DataFrame([{
+        "race_id": "F1",
+        "horse_id": "F1-3",
+        "horse_name": "ALPHA",
+        "predicted_win_probability": 0.25,
+        "confidence": invalid_confidence,
+        "model_version": "champion-v7",
+    }])
+
+    with pytest.raises(
+        ValueError,
+        match="confidence.*finite.*\\[0, 1\\]",
+    ):
+        prepare_paper_input(
+            prediction,
+            CsvOddsSnapshotProvider(odds_path),
+            datetime(2026, 10, 20, 5, 15, tzinfo=timezone.utc),
+        )
+
+
+@pytest.mark.parametrize("confidence", [0.0, 1.0])
+def test_prepare_paper_input_accepts_confidence_endpoints(
+    tmp_path,
+    confidence,
+):
+    odds_path = tmp_path / "odds.csv"
+    odds_path.write_text(
+        "race_id,horse_id,horse_name,decimal_odds,observed_at,"
+        "scheduled_post_time\n"
+        "F1,F1-3,ALPHA,5.5,2026-10-20T05:10:00+00:00,"
+        "2026-10-20T05:30:00+00:00\n",
+        encoding="utf-8",
+    )
+    prediction = pd.DataFrame([{
+        "race_id": "F1",
+        "horse_id": "F1-3",
+        "horse_name": "ALPHA",
+        "predicted_win_probability": 0.25,
+        "confidence": confidence,
+        "model_version": "champion-v7",
+    }])
+
+    out = prepare_paper_input(
+        prediction,
+        CsvOddsSnapshotProvider(odds_path),
+        datetime(2026, 10, 20, 5, 15, tzinfo=timezone.utc),
+    )
+
+    assert out.loc[0, "confidence"] == confidence
