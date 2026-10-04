@@ -294,19 +294,6 @@ function Get-CycleMicrotask {
         1 {
             return @{
                 files = @(
-                    "src/horse_racing_predictions/dashboard.py",
-                    "tests/test_residual_paper_dashboard.py"
-                )
-                task = (@(
-                    "Extend the read-only forward-runner heartbeat dashboard section to display started_at_utc and elapsed_seconds when present.",
-                    "Do not infer missing values and do not alter Paper decisions.",
-                    "Add source-level dashboard tests for both fields."
-                ) -join " ")
-            }
-        }
-        2 {
-            return @{
-                files = @(
                     "src/horse_racing_predictions/paper_input.py",
                     "tests/test_future_pipeline.py"
                 )
@@ -317,7 +304,7 @@ function Get-CycleMicrotask {
                 ) -join " ")
             }
         }
-        3 {
+        2 {
             return @{
                 files = @(
                     "src/horse_racing_predictions/paper_input.py",
@@ -330,7 +317,7 @@ function Get-CycleMicrotask {
                 ) -join " ")
             }
         }
-        4 {
+        3 {
             return @{
                 files = @(
                     "src/horse_racing_predictions/paper_input.py",
@@ -343,7 +330,7 @@ function Get-CycleMicrotask {
                 ) -join " ")
             }
         }
-        5 {
+        4 {
             return @{
                 files = @(
                     "src/horse_racing_predictions/paper_input.py",
@@ -356,7 +343,7 @@ function Get-CycleMicrotask {
                 ) -join " ")
             }
         }
-        6 {
+        5 {
             return @{
                 files = @(
                     "src/horse_racing_predictions/paper_input.py",
@@ -369,7 +356,7 @@ function Get-CycleMicrotask {
                 ) -join " ")
             }
         }
-        7 {
+        6 {
             return @{
                 files = @(
                     "src/horse_racing_predictions/paper_input.py",
@@ -382,7 +369,7 @@ function Get-CycleMicrotask {
                 ) -join " ")
             }
         }
-        8 {
+        7 {
             return @{
                 files = @(
                     "src/horse_racing_predictions/forward_pipeline.py",
@@ -396,7 +383,7 @@ function Get-CycleMicrotask {
                 ) -join " ")
             }
         }
-        9 {
+        8 {
             return @{
                 files = @(
                     "src/horse_racing_predictions/jravan_forward.py",
@@ -409,7 +396,7 @@ function Get-CycleMicrotask {
                 ) -join " ")
             }
         }
-        10 {
+        9 {
             return @{
                 files = @(
                     "src/horse_racing_predictions/forward_pipeline.py",
@@ -423,7 +410,7 @@ function Get-CycleMicrotask {
                 ) -join " ")
             }
         }
-        11 {
+        10 {
             return @{
                 files = @(
                     "src/horse_racing_predictions/forward_pipeline.py",
@@ -437,7 +424,7 @@ function Get-CycleMicrotask {
                 ) -join " ")
             }
         }
-        12 {
+        11 {
             return @{
                 files = @(
                     "src/horse_racing_predictions/forward_pipeline.py",
@@ -446,6 +433,20 @@ function Get-CycleMicrotask {
                 task = (@(
                     "Add paper_input_rows_per_race to forward_paper_summary.json.",
                     "Define it as paper_input_rows divided by paper_input_races when paper_input_races is greater than zero, otherwise None.",
+                    "This is sanitized aggregate observability only.",
+                    "Add lightweight tests and do not change Paper decisions."
+                ) -join " ")
+            }
+        }
+        12 {
+            return @{
+                files = @(
+                    "src/horse_racing_predictions/forward_pipeline.py",
+                    "tests/test_future_pipeline.py"
+                )
+                task = (@(
+                    "Add prediction_rows_per_race to forward_paper_summary.json.",
+                    "Define it as prediction_rows divided by prediction_races when prediction_races is greater than zero, otherwise None.",
                     "This is sanitized aggregate observability only.",
                     "Add lightweight tests and do not change Paper decisions."
                 ) -join " ")

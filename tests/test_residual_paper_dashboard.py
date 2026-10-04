@@ -72,3 +72,16 @@ def test_dashboard_heartbeat_handles_stale_timestamp():
     assert "timezone" in source
     assert "1800" in source
     assert "30 分以上更新されていません" in source
+
+
+def test_dashboard_heartbeat_shows_start_and_elapsed_when_present():
+    source = Path(
+        "src/horse_racing_predictions/dashboard.py"
+    ).read_text(encoding="utf-8")
+
+    assert 'started_at_utc = hb.get("started_at_utc")' in source
+    assert "if started_at_utc is not None" in source
+    assert 'st.caption(f"Started: {started_at_utc}")' in source
+    assert 'elapsed_seconds = hb.get("elapsed_seconds")' in source
+    assert "if elapsed_seconds is not None" in source
+    assert 'st.caption(f"Elapsed: {elapsed_seconds} sec")' in source
