@@ -211,9 +211,18 @@ def test_forward_paper_summary_includes_sanitized_aggregate_counts():
     ).read_text(encoding="utf-8")
 
     assert '"prediction_rows": int(len(predictions))' in source
-    assert '"prediction_races": int(predictions["race_id"].nunique())' in source
+    assert 'prediction_races = int(predictions["race_id"].nunique())' in source
+    assert '"prediction_races": prediction_races' in source
     assert '"paper_input_rows": int(len(paper_input))' in source
-    assert '"paper_input_races": int(paper_input["race_id"].nunique())' in source
+    assert 'paper_input_races = int(paper_input["race_id"].nunique())' in source
+    assert '"paper_input_races": paper_input_races' in source
+    assert (
+        '"paper_input_race_coverage_rate": '
+        "paper_input_race_coverage_rate"
+    ) in source
+    assert "paper_input_races / prediction_races" in source
+    assert "if prediction_races > 0" in source
+    assert "else None" in source
 
 
 def test_prepare_paper_input_has_single_blank_race_id_guard():
