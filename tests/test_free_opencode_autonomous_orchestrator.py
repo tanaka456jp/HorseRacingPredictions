@@ -32,6 +32,11 @@ def test_free_opencode_autonomous_workflow_is_pc2_marker_triggered():
     assert '-FallbackModel "ollama/qwen3:8b"' in workflow
     assert "OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}" in workflow
     assert "I_APPROVE_PAID_CODEX" not in workflow
+    assert "Check R&D priority mode" in workflow
+    assert "research\\ev_rnd_primary.txt" in workflow
+    assert "github.event_name" in workflow
+    assert "steps.rnd_priority.outputs.skip != 'true'" in workflow
+    assert "rnd_primary_skip_autonomous" in workflow
 
 
 def test_free_opencode_cycle_uses_only_pinned_local_model_and_git_pr_flow():
