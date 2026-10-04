@@ -33,6 +33,17 @@ def prepare_paper_input(
             f"missing prediction columns: {sorted(missing)}"
         )
 
+    blank_race_id = (
+        predictions["race_id"]
+        .astype(str)
+        .str.strip()
+        .eq("")
+    )
+    if blank_race_id.any():
+        raise ValueError(
+            "race_id must not be blank or whitespace in predictions"
+        )
+
     dup = predictions.groupby(["race_id", "horse_id"]).size()
     dup = dup[dup > 1]
     if not dup.empty:
