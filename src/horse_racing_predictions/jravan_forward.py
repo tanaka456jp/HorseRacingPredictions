@@ -62,6 +62,7 @@ class TrialForwardInputSummary:
     latest_post_time: str | None
     entries_path: str | None
     odds_path: str | None
+    missing_complete_odds_races: int = 0
     complete_odds_coverage_rate: float | None = None
     complete_odds_coverage: bool = False
 
@@ -553,6 +554,10 @@ def build_trial_forward_summary(
         if not odds.empty
         else 0
     )
+    missing_complete_odds_races = max(
+        future_entry_races - odds_races,
+        0,
+    )
     complete_odds_coverage_rate = (
         odds_races / future_entry_races
         if future_entry_races > 0
@@ -599,6 +604,7 @@ def build_trial_forward_summary(
             if odds_path is not None
             else None
         ),
+        missing_complete_odds_races=missing_complete_odds_races,
         complete_odds_coverage_rate=complete_odds_coverage_rate,
         complete_odds_coverage=complete_odds_coverage,
     )

@@ -324,6 +324,7 @@ def test_trial_forward_summary_reports_complete_odds_coverage_rate(tmp_path):
 
     assert summary.future_entry_races == 1
     assert summary.odds_races == 1
+    assert summary.missing_complete_odds_races == 0
     assert summary.complete_odds_coverage_rate == 1.0
     assert summary.complete_odds_coverage is True
 
@@ -371,6 +372,7 @@ def test_trial_forward_summary_marks_incomplete_odds_coverage_false():
         odds_path=None,
     )
 
+    assert summary.missing_complete_odds_races == 1
     assert summary.complete_odds_coverage_rate == 0.5
     assert summary.complete_odds_coverage is False
 
@@ -427,3 +429,26 @@ def test_write_trial_forward_summary_serializes_coverage_rate_none(tmp_path):
 
     data = json.loads(path.read_text(encoding="utf-8"))
     assert data["complete_odds_coverage_rate"] is None
+
+
+def test_trial_forward_summary_missing_complete_odds_never_negative():
+    entries = pd.DataFrame({"race_id": ["R1"]})
+    odds = pd.DataFrame({"race_id": ["R1", "R2"]})
+    captured_at = datetime(2026, 9, 27, 9, 0, tzinfo=JST)
+
+    summary = build_trial_forward_summary(
+        status="ready",
+        history_cutoff="2026-09-22",
+        captured_at=captured_at,
+        decision_time=captured_at,
+        current_week_rows=1,
+        current_week_races=1,
+        entries=entries,
+        odds=odds,
+        skipped_races_no_complete_odds=0,
+        schedules={},
+        entries_path=None,
+        odds_path=None,
+    )
+
+    assert summary.missing_complete_odds_races == 0
