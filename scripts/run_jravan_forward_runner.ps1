@@ -132,6 +132,7 @@ if ($inputSummary.status -ne "ready") {
         3
     )
     Write-Validation -Payload $baseValidation
+    Write-Heartbeat -Stage "deferred_not_ready"
     Write-Host "Forward Paper safely deferred: $($inputSummary.status)"
     if (-not [string]::IsNullOrWhiteSpace($env:GITHUB_STEP_SUMMARY)) {
         @(
