@@ -63,6 +63,7 @@ class TrialForwardInputSummary:
     entries_path: str | None
     odds_path: str | None
     complete_odds_coverage_rate: float | None = None
+    complete_odds_coverage: bool = False
 
 
 def _raw_bytes(text: str) -> bytes:
@@ -557,6 +558,10 @@ def build_trial_forward_summary(
         if future_entry_races > 0
         else None
     )
+    complete_odds_coverage = (
+        future_entry_races > 0
+        and odds_races == future_entry_races
+    )
 
     return TrialForwardInputSummary(
         status=status,
@@ -595,4 +600,5 @@ def build_trial_forward_summary(
             else None
         ),
         complete_odds_coverage_rate=complete_odds_coverage_rate,
+        complete_odds_coverage=complete_odds_coverage,
     )

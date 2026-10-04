@@ -1,6 +1,7 @@
 import json
 from datetime import datetime
 
+import pandas as pd
 from horse_racing_predictions.jravan import JvRawRecord
 from horse_racing_predictions.jravan_forward import (
     JST,
@@ -324,6 +325,7 @@ def test_trial_forward_summary_reports_complete_odds_coverage_rate(tmp_path):
     assert summary.future_entry_races == 1
     assert summary.odds_races == 1
     assert summary.complete_odds_coverage_rate == 1.0
+    assert summary.complete_odds_coverage is True
 
 
 def test_trial_forward_summary_coverage_is_none_without_future_races():
@@ -346,6 +348,31 @@ def test_trial_forward_summary_coverage_is_none_without_future_races():
     )
 
     assert summary.complete_odds_coverage_rate is None
+    assert summary.complete_odds_coverage is False
+
+
+def test_trial_forward_summary_marks_incomplete_odds_coverage_false():
+    entries = pd.DataFrame({"race_id": ["R1", "R2"]})
+    odds = pd.DataFrame({"race_id": ["R1"]})
+    captured_at = datetime(2026, 9, 27, 9, 0, tzinfo=JST)
+
+    summary = build_trial_forward_summary(
+        status="ready",
+        history_cutoff="2026-09-22",
+        captured_at=captured_at,
+        decision_time=captured_at,
+        current_week_rows=2,
+        current_week_races=2,
+        entries=entries,
+        odds=odds,
+        skipped_races_no_complete_odds=1,
+        schedules={},
+        entries_path=None,
+        odds_path=None,
+    )
+
+    assert summary.complete_odds_coverage_rate == 0.5
+    assert summary.complete_odds_coverage is False
 
 
 def test_write_trial_forward_summary_serializes_coverage_rate_numeric(tmp_path):
