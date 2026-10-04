@@ -41,6 +41,18 @@ def prepare_paper_input(
             f"duplicate (race_id, horse_id) rows in predictions: {pairs}"
         )
 
+    blank_race_id = (
+        predictions["race_id"]
+        .fillna("")
+        .astype(str)
+        .str.strip()
+        .eq("")
+    )
+    if blank_race_id.any():
+        raise ValueError(
+            "race_id must not be blank or whitespace in predictions"
+        )
+
     blank_horse_name = (
         predictions["horse_name"]
         .fillna("")
