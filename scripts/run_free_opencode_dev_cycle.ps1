@@ -294,19 +294,6 @@ function Get-CycleMicrotask {
         1 {
             return @{
                 files = @(
-                    "src/horse_racing_predictions/paper_input.py",
-                    "tests/test_future_pipeline.py"
-                )
-                task = (@(
-                    "Fail closed in prepare_paper_input when horse_id is blank or whitespace after conversion to string.",
-                    "Raise a clear ValueError before odds resolution.",
-                    "Add a focused test and do not alter valid-row behavior."
-                ) -join " ")
-            }
-        }
-        2 {
-            return @{
-                files = @(
                     "src/horse_racing_predictions/forward_pipeline.py",
                     "tests/test_future_pipeline.py"
                 )
@@ -318,7 +305,7 @@ function Get-CycleMicrotask {
                 ) -join " ")
             }
         }
-        3 {
+        2 {
             return @{
                 files = @(
                     "src/horse_racing_predictions/dashboard.py",
@@ -331,7 +318,7 @@ function Get-CycleMicrotask {
                 ) -join " ")
             }
         }
-        4 {
+        3 {
             return @{
                 files = @(
                     "src/horse_racing_predictions/paper_input.py",
@@ -344,7 +331,7 @@ function Get-CycleMicrotask {
                 ) -join " ")
             }
         }
-        5 {
+        4 {
             return @{
                 files = @(
                     "src/horse_racing_predictions/paper_input.py",
@@ -357,7 +344,7 @@ function Get-CycleMicrotask {
                 ) -join " ")
             }
         }
-        6 {
+        5 {
             return @{
                 files = @(
                     "src/horse_racing_predictions/paper_input.py",
@@ -370,7 +357,7 @@ function Get-CycleMicrotask {
                 ) -join " ")
             }
         }
-        7 {
+        6 {
             return @{
                 files = @(
                     "src/horse_racing_predictions/paper_input.py",
@@ -383,7 +370,7 @@ function Get-CycleMicrotask {
                 ) -join " ")
             }
         }
-        8 {
+        7 {
             return @{
                 files = @(
                     "src/horse_racing_predictions/paper_input.py",
@@ -396,7 +383,7 @@ function Get-CycleMicrotask {
                 ) -join " ")
             }
         }
-        9 {
+        8 {
             return @{
                 files = @(
                     "src/horse_racing_predictions/paper_input.py",
@@ -409,7 +396,7 @@ function Get-CycleMicrotask {
                 ) -join " ")
             }
         }
-        10 {
+        9 {
             return @{
                 files = @(
                     "src/horse_racing_predictions/forward_pipeline.py",
@@ -423,7 +410,7 @@ function Get-CycleMicrotask {
                 ) -join " ")
             }
         }
-        11 {
+        10 {
             return @{
                 files = @(
                     "src/horse_racing_predictions/jravan_forward.py",
@@ -436,7 +423,7 @@ function Get-CycleMicrotask {
                 ) -join " ")
             }
         }
-        12 {
+        11 {
             return @{
                 files = @(
                     "src/horse_racing_predictions/forward_pipeline.py",
@@ -445,6 +432,20 @@ function Get-CycleMicrotask {
                 task = (@(
                     "Add missing_paper_input_rows to forward_paper_summary.json.",
                     "Define it as max(prediction_rows minus paper_input_rows, 0).",
+                    "This is sanitized aggregate observability only.",
+                    "Add lightweight tests and do not change Paper decisions."
+                ) -join " ")
+            }
+        }
+        12 {
+            return @{
+                files = @(
+                    "src/horse_racing_predictions/forward_pipeline.py",
+                    "tests/test_future_pipeline.py"
+                )
+                task = (@(
+                    "Add missing_paper_input_races to forward_paper_summary.json.",
+                    "Define it as max(prediction_races minus paper_input_races, 0).",
                     "This is sanitized aggregate observability only.",
                     "Add lightweight tests and do not change Paper decisions."
                 ) -join " ")
