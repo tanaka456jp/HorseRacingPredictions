@@ -294,33 +294,6 @@ function Get-CycleMicrotask {
         1 {
             return @{
                 files = @(
-                    "tests/test_jravan_forward.py"
-                )
-                task = (@(
-                    "Append focused regression coverage proving write_trial_forward_summary serializes complete_odds_coverage_rate.",
-                    "Cover both a numeric rate and None when no future races are available.",
-                    "Do not remove, rewrite, or rename any existing test or helper.",
-                    "Do not edit production code; the production implementation already computes this field."
-                ) -join " ")
-            }
-        }
-        2 {
-            return @{
-                files = @(
-                    "src/horse_racing_predictions/jravan_forward.py",
-                    "tests/test_jravan_forward.py"
-                )
-                task = (@(
-                    "Extend TrialForwardInputSummary with complete_odds_coverage.",
-                    "It is true only when there is at least one future race and every future race has a complete odds race.",
-                    "This is diagnostic-only.",
-                    "Add focused tests for complete and empty or incomplete cases."
-                ) -join " ")
-            }
-        }
-        3 {
-            return @{
-                files = @(
                     "src/horse_racing_predictions/paper_input.py",
                     "tests/test_future_pipeline.py"
                 )
@@ -332,7 +305,7 @@ function Get-CycleMicrotask {
                 ) -join " ")
             }
         }
-        4 {
+        2 {
             return @{
                 files = @(
                     "src/horse_racing_predictions/paper_input.py",
@@ -345,7 +318,7 @@ function Get-CycleMicrotask {
                 ) -join " ")
             }
         }
-        5 {
+        3 {
             return @{
                 files = @(
                     "src/horse_racing_predictions/forward_pipeline.py",
@@ -359,7 +332,7 @@ function Get-CycleMicrotask {
                 ) -join " ")
             }
         }
-        6 {
+        4 {
             return @{
                 files = @(
                     "scripts/run_jravan_forward_runner.ps1",
@@ -373,7 +346,7 @@ function Get-CycleMicrotask {
                 ) -join " ")
             }
         }
-        7 {
+        5 {
             return @{
                 files = @(
                     "scripts/run_jravan_forward_runner.ps1",
@@ -388,7 +361,7 @@ function Get-CycleMicrotask {
                 ) -join " ")
             }
         }
-        8 {
+        6 {
             return @{
                 files = @(
                     "src/horse_racing_predictions/jravan_forward.py",
@@ -402,7 +375,7 @@ function Get-CycleMicrotask {
                 ) -join " ")
             }
         }
-        9 {
+        7 {
             return @{
                 files = @(
                     "src/horse_racing_predictions/paper_input.py",
@@ -415,7 +388,7 @@ function Get-CycleMicrotask {
                 ) -join " ")
             }
         }
-        10 {
+        8 {
             return @{
                 files = @(
                     "src/horse_racing_predictions/paper_input.py",
@@ -428,7 +401,7 @@ function Get-CycleMicrotask {
                 ) -join " ")
             }
         }
-        11 {
+        9 {
             return @{
                 files = @(
                     "src/horse_racing_predictions/forward_pipeline.py",
@@ -442,7 +415,7 @@ function Get-CycleMicrotask {
                 ) -join " ")
             }
         }
-        12 {
+        10 {
             return @{
                 files = @(
                     "src/horse_racing_predictions/dashboard.py",
@@ -452,6 +425,32 @@ function Get-CycleMicrotask {
                     "Extend the read-only forward-runner heartbeat dashboard section to display started_at_utc and elapsed_seconds when present.",
                     "Do not infer missing values and do not alter Paper decisions.",
                     "Add source-level dashboard tests for both fields."
+                ) -join " ")
+            }
+        }
+        11 {
+            return @{
+                files = @(
+                    "src/horse_racing_predictions/paper_input.py",
+                    "tests/test_future_pipeline.py"
+                )
+                task = (@(
+                    "Fail closed in prepare_paper_input when predicted_win_probability is non-finite or outside the inclusive range 0 to 1.",
+                    "Validate before odds resolution and raise a clear ValueError.",
+                    "Add focused tests for invalid values and do not alter valid-row behavior."
+                ) -join " ")
+            }
+        }
+        12 {
+            return @{
+                files = @(
+                    "src/horse_racing_predictions/paper_input.py",
+                    "tests/test_future_pipeline.py"
+                )
+                task = (@(
+                    "Fail closed in prepare_paper_input when confidence is non-finite or outside the inclusive range 0 to 1.",
+                    "Validate before odds resolution and raise a clear ValueError.",
+                    "Add focused tests for invalid values and do not alter valid-row behavior."
                 ) -join " ")
             }
         }
