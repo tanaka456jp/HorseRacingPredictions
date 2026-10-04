@@ -189,10 +189,9 @@ def test_free_opencode_microtasks_are_narrow_and_deterministic():
     ).read_text(encoding="utf-8")
 
     cycle_one = script.split("        2 {", 1)[0]
-    assert '"src/horse_racing_predictions/forward_pipeline.py"' in cycle_one
-    assert '"tests/test_future_pipeline.py"' in cycle_one
-    assert "prediction_rows, prediction_races" in cycle_one
-    assert "run_duration_seconds" in script
+    assert '"scripts/run_jravan_forward_runner.ps1"' in cycle_one
+    assert '"tests/test_jravan_forward_runner_script.py"' in cycle_one
+    assert "run_duration_seconds" in cycle_one
     assert "safely defers because input status is not ready" in script
     assert "missing_complete_odds_races" in script
     assert "race_id is blank or whitespace" in script
@@ -203,6 +202,7 @@ def test_free_opencode_microtasks_are_narrow_and_deterministic():
     assert "confidence is non-finite" in script
     assert "model_version is blank or whitespace" in script
     assert "race_id or horse_id is null" in script
+    assert "model_version is null" in script
     assert '$AllowedCycleFiles = @($microtask.files)' in script
     assert '$outsideAllowed.Count -gt 0' in script
     assert 'Read only the allowed files.' in script

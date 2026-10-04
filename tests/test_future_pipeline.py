@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from pathlib import Path
 
 import pandas as pd
 import pytest
@@ -154,3 +155,14 @@ def test_prepare_paper_input_rejects_blank_horse_name_before_odds_resolution(tmp
             CsvOddsSnapshotProvider(odds_path),
             datetime(2026, 10, 20, 5, 15, tzinfo=timezone.utc),
         )
+
+
+def test_forward_paper_summary_includes_sanitized_aggregate_counts():
+    source = Path(
+        "src/horse_racing_predictions/forward_pipeline.py"
+    ).read_text(encoding="utf-8")
+
+    assert '"prediction_rows": int(len(predictions))' in source
+    assert '"prediction_races": int(predictions["race_id"].nunique())' in source
+    assert '"paper_input_rows": int(len(paper_input))' in source
+    assert '"paper_input_races": int(paper_input["race_id"].nunique())' in source
