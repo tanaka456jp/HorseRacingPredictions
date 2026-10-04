@@ -5,3 +5,9 @@ Rows from 2025 onward must remain untouched until the development gate passes.
 Historical final odds are a research proxy only; equivalent pre-race 0B31
 inputs are required before any Forward Paper use. Only sanitized aggregates
 may be uploaded.
+
+Phase transition: expectation-value R&D is now the primary track.
+Select the residual EV rule only on the through-2022 tuning period and freeze it
+unchanged for 2023 and 2024 validation. Do not inspect or reuse 2025-2026
+holdout rows. Do not change Forward Paper thresholds from this research result.
+request=2026-10-04-ev-rnd-phase1

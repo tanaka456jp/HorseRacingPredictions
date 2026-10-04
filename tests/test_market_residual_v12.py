@@ -5,6 +5,8 @@ import pytest
 
 from horse_racing_predictions.market_residual_v12 import (
     evaluate_market_residual_v12_development,
+    evaluate_fixed_residual_ev_rule,
+    fit_residual_ev_rule,
     fit_residual_gamma,
     residual_adjusted_probability,
 )
@@ -165,3 +167,80 @@ def test_residual_v12_development_keeps_2025_holdout_untouched():
         "development_gate_passed"
         in result
     )
+    assert (
+        "ev_rule_tuning_2022"
+        in result
+    )
+    assert (
+        "ev_development_gate_passed"
+        in result
+    )
+    assert (
+        result["validation_2023"]["fixed_ev_rule_result"]
+        is None
+        or result["validation_2023"]["fixed_ev_rule_result"][
+            "ev_threshold"
+        ]
+        == result["ev_rule_tuning_2022"]["fitted_rule"][
+            "ev_threshold"
+        ]
+    )
+
+
+def test_residual_ev_rule_selects_on_tuning_and_evaluates_fixed_rule():
+    frame = pd.DataFrame({
+        "race_id": ["R1", "R1", "R2", "R2"],
+        "finish_position": [1, 2, 2, 1],
+        "win_odds": [3.0, 2.0, 2.0, 4.0],
+    })
+    probability = pd.Series(
+        [0.40, 0.20, 0.20, 0.35],
+        index=frame.index,
+        dtype=float,
+    )
+
+    rule, sweep = fit_residual_ev_rule(
+        frame,
+        probability,
+        min_probability=0.03,
+        min_rows=1,
+        min_races=1,
+    )
+
+    assert rule is not None
+    assert len(sweep) > 0
+    assert rule["policy"] in {
+        "all_candidates",
+        "top1_ev_per_race",
+    }
+
+    fixed = evaluate_fixed_residual_ev_rule(
+        frame,
+        probability,
+        rule,
+        min_probability=0.03,
+    )
+    assert fixed["ev_threshold"] == rule["ev_threshold"]
+    assert fixed["policy"] == rule["policy"]
+
+
+def test_residual_ev_rule_requires_minimum_evidence():
+    frame = pd.DataFrame({
+        "race_id": ["R1", "R1"],
+        "finish_position": [1, 2],
+        "win_odds": [3.0, 2.0],
+    })
+    probability = pd.Series(
+        [0.40, 0.20],
+        index=frame.index,
+        dtype=float,
+    )
+
+    rule, _ = fit_residual_ev_rule(
+        frame,
+        probability,
+        min_rows=200,
+        min_races=100,
+    )
+
+    assert rule is None
