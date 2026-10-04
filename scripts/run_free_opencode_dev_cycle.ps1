@@ -294,33 +294,6 @@ function Get-CycleMicrotask {
         1 {
             return @{
                 files = @(
-                    "src/horse_racing_predictions/paper_input.py",
-                    "tests/test_future_pipeline.py"
-                )
-                task = (@(
-                    "Fail closed in prepare_paper_input when predictions contain duplicate (race_id, horse_id) rows.",
-                    "Raise a clear ValueError before resolving odds.",
-                    "Add a test proving duplicate rows are rejected.",
-                    "Do not alter valid-row behavior."
-                ) -join " ")
-            }
-        }
-        2 {
-            return @{
-                files = @(
-                    "src/horse_racing_predictions/paper_input.py",
-                    "tests/test_future_pipeline.py"
-                )
-                task = (@(
-                    "Fail closed in prepare_paper_input when horse_name is blank or whitespace after conversion to string.",
-                    "Raise a clear ValueError before odds resolution and add a focused test.",
-                    "Do not alter valid-row behavior."
-                ) -join " ")
-            }
-        }
-        3 {
-            return @{
-                files = @(
                     "src/horse_racing_predictions/forward_pipeline.py",
                     "tests/test_future_pipeline.py"
                 )
@@ -332,7 +305,7 @@ function Get-CycleMicrotask {
                 ) -join " ")
             }
         }
-        4 {
+        2 {
             return @{
                 files = @(
                     "scripts/run_jravan_forward_runner.ps1",
@@ -346,7 +319,7 @@ function Get-CycleMicrotask {
                 ) -join " ")
             }
         }
-        5 {
+        3 {
             return @{
                 files = @(
                     "scripts/run_jravan_forward_runner.ps1",
@@ -361,7 +334,7 @@ function Get-CycleMicrotask {
                 ) -join " ")
             }
         }
-        6 {
+        4 {
             return @{
                 files = @(
                     "src/horse_racing_predictions/jravan_forward.py",
@@ -375,7 +348,7 @@ function Get-CycleMicrotask {
                 ) -join " ")
             }
         }
-        7 {
+        5 {
             return @{
                 files = @(
                     "src/horse_racing_predictions/paper_input.py",
@@ -388,7 +361,7 @@ function Get-CycleMicrotask {
                 ) -join " ")
             }
         }
-        8 {
+        6 {
             return @{
                 files = @(
                     "src/horse_racing_predictions/paper_input.py",
@@ -401,7 +374,7 @@ function Get-CycleMicrotask {
                 ) -join " ")
             }
         }
-        9 {
+        7 {
             return @{
                 files = @(
                     "src/horse_racing_predictions/forward_pipeline.py",
@@ -415,7 +388,7 @@ function Get-CycleMicrotask {
                 ) -join " ")
             }
         }
-        10 {
+        8 {
             return @{
                 files = @(
                     "src/horse_racing_predictions/dashboard.py",
@@ -428,7 +401,7 @@ function Get-CycleMicrotask {
                 ) -join " ")
             }
         }
-        11 {
+        9 {
             return @{
                 files = @(
                     "src/horse_racing_predictions/paper_input.py",
@@ -441,7 +414,7 @@ function Get-CycleMicrotask {
                 ) -join " ")
             }
         }
-        12 {
+        10 {
             return @{
                 files = @(
                     "src/horse_racing_predictions/paper_input.py",
@@ -451,6 +424,32 @@ function Get-CycleMicrotask {
                     "Fail closed in prepare_paper_input when confidence is non-finite or outside the inclusive range 0 to 1.",
                     "Validate before odds resolution and raise a clear ValueError.",
                     "Add focused tests for invalid values and do not alter valid-row behavior."
+                ) -join " ")
+            }
+        }
+        11 {
+            return @{
+                files = @(
+                    "src/horse_racing_predictions/paper_input.py",
+                    "tests/test_future_pipeline.py"
+                )
+                task = (@(
+                    "Fail closed in prepare_paper_input when model_version is blank or whitespace after conversion to string.",
+                    "Validate before odds resolution and raise a clear ValueError.",
+                    "Add a focused test and do not alter valid-row behavior."
+                ) -join " ")
+            }
+        }
+        12 {
+            return @{
+                files = @(
+                    "src/horse_racing_predictions/paper_input.py",
+                    "tests/test_future_pipeline.py"
+                )
+                task = (@(
+                    "Fail closed in prepare_paper_input when race_id or horse_id is null before string conversion.",
+                    "Validate before grouping or odds resolution and raise a clear ValueError.",
+                    "Add focused tests and do not alter valid-row behavior."
                 ) -join " ")
             }
         }
