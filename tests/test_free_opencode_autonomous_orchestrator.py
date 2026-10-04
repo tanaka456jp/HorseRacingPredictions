@@ -189,6 +189,9 @@ def test_free_opencode_microtasks_are_narrow_and_deterministic():
     ).read_text(encoding="utf-8")
 
     assert "complete_odds_coverage_rate" in script
+    cycle_one = script.split("        2 {", 1)[0]
+    assert '"tests/test_jravan_forward.py"' in cycle_one
+    assert '"src/horse_racing_predictions/jravan_forward.py"' not in cycle_one
     assert "complete_odds_coverage" in script
     assert "missing_complete_odds_races" in script
     assert "duplicate" in script
@@ -205,4 +208,12 @@ def test_free_opencode_microtasks_are_narrow_and_deterministic():
     assert 'Read only the allowed files.' in script
     assert 'Do not run tests or shell commands' in script
     assert "Preserve existing functions and tests" in script
+    assert "Prefer surgical additive edits at precise existing locations." in script
     assert "Do not delete more than 20 existing test lines or 80 existing lines total." in script
+    assert "Test-AutonomousGuard" in script
+    assert "autonomous_guard_rejection_retry=1" in script
+    assert "git reset --hard HEAD" in script
+    assert "guard-retry-cycle-$Cycle" in script
+    assert "Keep the total patch under 80 changed lines and under 10 deleted lines." in script
+    assert "Autonomous development safety guard failed after one clean guard retry." in script
+    assert "autonomous_guard_rejection_retry_result=success" in script

@@ -294,14 +294,13 @@ function Get-CycleMicrotask {
         1 {
             return @{
                 files = @(
-                    "src/horse_racing_predictions/jravan_forward.py",
                     "tests/test_jravan_forward.py"
                 )
                 task = (@(
-                    "Add a focused regression test proving write_trial_forward_summary serializes complete_odds_coverage_rate.",
+                    "Append focused regression coverage proving write_trial_forward_summary serializes complete_odds_coverage_rate.",
                     "Cover both a numeric rate and None when no future races are available.",
-                    "The production implementation already computes this field; do not redesign it.",
-                    "Do not change capture or eligibility behavior."
+                    "Do not remove, rewrite, or rename any existing test or helper.",
+                    "Do not edit production code; the production implementation already computes this field."
                 ) -join " ")
             }
         }
@@ -588,6 +587,12 @@ function Assert-CycleChangedPathsAllowed {
     return $changedPaths
 }
 
+function Test-AutonomousGuard {
+    $guardPath = Join-Path $PSScriptRoot "verify_autonomous_dev_guard.py"
+    & python $guardPath --repo $DevRoot
+    return ($LASTEXITCODE -eq 0)
+}
+
 function Invoke-GuardTestsWithLocalRepair {
     param(
         [string[]]$AllowedFiles,
@@ -774,6 +779,7 @@ $prompt = (@(
     "- Read only the allowed files. Do not explore git history or unrelated files.",
     "- Edit the allowed implementation file(s) and test file(s), then stop.",
     "- Preserve existing functions and tests; do not replace whole files for a small microtask.",
+    "- Prefer surgical additive edits at precise existing locations.",
     "- Keep the patch narrow. Do not delete more than 20 existing test lines or 80 existing lines total.",
     "- Do not run tests or shell commands; the orchestrator runs all tests afterward.",
     "- Do not commit, push, create PRs, merge, or change branches.",
@@ -797,6 +803,7 @@ if ((Get-RepositoryChangeCount) -eq 0) {
         "",
         "Read the allowed files, make the required code and test edits, then stop.",
         "Preserve existing functions and tests; do not replace whole files for a small microtask.",
+        "Prefer surgical additive edits at precise existing locations.",
         "Keep the patch narrow. Do not delete more than 20 existing test lines or 80 existing lines total.",
         "Do not run tests or shell commands.",
         "Do not commit, push, create PRs, merge, or change branches."
@@ -811,6 +818,44 @@ if ((Get-RepositoryChangeCount) -eq 0) {
 $changedPaths = @(Assert-CycleChangedPathsAllowed -AllowedFiles $AllowedCycleFiles)
 Write-Host "microtask_changed_files=$($changedPaths.Count)"
 Write-Host "microtask_allowed_files=$allowedText"
+
+if (-not (Test-AutonomousGuard)) {
+    Write-Host "autonomous_guard_rejection_retry=1"
+    & git reset --hard HEAD
+    & git clean -fd
+
+    $guardRetryPrompt = (@(
+        "Your previous edit for this microtask was rejected because it changed or deleted too much existing code/test coverage.",
+        "Start again from the clean repository state and make only a surgical additive patch.",
+        "",
+        "Task:",
+        [string]$microtask.task,
+        "",
+        "Allowed files only:",
+        $allowedText,
+        "",
+        "Hard limits:",
+        "- Preserve every existing function, class, helper, import, and test unless one exact line must change for the requested feature.",
+        "- Do not replace a whole file or a whole class.",
+        "- Do not delete or rename any existing test function.",
+        "- Keep the total patch under 80 changed lines and under 10 deleted lines.",
+        "- Prefer adding a few lines at a precise existing location.",
+        "- Do not run tests or shell commands; the orchestrator runs all tests.",
+        "- Do not commit, push, create PRs, merge, or change branches.",
+        $SafetyBoundaries
+    ) -join [Environment]::NewLine)
+
+    Invoke-FreeOpenCode -Prompt $guardRetryPrompt -Label "guard-retry-cycle-$Cycle"
+    if ((Get-RepositoryChangeCount) -eq 0) {
+        throw "Guard retry produced no repository changes."
+    }
+    $changedPaths = @(Assert-CycleChangedPathsAllowed -AllowedFiles $AllowedCycleFiles)
+    Write-Host "guard_retry_changed_files=$($changedPaths.Count)"
+    if (-not (Test-AutonomousGuard)) {
+        throw "Autonomous development safety guard failed after one clean guard retry."
+    }
+    Write-Host "autonomous_guard_rejection_retry_result=success"
+}
 
 Invoke-GuardTestsWithLocalRepair `
     -AllowedFiles $AllowedCycleFiles `
