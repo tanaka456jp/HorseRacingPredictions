@@ -363,3 +363,32 @@ def test_prepare_paper_input_accepts_confidence_endpoints(
     )
 
     assert out.loc[0, "confidence"] == confidence
+
+
+def test_prepare_paper_input_rejects_blank_model_version_before_odds_resolution(
+    tmp_path,
+):
+    odds_path = tmp_path / "odds.csv"
+    odds_path.write_text(
+        "race_id,horse_id,horse_name,decimal_odds,observed_at,"
+        "scheduled_post_time\n",
+        encoding="utf-8",
+    )
+    prediction = pd.DataFrame([{
+        "race_id": "F1",
+        "horse_id": "F1-3",
+        "horse_name": "ALPHA",
+        "predicted_win_probability": 0.25,
+        "confidence": 0.7,
+        "model_version": "   ",
+    }])
+
+    with pytest.raises(
+        ValueError,
+        match="model_version.*blank or whitespace",
+    ):
+        prepare_paper_input(
+            prediction,
+            CsvOddsSnapshotProvider(odds_path),
+            datetime(2026, 10, 20, 5, 15, tzinfo=timezone.utc),
+        )
