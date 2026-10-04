@@ -41,6 +41,18 @@ def prepare_paper_input(
             f"duplicate (race_id, horse_id) rows in predictions: {pairs}"
         )
 
+    blank_horse_name = (
+        predictions["horse_name"]
+        .fillna("")
+        .astype(str)
+        .str.strip()
+        .eq("")
+    )
+    if blank_horse_name.any():
+        raise ValueError(
+            "horse_name must not be blank or whitespace in predictions"
+        )
+
     rows = []
     for race_id, race_predictions in predictions.groupby(
         "race_id",
