@@ -29,6 +29,25 @@ GAMMA_GRID = (
 )
 
 
+EV_THRESHOLDS = (
+    1.05,
+    1.10,
+    1.15,
+    1.20,
+    1.25,
+    1.30,
+    1.40,
+    1.50,
+    1.75,
+    2.00,
+)
+
+EV_POLICIES = (
+    "all_candidates",
+    "top1_ev_per_race",
+)
+
+
 def _safe_float(value) -> float | None:
     value = float(value)
     return value if math.isfinite(value) else None
@@ -108,6 +127,203 @@ def _quality(
             )
         ),
     }
+
+
+
+def _select_ev_candidates(
+    frame: pd.DataFrame,
+    probability: pd.Series,
+    *,
+    ev_threshold: float,
+    min_probability: float,
+    policy: str,
+) -> pd.DataFrame:
+    if policy not in EV_POLICIES:
+        raise ValueError(
+            f"unknown EV selection policy: {policy}"
+        )
+    odds = pd.to_numeric(
+        frame["win_odds"],
+        errors="coerce",
+    )
+    expected_return = (
+        probability.astype(float) * odds
+    )
+    selected = frame.loc[
+        probability.ge(min_probability)
+        & expected_return.ge(ev_threshold)
+    ].copy()
+    if selected.empty:
+        return selected
+
+    selected["_probability"] = probability.loc[
+        selected.index
+    ]
+    selected["_expected_return"] = expected_return.loc[
+        selected.index
+    ]
+
+    if policy == "top1_ev_per_race":
+        selected = (
+            selected.sort_values(
+                [
+                    "race_id",
+                    "_expected_return",
+                    "_probability",
+                ],
+                ascending=[True, False, False],
+                kind="stable",
+            )
+            .groupby(
+                "race_id",
+                sort=False,
+                as_index=False,
+            )
+            .head(1)
+        )
+
+    return selected
+
+
+def _ev_rule_result(
+    selected: pd.DataFrame,
+    *,
+    ev_threshold: float,
+    policy: str,
+) -> dict:
+    if selected.empty:
+        return {
+            "ev_threshold": float(ev_threshold),
+            "policy": policy,
+            "rows": 0,
+            "races": 0,
+            "wins": 0,
+            "hit_rate": None,
+            "average_probability": None,
+            "average_expected_return": None,
+            "flat_bet_roi_final_odds": None,
+        }
+
+    odds = pd.to_numeric(
+        selected["win_odds"],
+        errors="coerce",
+    )
+    finish = pd.to_numeric(
+        selected["finish_position"],
+        errors="coerce",
+    )
+    wins_mask = finish.eq(1)
+    wins = int(wins_mask.sum())
+    flat_return = float(
+        odds.where(
+            wins_mask,
+            0.0,
+        ).mean()
+    )
+    return {
+        "ev_threshold": float(ev_threshold),
+        "policy": policy,
+        "rows": int(len(selected)),
+        "races": int(
+            selected["race_id"].nunique()
+        ),
+        "wins": wins,
+        "hit_rate": _safe_float(
+            wins / len(selected)
+        ),
+        "average_probability": _safe_float(
+            selected["_probability"].mean()
+        ),
+        "average_expected_return": _safe_float(
+            selected["_expected_return"].mean()
+        ),
+        "flat_bet_roi_final_odds": _safe_float(
+            flat_return - 1.0
+        ),
+    }
+
+
+def residual_ev_threshold_sweep(
+    frame: pd.DataFrame,
+    probability: pd.Series,
+    *,
+    min_probability: float = 0.03,
+    thresholds: tuple[float, ...] = EV_THRESHOLDS,
+    policies: tuple[str, ...] = EV_POLICIES,
+) -> list[dict]:
+    rows: list[dict] = []
+    for policy in policies:
+        for threshold in thresholds:
+            selected = _select_ev_candidates(
+                frame,
+                probability,
+                ev_threshold=float(threshold),
+                min_probability=min_probability,
+                policy=policy,
+            )
+            rows.append(
+                _ev_rule_result(
+                    selected,
+                    ev_threshold=float(threshold),
+                    policy=policy,
+                )
+            )
+    return rows
+
+
+def fit_residual_ev_rule(
+    frame: pd.DataFrame,
+    probability: pd.Series,
+    *,
+    min_probability: float = 0.03,
+    min_rows: int = 200,
+    min_races: int = 100,
+) -> tuple[dict | None, list[dict]]:
+    sweep = residual_ev_threshold_sweep(
+        frame,
+        probability,
+        min_probability=min_probability,
+    )
+    eligible = [
+        row
+        for row in sweep
+        if row["rows"] >= min_rows
+        and row["races"] >= min_races
+        and row["flat_bet_roi_final_odds"] is not None
+    ]
+    if not eligible:
+        return None, sweep
+
+    best = max(
+        eligible,
+        key=lambda row: (
+            float(row["flat_bet_roi_final_odds"]),
+            int(row["rows"]),
+            -float(row["ev_threshold"]),
+        ),
+    )
+    return dict(best), sweep
+
+
+def evaluate_fixed_residual_ev_rule(
+    frame: pd.DataFrame,
+    probability: pd.Series,
+    rule: dict,
+    *,
+    min_probability: float = 0.03,
+) -> dict:
+    selected = _select_ev_candidates(
+        frame,
+        probability,
+        ev_threshold=float(rule["ev_threshold"]),
+        min_probability=min_probability,
+        policy=str(rule["policy"]),
+    )
+    return _ev_rule_result(
+        selected,
+        ev_threshold=float(rule["ev_threshold"]),
+        policy=str(rule["policy"]),
+    )
 
 
 class MarketResidualRegressor:
@@ -300,6 +516,9 @@ def evaluate_market_residual_v12_development(
     validation_2023_end: str = "2023-12-31",
     validation_2024_start: str = "2024-01-01",
     validation_2024_end: str = "2024-12-31",
+    min_probability: float = 0.03,
+    min_ev_rows: int = 200,
+    min_ev_races: int = 100,
 ) -> dict:
     if iterations < 1:
         raise ValueError(
@@ -444,6 +663,21 @@ def evaluate_market_residual_v12_development(
         tuning_market,
         tuning_residual,
     )
+    tuning_adjusted = residual_adjusted_probability(
+        tuning,
+        tuning_market,
+        tuning_residual,
+        gamma=gamma,
+    )
+    fitted_ev_rule, ev_threshold_sweep = (
+        fit_residual_ev_rule(
+            tuning,
+            tuning_adjusted,
+            min_probability=min_probability,
+            min_rows=min_ev_rows,
+            min_races=min_ev_races,
+        )
+    )
 
     def _evaluate_period(
         period: pd.DataFrame,
@@ -461,6 +695,16 @@ def evaluate_market_residual_v12_development(
             market,
             residual,
             gamma=gamma,
+        )
+        fixed_ev_rule_result = (
+            None
+            if fitted_ev_rule is None
+            else evaluate_fixed_residual_ev_rule(
+                period,
+                adjusted,
+                fitted_ev_rule,
+                min_probability=min_probability,
+            )
         )
         market_quality = _quality(
             period,
@@ -529,6 +773,7 @@ def evaluate_market_residual_v12_development(
             "residual_prediction_std": _safe_float(
                 residual.std(ddof=0)
             ),
+            "fixed_ev_rule_result": fixed_ev_rule_result,
         }
 
     result_2023 = _evaluate_period(
@@ -554,6 +799,28 @@ def evaluate_market_residual_v12_development(
         ]
     )
 
+    def _ev_period_passed(result: dict) -> bool:
+        ev_result = result["fixed_ev_rule_result"]
+        return bool(
+            ev_result is not None
+            and ev_result["flat_bet_roi_final_odds"] is not None
+            and float(
+                ev_result["flat_bet_roi_final_odds"]
+            ) > 0.0
+            and int(ev_result["rows"]) >= min_ev_rows
+            and int(ev_result["races"]) >= min_ev_races
+        )
+
+    ev_gate = bool(
+        fitted_ev_rule is not None
+        and fitted_ev_rule["flat_bet_roi_final_odds"] is not None
+        and float(
+            fitted_ev_rule["flat_bet_roi_final_odds"]
+        ) > 0.0
+        and _ev_period_passed(result_2023)
+        and _ev_period_passed(result_2024)
+    )
+
     return {
         "status": (
             "research_only_market_residual_v12_development"
@@ -561,11 +828,12 @@ def evaluate_market_residual_v12_development(
         "warning": (
             "Historical final win odds are used only as a research market "
             "proxy. The residual model learns winner-minus-market probability "
-            "on the original training period. Gamma is selected only through "
-            "2022 and then frozen for 2023 and 2024 validation. Rows from 2025 "
-            "onward are excluded before feature building. A development PASS "
-            "still requires equivalent timestamped pre-race 0B31 inputs before "
-            "any Forward Paper use."
+            "on the original training period. Gamma and the research-only EV "
+            "selection rule are selected only through 2022 and then frozen for "
+            "2023 and 2024 validation. Rows from 2025 onward are excluded "
+            "before feature building. The EV rule must not change Forward Paper "
+            "thresholds; equivalent timestamped pre-race 0B31 inputs are "
+            "required before any Paper decision experiment."
         ),
         "training": {
             "train_start": champion.manifest.train_start,
@@ -594,7 +862,23 @@ def evaluate_market_residual_v12_development(
             ),
             "sweep": gamma_sweep,
         },
+        "ev_rule_tuning_2022": {
+            "period_start": str(
+                tuning["race_date"].min().date()
+            ),
+            "period_end": str(
+                tuning["race_date"].max().date()
+            ),
+            "fitted_rule": fitted_ev_rule,
+            "threshold_sweep": ev_threshold_sweep,
+        },
         "validation_2023": result_2023,
         "validation_2024": result_2024,
         "development_gate_passed": gate,
+        "ev_development_gate_passed": ev_gate,
+        "ev_constraints": {
+            "min_probability": float(min_probability),
+            "min_rows": int(min_ev_rows),
+            "min_races": int(min_ev_races),
+        },
     }
