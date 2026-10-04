@@ -1,0 +1,9 @@
+Expectation-value R&D is the primary development track.
+
+While this file exists, push-triggered Free OpenCode autonomous development
+must skip its long defensive microtask cycle so the PC2 self-hosted runner is
+available for explicit research workflows. Manual workflow_dispatch remains
+available when a defensive maintenance run is intentionally requested.
+
+This mode does not enable live betting and does not change Forward Paper
+thresholds. 2025-2026 holdout reuse remains prohibited.
