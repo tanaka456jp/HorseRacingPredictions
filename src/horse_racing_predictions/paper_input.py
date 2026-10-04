@@ -44,6 +44,17 @@ def prepare_paper_input(
             "race_id must not be blank or whitespace in predictions"
         )
 
+    blank_horse_id = (
+        predictions["horse_id"]
+        .astype(str)
+        .str.strip()
+        .eq("")
+    )
+    if blank_horse_id.any():
+        raise ValueError(
+            "horse_id must not be blank or whitespace in predictions"
+        )
+
     dup = predictions.groupby(["race_id", "horse_id"]).size()
     dup = dup[dup > 1]
     if not dup.empty:

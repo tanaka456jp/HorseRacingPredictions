@@ -181,6 +181,30 @@ def test_prepare_paper_input_rejects_blank_horse_name_before_odds_resolution(tmp
         )
 
 
+def test_prepare_paper_input_rejects_blank_horse_id_before_odds_resolution(tmp_path):
+    odds_path = tmp_path / "odds.csv"
+    odds_path.write_text(
+        "race_id,horse_id,horse_name,decimal_odds,observed_at,"
+        "scheduled_post_time\n",
+        encoding="utf-8",
+    )
+    prediction = pd.DataFrame([{
+        "race_id": "F1",
+        "horse_id": "   ",
+        "horse_name": "ALPHA",
+        "predicted_win_probability": 0.25,
+        "confidence": 0.7,
+        "model_version": "champion-v7",
+    }])
+
+    with pytest.raises(ValueError, match="horse_id.*blank or whitespace"):
+        prepare_paper_input(
+            prediction,
+            CsvOddsSnapshotProvider(odds_path),
+            datetime(2026, 10, 20, 5, 15, tzinfo=timezone.utc),
+        )
+
+
 def test_forward_paper_summary_includes_sanitized_aggregate_counts():
     source = Path(
         "src/horse_racing_predictions/forward_pipeline.py"
