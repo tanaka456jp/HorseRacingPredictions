@@ -48,6 +48,12 @@ if heartbeat_path.exists():
             "Paper Stages",
             f"Forward: {'✓' if forward_executed else '✗'} / Residual: {'✓' if residual_executed else '✗'}",
         )
+        started_at_utc = hb.get("started_at_utc")
+        if started_at_utc is not None:
+            st.caption(f"Started: {started_at_utc}")
+        elapsed_seconds = hb.get("elapsed_seconds")
+        if elapsed_seconds is not None:
+            st.caption(f"Elapsed: {elapsed_seconds} sec")
         if stale:
             st.warning("Heartbeat が 30 分以上更新されていません。")
 else:
