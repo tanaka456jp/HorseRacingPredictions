@@ -38,12 +38,26 @@ jobs:
           clean: false
           persist-credentials: false
 
+      - name: Check R&D priority mode
+        id: rnd_priority
+        shell: powershell
+        run: |
+          $skip = (
+            "${{ github.event_name }}" -eq "push" -and
+            (Test-Path -LiteralPath ".\research\ev_rnd_primary.txt" -PathType Leaf)
+          )
+          $value = $skip.ToString().ToLowerInvariant()
+          "skip=$value" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          Write-Host "rnd_primary_skip_autonomous=$value"
+
       - name: Install Python test dependencies
+        if: steps.rnd_priority.outputs.skip != 'true'
         shell: powershell
         run: |
           python -m pip install -e ".[dev]"
 
       - name: Parse free OpenCode PowerShell scripts
+        if: steps.rnd_priority.outputs.skip != 'true'
         shell: powershell
         run: |
           $failed = $false
@@ -67,11 +81,13 @@ jobs:
           if ($failed) { exit 1 }
 
       - name: Bootstrap pinned free OpenCode CLI
+        if: steps.rnd_priority.outputs.skip != 'true'
         shell: powershell
         run: |
           & .\scripts\install_free_opencode_cli.ps1 -ExpectedComputerName "DESKTOP-MVV1FD4" -Version "1.18.29"
 
       - name: Verify exact free Nemotron endpoint
+        if: steps.rnd_priority.outputs.skip != 'true'
         id: nemotron_smoke
         continue-on-error: true
         shell: powershell
@@ -81,6 +97,7 @@ jobs:
           & .\scripts\audit_free_nemotron_opencode.ps1 -ExpectedComputerName "DESKTOP-MVV1FD4" -Version "1.18.29" -Model "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free" -TimeoutSeconds 240
 
       - name: Select free autonomous model
+        if: steps.rnd_priority.outputs.skip != 'true'
         shell: powershell
         run: |
           $smokeOutcome = "${{ steps.nemotron_smoke.outcome }}"
@@ -98,6 +115,7 @@ jobs:
           Write-Host "paid_fallback_allowed=False"
 
       - name: Run free autonomous development cycles
+        if: steps.rnd_priority.outputs.skip != 'true'
         shell: powershell
         env:
           REQUESTED_CYCLES: ${{ github.event.inputs.cycles || '12' }}
@@ -107,7 +125,7 @@ jobs:
           & .\scripts\run_free_opencode_dev_12h.ps1 -Cycles ([int]$env:REQUESTED_CYCLES) -CycleMinutes ([int]$env:REQUESTED_CYCLE_MINUTES) -ExpectedComputerName "DESKTOP-MVV1FD4" -Version "1.18.29" -Model "$env:SELECTED_FREE_MODEL" -FallbackModel "ollama/qwen3:8b"
 
       - name: Publish sanitized autonomous-development summary
-        if: always()
+        if: always() && steps.rnd_priority.outputs.skip != 'true'
         uses: actions/upload-artifact@v4
         with:
           name: free-opencode-autonomous-dev-12h-summary
