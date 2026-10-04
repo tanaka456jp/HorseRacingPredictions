@@ -74,6 +74,14 @@ def run_forward_paper_pipeline(
         config=config,
     )
 
+    prediction_races = int(predictions["race_id"].nunique())
+    paper_input_races = int(paper_input["race_id"].nunique())
+    paper_input_race_coverage_rate = (
+        paper_input_races / prediction_races
+        if prediction_races > 0
+        else None
+    )
+
     summary = {
         "mode": "forward_paper_only",
         "model_version": champion.manifest.model_version,
@@ -84,9 +92,10 @@ def run_forward_paper_pipeline(
         "model_train_end": champion.manifest.train_end,
         "decision_time": decision_time.isoformat(),
         "prediction_rows": int(len(predictions)),
-        "prediction_races": int(predictions["race_id"].nunique()),
+        "prediction_races": prediction_races,
         "paper_input_rows": int(len(paper_input)),
-        "paper_input_races": int(paper_input["race_id"].nunique()),
+        "paper_input_races": paper_input_races,
+        "paper_input_race_coverage_rate": paper_input_race_coverage_rate,
         "predictions_file": str(predictions_path),
         "paper_input_file": str(paper_input_path),
         "ledger_file": str(ledger_path),
