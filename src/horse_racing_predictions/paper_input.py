@@ -33,6 +33,14 @@ def prepare_paper_input(
             f"missing prediction columns: {sorted(missing)}"
         )
 
+    dup = predictions.groupby(["race_id", "horse_id"]).size()
+    dup = dup[dup > 1]
+    if not dup.empty:
+        pairs = ", ".join(f"{r}/{h}" for r, h in dup.index)
+        raise ValueError(
+            f"duplicate (race_id, horse_id) rows in predictions: {pairs}"
+        )
+
     rows = []
     for race_id, race_predictions in predictions.groupby(
         "race_id",
