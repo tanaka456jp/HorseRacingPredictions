@@ -33,6 +33,20 @@ def prepare_paper_input(
             f"missing prediction columns: {sorted(missing)}"
         )
 
+    probabilities = pd.to_numeric(
+        predictions["predicted_win_probability"],
+        errors="coerce",
+    )
+    invalid_probability = (
+        probabilities.isna()
+        | ~probabilities.between(0.0, 1.0, inclusive="both")
+    )
+    if invalid_probability.any():
+        raise ValueError(
+            "predicted_win_probability must be finite and within "
+            "[0, 1] in predictions"
+        )
+
     blank_race_id = (
         predictions["race_id"]
         .astype(str)
