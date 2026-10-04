@@ -47,6 +47,19 @@ def prepare_paper_input(
             "[0, 1] in predictions"
         )
 
+    confidences = pd.to_numeric(
+        predictions["confidence"],
+        errors="coerce",
+    )
+    invalid_confidence = (
+        confidences.isna()
+        | ~confidences.between(0.0, 1.0, inclusive="both")
+    )
+    if invalid_confidence.any():
+        raise ValueError(
+            "confidence must be finite and within [0, 1] in predictions"
+        )
+
     blank_race_id = (
         predictions["race_id"]
         .astype(str)
