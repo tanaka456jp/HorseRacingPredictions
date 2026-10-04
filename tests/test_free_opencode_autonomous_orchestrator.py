@@ -189,8 +189,7 @@ def test_free_opencode_microtasks_are_narrow_and_deterministic():
     cycle_one = script.split("        2 {", 1)[0]
     assert '"src/horse_racing_predictions/paper_input.py"' in cycle_one
     assert '"tests/test_future_pipeline.py"' in cycle_one
-    assert "confidence is non-finite" in cycle_one
-    assert "model_version is blank or whitespace" in script
+    assert "model_version is blank or whitespace" in cycle_one
     assert "race_id or horse_id is null" in script
     assert "model_version is null" in script
     assert "horse_name is null" in script
@@ -201,6 +200,7 @@ def test_free_opencode_microtasks_are_narrow_and_deterministic():
     assert "paper_input_rows_per_race" in script
     assert "prediction_rows_per_race" in script
     assert "missing_paper_input_row_rate" in script
+    assert "missing_paper_input_race_rate" in script
     assert '$AllowedCycleFiles = @($microtask.files)' in script
     assert '$outsideAllowed.Count -gt 0' in script
     assert 'Read only the allowed files.' in script
