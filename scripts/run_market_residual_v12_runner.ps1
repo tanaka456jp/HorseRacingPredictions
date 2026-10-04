@@ -55,9 +55,12 @@ $payload = @{
     gamma_tuning_races = [int]$summary.gamma_tuning.races
     selected_gamma = [double]$summary.gamma_tuning.selected_gamma
     gamma_sweep = $summary.gamma_tuning.sweep
+    ev_rule_tuning_2022 = $summary.ev_rule_tuning_2022
     validation_2023 = $v23
     validation_2024 = $v24
     development_gate_passed = [bool]$summary.development_gate_passed
+    ev_development_gate_passed = [bool]$summary.ev_development_gate_passed
+    ev_constraints = $summary.ev_constraints
 }
 $validationPath = Join-Path $ProjectRoot $ValidationOutput
 $validationDir = Split-Path -Parent $validationPath
@@ -79,7 +82,11 @@ if (-not [string]::IsNullOrWhiteSpace($env:GITHUB_STEP_SUMMARY)) {
         "- 2024 residual winner log-loss: $($v24.residual_quality.winner_log_loss)",
         "- 2024 market Brier: $($v24.market_quality.brier)",
         "- 2024 residual Brier: $($v24.residual_quality.brier)",
-        "- development gate passed: $($summary.development_gate_passed)"
+        "- development gate passed: $($summary.development_gate_passed)",
+        "- fitted EV rule: $($summary.ev_rule_tuning_2022.fitted_rule | ConvertTo-Json -Compress)",
+        "- 2023 fixed EV result: $($v23.fixed_ev_rule_result | ConvertTo-Json -Compress)",
+        "- 2024 fixed EV result: $($v24.fixed_ev_rule_result | ConvertTo-Json -Compress)",
+        "- EV development gate passed: $($summary.ev_development_gate_passed)"
     ) | Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Encoding UTF8
 }
 
@@ -90,3 +97,7 @@ Write-Host "v2023_brier_delta=$($v23.brier_delta_vs_market)"
 Write-Host "v2024_log_loss_delta=$($v24.winner_log_loss_delta_vs_market)"
 Write-Host "v2024_brier_delta=$($v24.brier_delta_vs_market)"
 Write-Host "development_gate_passed=$($summary.development_gate_passed)"
+Write-Host "fitted_ev_rule=$($summary.ev_rule_tuning_2022.fitted_rule | ConvertTo-Json -Compress)"
+Write-Host "v2023_fixed_ev=$($v23.fixed_ev_rule_result | ConvertTo-Json -Compress)"
+Write-Host "v2024_fixed_ev=$($v24.fixed_ev_rule_result | ConvertTo-Json -Compress)"
+Write-Host "ev_development_gate_passed=$($summary.ev_development_gate_passed)"
