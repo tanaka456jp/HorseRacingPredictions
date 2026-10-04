@@ -72,3 +72,16 @@ def test_forward_runner_heartbeat_stage_markers():
     assert 'Write-Heartbeat -Stage "residual_v12_paper_start"' in script
     assert 'Write-Heartbeat -Stage "residual_v12_paper_complete"' in script
     assert 'Write-Heartbeat -Stage "runner_complete"' in script
+
+
+def test_forward_runner_validation_includes_run_duration_seconds():
+    script = Path("scripts/run_jravan_forward_runner.ps1").read_text(
+        encoding="utf-8"
+    )
+
+    assert "$baseValidation.run_duration_seconds = [math]::Round(" in script
+    assert (
+        "([DateTimeOffset]::UtcNow - $RunnerStartedAt).TotalSeconds"
+        in script
+    )
+    assert script.count("$baseValidation.run_duration_seconds") == 2

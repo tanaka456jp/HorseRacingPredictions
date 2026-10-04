@@ -127,6 +127,10 @@ $baseValidation = @{
 }
 
 if ($inputSummary.status -ne "ready") {
+    $baseValidation.run_duration_seconds = [math]::Round(
+        ([DateTimeOffset]::UtcNow - $RunnerStartedAt).TotalSeconds,
+        3
+    )
     Write-Validation -Payload $baseValidation
     Write-Host "Forward Paper safely deferred: $($inputSummary.status)"
     if (-not [string]::IsNullOrWhiteSpace($env:GITHUB_STEP_SUMMARY)) {
@@ -264,6 +268,10 @@ $baseValidation.residual_v12_live_execution_enabled = [bool]$residualPaper.live_
 $baseValidation.residual_v12_result_reconciliation_executed = [bool]$residualSummary.result_reconciliation_executed
 
 Write-Heartbeat -Stage "residual_v12_paper_complete" -ForwardPaperExecuted $true -ResidualV12PaperExecuted $true
+$baseValidation.run_duration_seconds = [math]::Round(
+    ([DateTimeOffset]::UtcNow - $RunnerStartedAt).TotalSeconds,
+    3
+)
 Write-Validation -Payload $baseValidation
 
 if (-not [string]::IsNullOrWhiteSpace($env:GITHUB_STEP_SUMMARY)) {
