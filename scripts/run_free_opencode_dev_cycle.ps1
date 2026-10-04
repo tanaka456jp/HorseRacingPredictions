@@ -294,35 +294,6 @@ function Get-CycleMicrotask {
         1 {
             return @{
                 files = @(
-                    "scripts/run_jravan_forward_runner.ps1",
-                    "tests/test_jravan_forward_runner_script.py"
-                )
-                task = (@(
-                    "When the JRA-VAN forward runner safely defers because input status is not ready, update the heartbeat before exit.",
-                    "Use a clear deferred stage and keep forward_paper_executed=false, residual_v12_paper_executed=false, and live_execution_enabled=false.",
-                    "Do not include raw race or horse data.",
-                    "Add source-level tests for the deferred heartbeat behavior.",
-                    "Do not change betting behavior."
-                ) -join " ")
-            }
-        }
-        2 {
-            return @{
-                files = @(
-                    "src/horse_racing_predictions/jravan_forward.py",
-                    "tests/test_jravan_forward.py"
-                )
-                task = (@(
-                    "Extend TrialForwardInputSummary with missing_complete_odds_races.",
-                    "Set it to max(future_entry_races minus odds_races, 0).",
-                    "This is diagnostic-only and must not change capture or eligibility behavior.",
-                    "Add focused tests."
-                ) -join " ")
-            }
-        }
-        3 {
-            return @{
-                files = @(
                     "src/horse_racing_predictions/paper_input.py",
                     "tests/test_future_pipeline.py"
                 )
@@ -333,7 +304,7 @@ function Get-CycleMicrotask {
                 ) -join " ")
             }
         }
-        4 {
+        2 {
             return @{
                 files = @(
                     "src/horse_racing_predictions/paper_input.py",
@@ -346,7 +317,7 @@ function Get-CycleMicrotask {
                 ) -join " ")
             }
         }
-        5 {
+        3 {
             return @{
                 files = @(
                     "src/horse_racing_predictions/forward_pipeline.py",
@@ -360,7 +331,7 @@ function Get-CycleMicrotask {
                 ) -join " ")
             }
         }
-        6 {
+        4 {
             return @{
                 files = @(
                     "src/horse_racing_predictions/dashboard.py",
@@ -373,7 +344,7 @@ function Get-CycleMicrotask {
                 ) -join " ")
             }
         }
-        7 {
+        5 {
             return @{
                 files = @(
                     "src/horse_racing_predictions/paper_input.py",
@@ -386,7 +357,7 @@ function Get-CycleMicrotask {
                 ) -join " ")
             }
         }
-        8 {
+        6 {
             return @{
                 files = @(
                     "src/horse_racing_predictions/paper_input.py",
@@ -399,7 +370,7 @@ function Get-CycleMicrotask {
                 ) -join " ")
             }
         }
-        9 {
+        7 {
             return @{
                 files = @(
                     "src/horse_racing_predictions/paper_input.py",
@@ -412,7 +383,7 @@ function Get-CycleMicrotask {
                 ) -join " ")
             }
         }
-        10 {
+        8 {
             return @{
                 files = @(
                     "src/horse_racing_predictions/paper_input.py",
@@ -425,7 +396,7 @@ function Get-CycleMicrotask {
                 ) -join " ")
             }
         }
-        11 {
+        9 {
             return @{
                 files = @(
                     "src/horse_racing_predictions/paper_input.py",
@@ -438,7 +409,7 @@ function Get-CycleMicrotask {
                 ) -join " ")
             }
         }
-        12 {
+        10 {
             return @{
                 files = @(
                     "src/horse_racing_predictions/paper_input.py",
@@ -448,6 +419,33 @@ function Get-CycleMicrotask {
                     "Fail closed in prepare_paper_input when horse_name is null before string conversion.",
                     "Validate before odds resolution and raise a clear ValueError.",
                     "Add a focused test and do not alter valid-row behavior."
+                ) -join " ")
+            }
+        }
+        11 {
+            return @{
+                files = @(
+                    "src/horse_racing_predictions/forward_pipeline.py",
+                    "tests/test_future_pipeline.py"
+                )
+                task = (@(
+                    "Add paper_input_row_coverage_rate to forward_paper_summary.json.",
+                    "Define it as paper_input_rows divided by prediction_rows when prediction_rows is greater than zero, otherwise None.",
+                    "This is sanitized observability only.",
+                    "Add lightweight tests and do not change Paper decisions."
+                ) -join " ")
+            }
+        }
+        12 {
+            return @{
+                files = @(
+                    "src/horse_racing_predictions/jravan_forward.py",
+                    "tests/test_jravan_forward.py"
+                )
+                task = (@(
+                    "Serialize missing_complete_odds_races in trial forward summaries and add a focused round-trip assertion.",
+                    "Keep it as sanitized aggregate diagnostics only.",
+                    "Do not change capture, eligibility, inference, staking, or Paper behavior."
                 ) -join " ")
             }
         }
