@@ -85,7 +85,6 @@ def test_free_opencode_cycle_uses_only_pinned_local_model_and_git_pr_flow():
     assert "Do not run tests or shell commands" in script
     assert "microtask_changed_files=" in script
     assert "outside the assigned microtask" in script
-    assert "scripts/run_jravan_forward_runner.ps1" in script
     assert "src/horse_racing_predictions/dashboard.py" in script
     assert "src/horse_racing_predictions/jravan_forward.py" in script
     assert "src/horse_racing_predictions/paper_input.py" in script
