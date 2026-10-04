@@ -85,3 +85,25 @@ def test_forward_runner_validation_includes_run_duration_seconds():
         in script
     )
     assert script.count("$baseValidation.run_duration_seconds") == 2
+
+
+def test_forward_runner_deferred_heartbeat_stage():
+    script = Path("scripts/run_jravan_forward_runner.ps1").read_text(
+        encoding="utf-8"
+    )
+
+    assert 'Write-Heartbeat -Stage "deferred_not_ready"' in script
+    assert '$inputSummary.status -ne "ready"' in script
+
+
+def test_forward_runner_deferred_heartbeat_flags_false():
+    script = Path("scripts/run_jravan_forward_runner.ps1").read_text(
+        encoding="utf-8"
+    )
+
+    # Check that the deferred path doesn't set forward_paper_executed or residual_v12_paper_executed to true
+    deferred_section = script.split('$inputSummary.status -ne "ready"')[1].split('exit 0')[0]
+    assert 'Write-Heartbeat -Stage "deferred_not_ready"' in deferred_section
+    assert '-ForwardPaperExecuted' not in deferred_section
+    assert '-ResidualV12PaperExecuted' not in deferred_section
+    # live_execution_enabled defaults to $false in Write-Heartbeat function
