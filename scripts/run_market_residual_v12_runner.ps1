@@ -64,6 +64,7 @@ $payload = @{
     direct_value_tuning_2022 = $summary.direct_value_tuning_2022
     standardized_residual_tuning_2022 = $summary.standardized_residual_tuning_2022
     research_protocol = $summary.research_protocol
+    rolling_refit_phase9 = $summary.rolling_refit_phase9
     validation_2023 = $v23
     validation_2024 = $v24
     development_gate_passed = [bool]$summary.development_gate_passed
@@ -75,6 +76,7 @@ $payload = @{
     stable_longshot_market_edge_development_gate_passed = [bool]$summary.stable_longshot_market_edge_development_gate_passed
     direct_value_development_gate_passed = [bool]$summary.direct_value_development_gate_passed
     standardized_residual_development_gate_passed = [bool]$summary.standardized_residual_development_gate_passed
+    rolling_refit_development_gate_passed = [bool]$summary.rolling_refit_development_gate_passed
     ev_constraints = $summary.ev_constraints
 }
 $validationPath = Join-Path $ProjectRoot $ValidationOutput
@@ -132,7 +134,14 @@ if (-not [string]::IsNullOrWhiteSpace($env:GITHUB_STEP_SUMMARY)) {
         "- 2023 standardized delta vs baseline brier: $($v23.standardized_brier_delta_vs_baseline_residual)",
         "- 2024 standardized delta vs baseline log-loss: $($v24.standardized_winner_log_loss_delta_vs_baseline_residual)",
         "- 2024 standardized delta vs baseline brier: $($v24.standardized_brier_delta_vs_baseline_residual)",
-        "- standardized residual gate passed: $($summary.standardized_residual_development_gate_passed)"
+        "- standardized residual gate passed: $($summary.standardized_residual_development_gate_passed)",
+        "- rolling 2023 gamma: $($summary.rolling_refit_phase9.fold_2023.selected_gamma)",
+        "- rolling 2023 delta vs static log-loss: $($summary.rolling_refit_phase9.fold_2023.winner_log_loss_delta_vs_static_residual)",
+        "- rolling 2023 delta vs static brier: $($summary.rolling_refit_phase9.fold_2023.brier_delta_vs_static_residual)",
+        "- rolling 2024 gamma: $($summary.rolling_refit_phase9.fold_2024.selected_gamma)",
+        "- rolling 2024 delta vs static log-loss: $($summary.rolling_refit_phase9.fold_2024.winner_log_loss_delta_vs_static_residual)",
+        "- rolling 2024 delta vs static brier: $($summary.rolling_refit_phase9.fold_2024.brier_delta_vs_static_residual)",
+        "- rolling refit gate passed: $($summary.rolling_refit_development_gate_passed)"
     ) | Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Encoding UTF8
 }
 
@@ -178,3 +187,10 @@ Write-Host "v2023_standardized_brier_delta_vs_baseline=$($v23.standardized_brier
 Write-Host "v2024_standardized_logloss_delta_vs_baseline=$($v24.standardized_winner_log_loss_delta_vs_baseline_residual)"
 Write-Host "v2024_standardized_brier_delta_vs_baseline=$($v24.standardized_brier_delta_vs_baseline_residual)"
 Write-Host "standardized_residual_development_gate_passed=$($summary.standardized_residual_development_gate_passed)"
+Write-Host "rolling_2023_gamma=$($summary.rolling_refit_phase9.fold_2023.selected_gamma)"
+Write-Host "rolling_2023_logloss_delta_vs_static=$($summary.rolling_refit_phase9.fold_2023.winner_log_loss_delta_vs_static_residual)"
+Write-Host "rolling_2023_brier_delta_vs_static=$($summary.rolling_refit_phase9.fold_2023.brier_delta_vs_static_residual)"
+Write-Host "rolling_2024_gamma=$($summary.rolling_refit_phase9.fold_2024.selected_gamma)"
+Write-Host "rolling_2024_logloss_delta_vs_static=$($summary.rolling_refit_phase9.fold_2024.winner_log_loss_delta_vs_static_residual)"
+Write-Host "rolling_2024_brier_delta_vs_static=$($summary.rolling_refit_phase9.fold_2024.brier_delta_vs_static_residual)"
+Write-Host "rolling_refit_development_gate_passed=$($summary.rolling_refit_development_gate_passed)"
