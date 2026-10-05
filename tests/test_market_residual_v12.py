@@ -6,7 +6,10 @@ import pytest
 from horse_racing_predictions.market_residual_v12 import (
     evaluate_market_residual_v12_development,
     evaluate_fixed_residual_ev_rule,
+    direct_value_rule_result,
+    evaluate_fixed_direct_value_rule,
     evaluate_fixed_residual_market_edge_rule,
+    fit_direct_value_rule,
     fit_residual_ev_rule,
     fit_residual_market_edge_rule,
     fit_residual_market_edge_odds_segment_rule,
@@ -17,6 +20,7 @@ from horse_racing_predictions.market_residual_v12 import (
     select_broad_positive_market_edge_rule,
     select_broad_positive_longshot_market_edge_rule,
     select_temporally_stable_longshot_market_edge_rule,
+    realized_flat_bet_return,
     residual_adjusted_probability,
 )
 
@@ -222,6 +226,14 @@ def test_residual_v12_development_keeps_2025_holdout_untouched():
     )
     assert (
         "stable_longshot_market_edge_development_gate_passed"
+        in result
+    )
+    assert (
+        "direct_value_tuning_2022"
+        in result
+    )
+    assert (
+        "direct_value_development_gate_passed"
         in result
     )
     assert (
@@ -669,3 +681,88 @@ def test_stable_longshot_sweep_uses_fixed_time_split():
     )
     if rule is not None:
         assert rule["policy"] == "all_candidates"
+
+
+def test_realized_flat_bet_return_is_direct_profit_target():
+    frame = pd.DataFrame({
+        "finish_position": [1, 2, 1],
+        "win_odds": [3.5, 8.0, 1.8],
+    })
+
+    result = realized_flat_bet_return(frame)
+
+    assert result.tolist() == [2.5, -1.0, 0.8]
+
+
+def test_direct_value_rule_uses_fixed_zero_threshold():
+    frame = pd.DataFrame({
+        "race_id": ["R1", "R1", "R2", "R2"],
+        "finish_position": [1, 2, 2, 1],
+        "win_odds": [3.0, 4.0, 5.0, 2.0],
+    })
+    score = pd.Series(
+        [0.4, -0.2, 0.1, 0.3],
+        index=frame.index,
+        dtype=float,
+    )
+
+    rule, evidence = fit_direct_value_rule(
+        frame,
+        score,
+        threshold=0.0,
+        min_rows=1,
+        min_races=1,
+    )
+
+    assert evidence["rows"] == 3
+    assert evidence["races"] == 2
+    assert evidence["predicted_return_threshold"] == 0.0
+    if rule is not None:
+        assert rule["predicted_return_threshold"] == 0.0
+        fixed = evaluate_fixed_direct_value_rule(
+            frame,
+            score,
+            rule,
+        )
+        assert fixed == evidence
+
+
+def test_direct_value_rule_requires_positive_tuning_roi():
+    frame = pd.DataFrame({
+        "race_id": ["R1", "R2"],
+        "finish_position": [2, 2],
+        "win_odds": [5.0, 6.0],
+    })
+    score = pd.Series(
+        [0.2, 0.1],
+        index=frame.index,
+        dtype=float,
+    )
+
+    rule, evidence = fit_direct_value_rule(
+        frame,
+        score,
+        min_rows=1,
+        min_races=1,
+    )
+
+    assert evidence["flat_bet_roi_final_odds"] == -1.0
+    assert rule is None
+
+
+def test_direct_value_result_rejects_nonfinite_score():
+    frame = pd.DataFrame({
+        "race_id": ["R1"],
+        "finish_position": [1],
+        "win_odds": [3.0],
+    })
+    score = pd.Series([float("nan")], index=frame.index)
+
+    with pytest.raises(
+        ValueError,
+        match="predicted return contains non-finite",
+    ):
+        direct_value_rule_result(
+            frame,
+            score,
+        )
