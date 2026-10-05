@@ -6,7 +6,9 @@ import pytest
 from horse_racing_predictions.market_residual_v12 import (
     evaluate_market_residual_v12_development,
     evaluate_fixed_residual_ev_rule,
+    evaluate_fixed_residual_market_edge_rule,
     fit_residual_ev_rule,
+    fit_residual_market_edge_rule,
     fit_residual_gamma,
     residual_adjusted_probability,
 )
@@ -176,6 +178,14 @@ def test_residual_v12_development_keeps_2025_holdout_untouched():
         in result
     )
     assert (
+        "market_edge_rule_tuning_2022"
+        in result
+    )
+    assert (
+        "market_edge_development_gate_passed"
+        in result
+    )
+    assert (
         result["validation_2023"]["fixed_ev_rule_result"]
         is None
         or result["validation_2023"]["fixed_ev_rule_result"][
@@ -239,6 +249,79 @@ def test_residual_ev_rule_requires_minimum_evidence():
     rule, _ = fit_residual_ev_rule(
         frame,
         probability,
+        min_rows=200,
+        min_races=100,
+    )
+
+    assert rule is None
+
+
+def test_residual_market_edge_rule_meets_evidence_without_using_holdout():
+    frame = pd.DataFrame({
+        "race_id": [
+            "R1", "R1", "R2", "R2",
+            "R3", "R3", "R4", "R4",
+        ],
+        "finish_position": [1, 2, 2, 1, 1, 2, 2, 1],
+        "win_odds": [2.5, 4.0, 3.0, 2.0, 3.5, 2.2, 2.6, 3.2],
+    })
+    probability = pd.Series(
+        [0.45, 0.20, 0.25, 0.50, 0.35, 0.30, 0.30, 0.38],
+        index=frame.index,
+        dtype=float,
+    )
+    market_probability = pd.Series(
+        [0.40, 0.25, 0.30, 0.45, 0.30, 0.35, 0.35, 0.32],
+        index=frame.index,
+        dtype=float,
+    )
+
+    rule, sweep = fit_residual_market_edge_rule(
+        frame,
+        probability,
+        market_probability,
+        min_rows=1,
+        min_races=1,
+    )
+
+    assert rule is not None
+    assert len(sweep) > 0
+    assert rule["edge_ratio_threshold"] >= 1.0
+
+    fixed = evaluate_fixed_residual_market_edge_rule(
+        frame,
+        probability,
+        market_probability,
+        rule,
+    )
+    assert (
+        fixed["edge_ratio_threshold"]
+        == rule["edge_ratio_threshold"]
+    )
+    assert fixed["policy"] == rule["policy"]
+
+
+def test_market_edge_rule_requires_minimum_evidence():
+    frame = pd.DataFrame({
+        "race_id": ["R1", "R1"],
+        "finish_position": [1, 2],
+        "win_odds": [3.0, 2.0],
+    })
+    probability = pd.Series(
+        [0.40, 0.20],
+        index=frame.index,
+        dtype=float,
+    )
+    market_probability = pd.Series(
+        [0.35, 0.25],
+        index=frame.index,
+        dtype=float,
+    )
+
+    rule, _ = fit_residual_market_edge_rule(
+        frame,
+        probability,
+        market_probability,
         min_rows=200,
         min_races=100,
     )

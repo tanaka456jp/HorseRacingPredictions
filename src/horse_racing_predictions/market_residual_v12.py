@@ -48,6 +48,25 @@ EV_POLICIES = (
 )
 
 
+MARKET_EDGE_RATIO_THRESHOLDS = (
+    1.00,
+    1.005,
+    1.01,
+    1.02,
+    1.03,
+    1.05,
+    1.075,
+    1.10,
+    1.15,
+    1.20,
+)
+
+MARKET_EDGE_POLICIES = (
+    "all_candidates",
+    "top1_edge_per_race",
+)
+
+
 def _safe_float(value) -> float | None:
     value = float(value)
     return value if math.isfinite(value) else None
@@ -322,6 +341,244 @@ def evaluate_fixed_residual_ev_rule(
     return _ev_rule_result(
         selected,
         ev_threshold=float(rule["ev_threshold"]),
+        policy=str(rule["policy"]),
+    )
+
+
+
+def _select_market_edge_candidates(
+    frame: pd.DataFrame,
+    probability: pd.Series,
+    market_probability: pd.Series,
+    *,
+    edge_ratio_threshold: float,
+    min_probability: float,
+    policy: str,
+) -> pd.DataFrame:
+    if policy not in MARKET_EDGE_POLICIES:
+        raise ValueError(
+            f"unknown market-edge policy: {policy}"
+        )
+    if not probability.index.equals(
+        market_probability.index
+    ):
+        raise ValueError(
+            "probability and market probability indexes differ"
+        )
+
+    market = market_probability.astype(float).clip(
+        lower=1e-12,
+        upper=1.0,
+    )
+    edge_ratio = probability.astype(float) / market
+    odds = pd.to_numeric(
+        frame["win_odds"],
+        errors="coerce",
+    )
+    expected_return = probability.astype(float) * odds
+    selected = frame.loc[
+        probability.ge(min_probability)
+        & edge_ratio.ge(edge_ratio_threshold)
+    ].copy()
+    if selected.empty:
+        return selected
+
+    selected["_probability"] = probability.loc[
+        selected.index
+    ]
+    selected["_market_probability"] = market.loc[
+        selected.index
+    ]
+    selected["_edge_ratio"] = edge_ratio.loc[
+        selected.index
+    ]
+    selected["_expected_return"] = expected_return.loc[
+        selected.index
+    ]
+
+    if policy == "top1_edge_per_race":
+        selected = (
+            selected.sort_values(
+                [
+                    "race_id",
+                    "_edge_ratio",
+                    "_expected_return",
+                    "_probability",
+                ],
+                ascending=[True, False, False, False],
+                kind="stable",
+            )
+            .groupby(
+                "race_id",
+                sort=False,
+                as_index=False,
+            )
+            .head(1)
+        )
+
+    return selected
+
+
+def _market_edge_rule_result(
+    selected: pd.DataFrame,
+    *,
+    edge_ratio_threshold: float,
+    policy: str,
+) -> dict:
+    if selected.empty:
+        return {
+            "edge_ratio_threshold": float(
+                edge_ratio_threshold
+            ),
+            "policy": policy,
+            "rows": 0,
+            "races": 0,
+            "wins": 0,
+            "hit_rate": None,
+            "average_probability": None,
+            "average_market_probability": None,
+            "average_edge_ratio": None,
+            "average_expected_return": None,
+            "flat_bet_roi_final_odds": None,
+        }
+
+    odds = pd.to_numeric(
+        selected["win_odds"],
+        errors="coerce",
+    )
+    finish = pd.to_numeric(
+        selected["finish_position"],
+        errors="coerce",
+    )
+    wins_mask = finish.eq(1)
+    wins = int(wins_mask.sum())
+    flat_return = float(
+        odds.where(
+            wins_mask,
+            0.0,
+        ).mean()
+    )
+    return {
+        "edge_ratio_threshold": float(
+            edge_ratio_threshold
+        ),
+        "policy": policy,
+        "rows": int(len(selected)),
+        "races": int(
+            selected["race_id"].nunique()
+        ),
+        "wins": wins,
+        "hit_rate": _safe_float(
+            wins / len(selected)
+        ),
+        "average_probability": _safe_float(
+            selected["_probability"].mean()
+        ),
+        "average_market_probability": _safe_float(
+            selected["_market_probability"].mean()
+        ),
+        "average_edge_ratio": _safe_float(
+            selected["_edge_ratio"].mean()
+        ),
+        "average_expected_return": _safe_float(
+            selected["_expected_return"].mean()
+        ),
+        "flat_bet_roi_final_odds": _safe_float(
+            flat_return - 1.0
+        ),
+    }
+
+
+def residual_market_edge_sweep(
+    frame: pd.DataFrame,
+    probability: pd.Series,
+    market_probability: pd.Series,
+    *,
+    min_probability: float = 0.03,
+    thresholds: tuple[float, ...] = MARKET_EDGE_RATIO_THRESHOLDS,
+    policies: tuple[str, ...] = MARKET_EDGE_POLICIES,
+) -> list[dict]:
+    rows: list[dict] = []
+    for policy in policies:
+        for threshold in thresholds:
+            selected = _select_market_edge_candidates(
+                frame,
+                probability,
+                market_probability,
+                edge_ratio_threshold=float(threshold),
+                min_probability=min_probability,
+                policy=policy,
+            )
+            rows.append(
+                _market_edge_rule_result(
+                    selected,
+                    edge_ratio_threshold=float(threshold),
+                    policy=policy,
+                )
+            )
+    return rows
+
+
+def fit_residual_market_edge_rule(
+    frame: pd.DataFrame,
+    probability: pd.Series,
+    market_probability: pd.Series,
+    *,
+    min_probability: float = 0.03,
+    min_rows: int = 200,
+    min_races: int = 100,
+) -> tuple[dict | None, list[dict]]:
+    sweep = residual_market_edge_sweep(
+        frame,
+        probability,
+        market_probability,
+        min_probability=min_probability,
+    )
+    eligible = [
+        row
+        for row in sweep
+        if row["rows"] >= min_rows
+        and row["races"] >= min_races
+        and row["flat_bet_roi_final_odds"] is not None
+    ]
+    if not eligible:
+        return None, sweep
+
+    best = max(
+        eligible,
+        key=lambda row: (
+            float(row["flat_bet_roi_final_odds"]),
+            int(row["races"]),
+            int(row["rows"]),
+            -float(row["edge_ratio_threshold"]),
+        ),
+    )
+    return dict(best), sweep
+
+
+def evaluate_fixed_residual_market_edge_rule(
+    frame: pd.DataFrame,
+    probability: pd.Series,
+    market_probability: pd.Series,
+    rule: dict,
+    *,
+    min_probability: float = 0.03,
+) -> dict:
+    selected = _select_market_edge_candidates(
+        frame,
+        probability,
+        market_probability,
+        edge_ratio_threshold=float(
+            rule["edge_ratio_threshold"]
+        ),
+        min_probability=min_probability,
+        policy=str(rule["policy"]),
+    )
+    return _market_edge_rule_result(
+        selected,
+        edge_ratio_threshold=float(
+            rule["edge_ratio_threshold"]
+        ),
         policy=str(rule["policy"]),
     )
 
@@ -678,6 +935,16 @@ def evaluate_market_residual_v12_development(
             min_races=min_ev_races,
         )
     )
+    fitted_market_edge_rule, market_edge_sweep = (
+        fit_residual_market_edge_rule(
+            tuning,
+            tuning_adjusted,
+            tuning_market,
+            min_probability=min_probability,
+            min_rows=min_ev_rows,
+            min_races=min_ev_races,
+        )
+    )
 
     def _evaluate_period(
         period: pd.DataFrame,
@@ -703,6 +970,17 @@ def evaluate_market_residual_v12_development(
                 period,
                 adjusted,
                 fitted_ev_rule,
+                min_probability=min_probability,
+            )
+        )
+        fixed_market_edge_rule_result = (
+            None
+            if fitted_market_edge_rule is None
+            else evaluate_fixed_residual_market_edge_rule(
+                period,
+                adjusted,
+                market,
+                fitted_market_edge_rule,
                 min_probability=min_probability,
             )
         )
@@ -774,6 +1052,9 @@ def evaluate_market_residual_v12_development(
                 residual.std(ddof=0)
             ),
             "fixed_ev_rule_result": fixed_ev_rule_result,
+            "fixed_market_edge_rule_result": (
+                fixed_market_edge_rule_result
+            ),
         }
 
     result_2023 = _evaluate_period(
@@ -819,6 +1100,40 @@ def evaluate_market_residual_v12_development(
         ) > 0.0
         and _ev_period_passed(result_2023)
         and _ev_period_passed(result_2024)
+    )
+
+    def _market_edge_period_passed(
+        result: dict,
+    ) -> bool:
+        edge_result = result[
+            "fixed_market_edge_rule_result"
+        ]
+        return bool(
+            edge_result is not None
+            and edge_result["flat_bet_roi_final_odds"] is not None
+            and float(
+                edge_result["flat_bet_roi_final_odds"]
+            ) > 0.0
+            and int(edge_result["rows"]) >= min_ev_rows
+            and int(edge_result["races"]) >= min_ev_races
+        )
+
+    market_edge_gate = bool(
+        fitted_market_edge_rule is not None
+        and fitted_market_edge_rule[
+            "flat_bet_roi_final_odds"
+        ] is not None
+        and float(
+            fitted_market_edge_rule[
+                "flat_bet_roi_final_odds"
+            ]
+        ) > 0.0
+        and _market_edge_period_passed(
+            result_2023
+        )
+        and _market_edge_period_passed(
+            result_2024
+        )
     )
 
     return {
@@ -872,10 +1187,23 @@ def evaluate_market_residual_v12_development(
             "fitted_rule": fitted_ev_rule,
             "threshold_sweep": ev_threshold_sweep,
         },
+        "market_edge_rule_tuning_2022": {
+            "period_start": str(
+                tuning["race_date"].min().date()
+            ),
+            "period_end": str(
+                tuning["race_date"].max().date()
+            ),
+            "fitted_rule": fitted_market_edge_rule,
+            "threshold_sweep": market_edge_sweep,
+        },
         "validation_2023": result_2023,
         "validation_2024": result_2024,
         "development_gate_passed": gate,
         "ev_development_gate_passed": ev_gate,
+        "market_edge_development_gate_passed": (
+            market_edge_gate
+        ),
         "ev_constraints": {
             "min_probability": float(min_probability),
             "min_rows": int(min_ev_rows),

@@ -11,3 +11,11 @@ Select the residual EV rule only on the through-2022 tuning period and freeze it
 unchanged for 2023 and 2024 validation. Do not inspect or reuse 2025-2026
 holdout rows. Do not change Forward Paper thresholds from this research result.
 request=2026-10-04-ev-rnd-phase1
+
+Phase 2 challenger: sweep residual-adjusted probability divided by normalized
+market probability on the through-2022 tuning period. Freeze the selected
+market-edge rule unchanged for 2023 and 2024 validation. Require at least
+200 rows and 100 races. Keep the direct raw-odds EV experiment as a separate
+comparison. Do not inspect or reuse 2025-2026 holdout rows, and do not change
+Forward Paper thresholds.
+request=2026-10-05-market-edge-rnd-phase2
