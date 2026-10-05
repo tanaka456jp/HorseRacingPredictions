@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+from itertools import permutations
 
 import numpy as np
 import pandas as pd
@@ -344,6 +345,284 @@ def paired_race_bootstrap_binary_quality(
     }
 
 
+def _plackett_luce_top3_probability(
+    strengths: np.ndarray,
+    order: tuple[int, int, int],
+) -> float:
+    """Probability of one ordered top-three under fixed PL strengths."""
+    remaining = float(np.sum(strengths))
+    probability = 1.0
+    for position in order:
+        strength = float(strengths[position])
+        if remaining <= 0.0 or strength <= 0.0:
+            return 0.0
+        probability *= strength / remaining
+        remaining -= strength
+    return float(probability)
+
+
+def exotic_combination_race_evidence(
+    frame: pd.DataFrame,
+    probability: pd.Series,
+) -> pd.DataFrame:
+    """Convert Top-3 marginals to fixed joint order/set probabilities.
+
+    Phase 3 uses the pre-registered transform strength=q/(1-q), then a
+    Plackett-Luce without-replacement ranking distribution. No fitting or
+    tuning occurs in this conversion.
+    """
+    if frame.empty:
+        raise ValueError("combination evidence frame is empty")
+    if not probability.index.equals(frame.index):
+        raise ValueError("combination probability index differs from frame")
+
+    q = probability.astype(float).clip(
+        lower=1e-9,
+        upper=1.0 - 1e-9,
+    )
+    rows: list[dict] = []
+
+    for race_id, race in frame.groupby("race_id", sort=False):
+        finish = pd.to_numeric(
+            race["finish_position"],
+            errors="coerce",
+        )
+        actual_indices: list[object] = []
+        valid = True
+        for place in (1, 2, 3):
+            matches = race.index[finish.eq(place)].tolist()
+            if len(matches) != 1:
+                valid = False
+                break
+            actual_indices.append(matches[0])
+        if not valid or len(race) < 3:
+            continue
+
+        local_indices = list(race.index)
+        local_position = {
+            index: idx
+            for idx, index in enumerate(local_indices)
+        }
+        ordered = tuple(
+            local_position[index]
+            for index in actual_indices
+        )
+
+        race_q = q.loc[local_indices].to_numpy(dtype=float)
+        strengths = race_q / (1.0 - race_q)
+
+        trifecta_probability = _plackett_luce_top3_probability(
+            strengths,
+            ordered,
+        )
+        trio_probability = float(sum(
+            _plackett_luce_top3_probability(
+                strengths,
+                tuple(order),
+            )
+            for order in permutations(ordered, 3)
+        ))
+
+        top3_odds = pd.to_numeric(
+            race.loc[actual_indices, "win_odds"],
+            errors="coerce",
+        )
+        contains_longshot = bool(
+            top3_odds.ge(TOP3_LONGSHOT_ODDS_MIN).any()
+        )
+
+        rows.append({
+            "race_id": str(race_id),
+            "trifecta_probability": max(
+                float(trifecta_probability),
+                1e-300,
+            ),
+            "trio_probability": max(
+                min(float(trio_probability), 1.0),
+                1e-300,
+            ),
+            "contains_longshot": contains_longshot,
+        })
+
+    evidence = pd.DataFrame(rows)
+    if evidence.empty:
+        raise ValueError(
+            "no races with unique first/second/third finishers "
+            "for combination evidence"
+        )
+    evidence["trifecta_nll"] = -np.log(
+        evidence["trifecta_probability"]
+    )
+    evidence["trio_nll"] = -np.log(
+        evidence["trio_probability"]
+    )
+    return evidence
+
+
+def _joint_quality(evidence: pd.DataFrame) -> dict:
+    if evidence.empty:
+        raise ValueError("joint quality evidence is empty")
+    return {
+        "races": int(len(evidence)),
+        "mean_trifecta_nll": _safe_float(
+            evidence["trifecta_nll"].mean()
+        ),
+        "mean_trio_nll": _safe_float(
+            evidence["trio_nll"].mean()
+        ),
+        "geometric_mean_realized_trifecta_probability": _safe_float(
+            np.exp(-evidence["trifecta_nll"].mean())
+        ),
+        "geometric_mean_realized_trio_probability": _safe_float(
+            np.exp(-evidence["trio_nll"].mean())
+        ),
+    }
+
+
+def paired_race_bootstrap_joint_nll(
+    challenger_evidence: pd.DataFrame,
+    baseline_evidence: pd.DataFrame,
+    *,
+    samples: int = TOP3_BOOTSTRAP_SAMPLES,
+    seed: int = TOP3_BOOTSTRAP_SEED,
+) -> dict:
+    if samples < 1:
+        raise ValueError("bootstrap samples must be positive")
+
+    merged = challenger_evidence[
+        ["race_id", "trifecta_nll", "trio_nll"]
+    ].merge(
+        baseline_evidence[
+            ["race_id", "trifecta_nll", "trio_nll"]
+        ],
+        on="race_id",
+        how="inner",
+        suffixes=("_challenger", "_baseline"),
+        validate="one_to_one",
+    )
+    if merged.empty:
+        raise ValueError("joint bootstrap evidence has no paired races")
+
+    trifecta_delta = (
+        merged["trifecta_nll_challenger"]
+        - merged["trifecta_nll_baseline"]
+    ).to_numpy(dtype=float)
+    trio_delta = (
+        merged["trio_nll_challenger"]
+        - merged["trio_nll_baseline"]
+    ).to_numpy(dtype=float)
+
+    race_count = int(len(merged))
+    rng = np.random.default_rng(seed)
+    sampled_trifecta = np.empty(int(samples), dtype=float)
+    sampled_trio = np.empty(int(samples), dtype=float)
+
+    for idx in range(int(samples)):
+        draw = rng.integers(0, race_count, size=race_count)
+        sampled_trifecta[idx] = float(
+            trifecta_delta[draw].mean()
+        )
+        sampled_trio[idx] = float(
+            trio_delta[draw].mean()
+        )
+
+    return {
+        "samples": int(samples),
+        "seed": int(seed),
+        "races": race_count,
+        "trifecta_nll_improvement_support": _safe_float(
+            np.mean(sampled_trifecta < 0.0)
+        ),
+        "trio_nll_improvement_support": _safe_float(
+            np.mean(sampled_trio < 0.0)
+        ),
+        "trifecta_nll_delta_ci90": [
+            _safe_float(np.quantile(sampled_trifecta, 0.05)),
+            _safe_float(np.quantile(sampled_trifecta, 0.95)),
+        ],
+        "trio_nll_delta_ci90": [
+            _safe_float(np.quantile(sampled_trio, 0.05)),
+            _safe_float(np.quantile(sampled_trio, 0.95)),
+        ],
+    }
+
+
+def evaluate_exotic_combination_quality(
+    frame: pd.DataFrame,
+    baseline_probability: pd.Series,
+    challenger_probability: pd.Series,
+) -> dict:
+    baseline = exotic_combination_race_evidence(
+        frame,
+        baseline_probability,
+    )
+    challenger = exotic_combination_race_evidence(
+        frame,
+        challenger_probability,
+    )
+
+    def _segment(
+        baseline_segment: pd.DataFrame,
+        challenger_segment: pd.DataFrame,
+    ) -> dict:
+        baseline_quality = _joint_quality(baseline_segment)
+        challenger_quality = _joint_quality(challenger_segment)
+        bootstrap = paired_race_bootstrap_joint_nll(
+            challenger_segment,
+            baseline_segment,
+        )
+        return {
+            "baseline": baseline_quality,
+            "challenger": challenger_quality,
+            "trifecta_nll_delta": _safe_float(
+                float(challenger_quality["mean_trifecta_nll"])
+                - float(baseline_quality["mean_trifecta_nll"])
+            ),
+            "trio_nll_delta": _safe_float(
+                float(challenger_quality["mean_trio_nll"])
+                - float(baseline_quality["mean_trio_nll"])
+            ),
+            "paired_bootstrap_vs_baseline": bootstrap,
+        }
+
+    overall = _segment(baseline, challenger)
+
+    longshot_ids = set(
+        challenger.loc[
+            challenger["contains_longshot"],
+            "race_id",
+        ].astype(str)
+    )
+    baseline_longshot = baseline.loc[
+        baseline["race_id"].astype(str).isin(longshot_ids)
+    ].copy()
+    challenger_longshot = challenger.loc[
+        challenger["race_id"].astype(str).isin(longshot_ids)
+    ].copy()
+    if baseline_longshot.empty or challenger_longshot.empty:
+        raise ValueError(
+            "no realized top-three combinations contain a longshot proxy"
+        )
+
+    return {
+        "method": (
+            "fixed Plackett-Luce transform from Top-3 marginal "
+            "probabilities using strength=q/(1-q)"
+        ),
+        "overall": overall,
+        "longshot_containing": {
+            "definition": (
+                "realized top three contains at least one runner with "
+                "historical final win odds >= 6.0; development proxy only"
+            ),
+            **_segment(
+                baseline_longshot,
+                challenger_longshot,
+            ),
+        },
+    }
+
+
 def _evaluate_period(
     frame: pd.DataFrame,
     baseline_probability: pd.Series,
@@ -404,6 +683,11 @@ def _evaluate_period(
             - float(baseline["brier"])
         ),
         "paired_bootstrap_vs_baseline": bootstrap,
+        "combination_phase3": evaluate_exotic_combination_quality(
+            frame,
+            baseline_probability,
+            challenger_probability,
+        ),
         "longshot_proxy": {
             "definition": (
                 "historical final win odds >= 6.0; "
@@ -631,6 +915,32 @@ def evaluate_exotic_top3_development(
         and _bootstrap_period_passed(result_2024)
     )
 
+    def _combination_period_passed(result: dict) -> bool:
+        evidence = result["combination_phase3"]
+        for segment_name in ("overall", "longshot_containing"):
+            segment = evidence[segment_name]
+            bootstrap = segment["paired_bootstrap_vs_baseline"]
+            if not (
+                float(segment["trifecta_nll_delta"]) < 0.0
+                and float(segment["trio_nll_delta"]) < 0.0
+                and float(
+                    bootstrap[
+                        "trifecta_nll_improvement_support"
+                    ]
+                ) >= TOP3_MIN_IMPROVEMENT_SUPPORT
+                and float(
+                    bootstrap["trio_nll_improvement_support"]
+                ) >= TOP3_MIN_IMPROVEMENT_SUPPORT
+            ):
+                return False
+        return True
+
+    combination_gate = bool(
+        safety_gate
+        and _combination_period_passed(result_2023)
+        and _combination_period_passed(result_2024)
+    )
+
     return {
         "status": "research_only_exotic_top3_development",
         "hypothesis": (
@@ -639,10 +949,11 @@ def evaluate_exotic_top3_development(
             "historical final-odds >= 6.0 longshot proxy."
         ),
         "warning": (
-            "This phase does not estimate trifecta/trio expected value. "
-            "Historical final win odds are used only for development "
-            "segmentation. No exotic combination odds are available in "
-            "the current free pipeline, so no three-leg bet is selected."
+            "Phase 3 estimates relative trifecta/trio outcome probability "
+            "quality but not betting expected value. Historical final win "
+            "odds are development-only market inputs/proxies. No pre-race "
+            "exotic combination odds are available in the current free "
+            "pipeline, so no three-leg bet is selected."
         ),
         "training": {
             "period_start": str(
@@ -687,6 +998,21 @@ def evaluate_exotic_top3_development(
             "forward_paper": "unchanged",
             "paid_data": "not_used",
         },
+        "combination_phase3": {
+            "transform": (
+                "fixed Plackett-Luce q/(1-q); no Phase 3 fitting"
+            ),
+            "targets": [
+                "realized ordered top-three (trifecta probability proxy)",
+                "realized unordered top-three set (trio probability proxy)",
+            ],
+            "minimum_improvement_support": (
+                TOP3_MIN_IMPROVEMENT_SUPPORT
+            ),
+            "development_combination_gate_passed": (
+                combination_gate
+            ),
+        },
         "bootstrap_safety_phase2": {
             "samples": TOP3_BOOTSTRAP_SAMPLES,
             "seed": TOP3_BOOTSTRAP_SEED,
@@ -699,4 +1025,5 @@ def evaluate_exotic_top3_development(
         "evaluation_2024": result_2024,
         "development_gate_passed": gate,
         "development_safety_gate_passed": safety_gate,
+        "development_combination_gate_passed": combination_gate,
     }
