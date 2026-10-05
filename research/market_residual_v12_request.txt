@@ -65,3 +65,14 @@ freeze the zero-threshold rule unchanged for 2023 and 2024 validation. This is
 a research proxy using historical final odds only; do not inspect or reuse
 2025-2026 holdout rows and do not change Forward Paper thresholds.
 request=2026-10-05-direct-value-rnd-phase7
+
+Phase 8 challenger: train a parallel residual regressor on the standardized
+market error target (winner - normalized_market_probability) divided by
+sqrt(max(p*(1-p), 1e-4)). Convert its predictions back to raw probability
+residual units before applying the same race-softmax correction. Select only
+the correction gamma on the through-2022 tuning period using the existing gamma
+grid. Treat 2023 and 2024 explicitly as reused development evidence, not an
+independent holdout; the standardized challenger must beat baseline residual
+v12 on both winner log-loss and Brier in both years. Keep 2025-2026 untouched
+as the final independent holdout. Do not change Forward Paper thresholds.
+request=2026-10-05-standardized-market-residual-rnd-phase8
