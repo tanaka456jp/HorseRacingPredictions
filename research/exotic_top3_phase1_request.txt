@@ -39,3 +39,27 @@ Boundaries:
 - No paid tool, API, or data source may be used.
 
 request=2026-10-06-exotic-top3-rnd-phase1
+
+
+Phase 2 safety validation:
+Freeze the Phase 1 baseline/challenger feature sets and CatBoost settings.
+Do not add, remove, or tune features, thresholds, odds bands, or model
+hyperparameters from Phase 2 evidence.
+
+For each reused development year (2023 and 2024), run a deterministic paired
+race bootstrap comparing challenger minus baseline Top-3 binary log-loss and
+Brier:
+- 1000 bootstrap samples
+- seed 20261006
+- resample races with replacement
+- evaluate both the full field and the already pre-registered historical-final-
+  win-odds >= 6.0 longshot proxy
+- require at least 80% bootstrap support for challenger improvement in BOTH
+  binary log-loss and Brier, for BOTH full-field and longshot evidence, in BOTH
+  2023 and 2024
+
+This Phase 2 gate is uncertainty validation only. It is not a new tuning
+objective and it does not authorize trifecta/trio selection or Forward Paper
+changes. 2025-2026 remain untouched. No paid tool/API/data source may be used.
+
+request=2026-10-06-exotic-top3-safety-rnd-phase2
