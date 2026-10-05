@@ -15,6 +15,9 @@ from .market_aware_ranker_v11 import (
 
 
 TOP3_LONGSHOT_ODDS_MIN = 6.0
+TOP3_BOOTSTRAP_SAMPLES = 1000
+TOP3_BOOTSTRAP_SEED = 20261006
+TOP3_MIN_IMPROVEMENT_SUPPORT = 0.80
 
 TOP3_INTERACTION_SOURCE_FEATURES = (
     "horse_recent_top3_rate_5",
@@ -239,6 +242,108 @@ def _top3_quality(
     }
 
 
+
+def paired_race_bootstrap_binary_quality(
+    frame: pd.DataFrame,
+    challenger_probability: pd.Series,
+    baseline_probability: pd.Series,
+    *,
+    samples: int = TOP3_BOOTSTRAP_SAMPLES,
+    seed: int = TOP3_BOOTSTRAP_SEED,
+) -> dict:
+    """Race-level bootstrap of challenger-minus-baseline binary metrics."""
+    if samples < 1:
+        raise ValueError("bootstrap samples must be positive")
+    if frame.empty:
+        raise ValueError("bootstrap frame is empty")
+    if not challenger_probability.index.equals(frame.index):
+        raise ValueError("challenger probability index differs from frame")
+    if not baseline_probability.index.equals(frame.index):
+        raise ValueError("baseline probability index differs from frame")
+
+    target = top3_outcomes(frame).astype(float)
+    challenger = challenger_probability.astype(float).clip(
+        lower=1e-12,
+        upper=1.0 - 1e-12,
+    )
+    baseline = baseline_probability.astype(float).clip(
+        lower=1e-12,
+        upper=1.0 - 1e-12,
+    )
+
+    challenger_logloss = -(
+        target * np.log(challenger)
+        + (1.0 - target) * np.log(1.0 - challenger)
+    )
+    baseline_logloss = -(
+        target * np.log(baseline)
+        + (1.0 - target) * np.log(1.0 - baseline)
+    )
+    logloss_delta = challenger_logloss - baseline_logloss
+    brier_delta = (
+        np.square(challenger - target)
+        - np.square(baseline - target)
+    )
+
+    evidence = pd.DataFrame({
+        "race_id": frame["race_id"].astype(str),
+        "logloss_delta": logloss_delta,
+        "brier_delta": brier_delta,
+    })
+    grouped = (
+        evidence.groupby("race_id", sort=False)
+        .agg(
+            logloss_sum=("logloss_delta", "sum"),
+            brier_sum=("brier_delta", "sum"),
+            rows=("race_id", "size"),
+        )
+        .reset_index(drop=True)
+    )
+    race_count = int(len(grouped))
+    if race_count < 1:
+        raise ValueError("bootstrap evidence contains no races")
+
+    rng = np.random.default_rng(seed)
+    sampled_logloss = np.empty(int(samples), dtype=float)
+    sampled_brier = np.empty(int(samples), dtype=float)
+
+    logloss_sum = grouped["logloss_sum"].to_numpy(dtype=float)
+    brier_sum = grouped["brier_sum"].to_numpy(dtype=float)
+    row_count = grouped["rows"].to_numpy(dtype=float)
+
+    for idx in range(int(samples)):
+        draw = rng.integers(0, race_count, size=race_count)
+        denominator = float(row_count[draw].sum())
+        sampled_logloss[idx] = float(
+            logloss_sum[draw].sum() / denominator
+        )
+        sampled_brier[idx] = float(
+            brier_sum[draw].sum() / denominator
+        )
+
+    return {
+        "samples": int(samples),
+        "seed": int(seed),
+        "races": race_count,
+        "rows": int(len(frame)),
+        "winner_metric": "top3_binary",
+        "binary_log_loss_improvement_support": _safe_float(
+            np.mean(sampled_logloss < 0.0)
+        ),
+        "brier_improvement_support": _safe_float(
+            np.mean(sampled_brier < 0.0)
+        ),
+        "binary_log_loss_delta_ci90": [
+            _safe_float(np.quantile(sampled_logloss, 0.05)),
+            _safe_float(np.quantile(sampled_logloss, 0.95)),
+        ],
+        "brier_delta_ci90": [
+            _safe_float(np.quantile(sampled_brier, 0.05)),
+            _safe_float(np.quantile(sampled_brier, 0.95)),
+        ],
+    }
+
+
 def _evaluate_period(
     frame: pd.DataFrame,
     baseline_probability: pd.Series,
@@ -274,6 +379,17 @@ def _evaluate_period(
         challenger_longshot_probability,
     )
 
+    bootstrap = paired_race_bootstrap_binary_quality(
+        frame,
+        challenger_probability,
+        baseline_probability,
+    )
+    longshot_bootstrap = paired_race_bootstrap_binary_quality(
+        longshot,
+        challenger_longshot_probability,
+        baseline_longshot_probability,
+    )
+
     return {
         "period_start": str(frame["race_date"].min().date()),
         "period_end": str(frame["race_date"].max().date()),
@@ -287,6 +403,7 @@ def _evaluate_period(
             float(challenger["brier"])
             - float(baseline["brier"])
         ),
+        "paired_bootstrap_vs_baseline": bootstrap,
         "longshot_proxy": {
             "definition": (
                 "historical final win odds >= 6.0; "
@@ -301,6 +418,9 @@ def _evaluate_period(
             "brier_delta": _safe_float(
                 float(challenger_longshot["brier"])
                 - float(baseline_longshot["brier"])
+            ),
+            "paired_bootstrap_vs_baseline": (
+                longshot_bootstrap
             ),
         },
     }
@@ -481,6 +601,36 @@ def evaluate_exotic_top3_development(
         and _period_passed(result_2024)
     )
 
+    def _bootstrap_period_passed(result: dict) -> bool:
+        overall = result["paired_bootstrap_vs_baseline"]
+        longshot = result["longshot_proxy"][
+            "paired_bootstrap_vs_baseline"
+        ]
+        return bool(
+            float(
+                overall[
+                    "binary_log_loss_improvement_support"
+                ]
+            ) >= TOP3_MIN_IMPROVEMENT_SUPPORT
+            and float(
+                overall["brier_improvement_support"]
+            ) >= TOP3_MIN_IMPROVEMENT_SUPPORT
+            and float(
+                longshot[
+                    "binary_log_loss_improvement_support"
+                ]
+            ) >= TOP3_MIN_IMPROVEMENT_SUPPORT
+            and float(
+                longshot["brier_improvement_support"]
+            ) >= TOP3_MIN_IMPROVEMENT_SUPPORT
+        )
+
+    safety_gate = bool(
+        gate
+        and _bootstrap_period_passed(result_2023)
+        and _bootstrap_period_passed(result_2024)
+    )
+
     return {
         "status": "research_only_exotic_top3_development",
         "hypothesis": (
@@ -537,7 +687,16 @@ def evaluate_exotic_top3_development(
             "forward_paper": "unchanged",
             "paid_data": "not_used",
         },
+        "bootstrap_safety_phase2": {
+            "samples": TOP3_BOOTSTRAP_SAMPLES,
+            "seed": TOP3_BOOTSTRAP_SEED,
+            "minimum_improvement_support": (
+                TOP3_MIN_IMPROVEMENT_SUPPORT
+            ),
+            "development_safety_gate_passed": safety_gate,
+        },
         "evaluation_2023": result_2023,
         "evaluation_2024": result_2024,
         "development_gate_passed": gate,
+        "development_safety_gate_passed": safety_gate,
     }

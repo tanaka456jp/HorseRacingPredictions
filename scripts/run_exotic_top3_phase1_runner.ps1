@@ -64,7 +64,9 @@ $payload = @{
         longshot_binary_log_loss_delta = [double]$v24.longshot_proxy.binary_log_loss_delta
         longshot_brier_delta = [double]$v24.longshot_proxy.brier_delta
     }
+    bootstrap_safety_phase2 = $summary.bootstrap_safety_phase2
     development_gate_passed = [bool]$summary.development_gate_passed
+    development_safety_gate_passed = [bool]$summary.development_safety_gate_passed
 }
 $validationPath = Join-Path $ProjectRoot $ValidationOutput
 $validationDir = Split-Path -Parent $validationPath
@@ -86,6 +88,15 @@ if (-not [string]::IsNullOrWhiteSpace($env:GITHUB_STEP_SUMMARY)) {
         "- 2024 longshot log-loss delta: $($v24.longshot_proxy.binary_log_loss_delta)",
         "- 2024 longshot Brier delta: $($v24.longshot_proxy.brier_delta)",
         "- development gate passed: $($summary.development_gate_passed)",
+        "- 2023 overall log-loss bootstrap support: $($v23.paired_bootstrap_vs_baseline.binary_log_loss_improvement_support)",
+        "- 2023 overall Brier bootstrap support: $($v23.paired_bootstrap_vs_baseline.brier_improvement_support)",
+        "- 2023 longshot log-loss bootstrap support: $($v23.longshot_proxy.paired_bootstrap_vs_baseline.binary_log_loss_improvement_support)",
+        "- 2023 longshot Brier bootstrap support: $($v23.longshot_proxy.paired_bootstrap_vs_baseline.brier_improvement_support)",
+        "- 2024 overall log-loss bootstrap support: $($v24.paired_bootstrap_vs_baseline.binary_log_loss_improvement_support)",
+        "- 2024 overall Brier bootstrap support: $($v24.paired_bootstrap_vs_baseline.brier_improvement_support)",
+        "- 2024 longshot log-loss bootstrap support: $($v24.longshot_proxy.paired_bootstrap_vs_baseline.binary_log_loss_improvement_support)",
+        "- 2024 longshot Brier bootstrap support: $($v24.longshot_proxy.paired_bootstrap_vs_baseline.brier_improvement_support)",
+        "- development safety gate passed: $($summary.development_safety_gate_passed)",
         "- final holdout: $($summary.research_protocol.final_holdout)",
         "- Forward Paper: $($summary.research_protocol.forward_paper)"
     ) | Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Encoding UTF8
@@ -100,3 +111,12 @@ Write-Host "exotic_top3_2024_brier_delta=$($v24.brier_delta)"
 Write-Host "exotic_top3_2024_longshot_logloss_delta=$($v24.longshot_proxy.binary_log_loss_delta)"
 Write-Host "exotic_top3_2024_longshot_brier_delta=$($v24.longshot_proxy.brier_delta)"
 Write-Host "exotic_top3_development_gate_passed=$($summary.development_gate_passed)"
+Write-Host "exotic_top3_2023_logloss_bootstrap_support=$($v23.paired_bootstrap_vs_baseline.binary_log_loss_improvement_support)"
+Write-Host "exotic_top3_2023_brier_bootstrap_support=$($v23.paired_bootstrap_vs_baseline.brier_improvement_support)"
+Write-Host "exotic_top3_2023_longshot_logloss_bootstrap_support=$($v23.longshot_proxy.paired_bootstrap_vs_baseline.binary_log_loss_improvement_support)"
+Write-Host "exotic_top3_2023_longshot_brier_bootstrap_support=$($v23.longshot_proxy.paired_bootstrap_vs_baseline.brier_improvement_support)"
+Write-Host "exotic_top3_2024_logloss_bootstrap_support=$($v24.paired_bootstrap_vs_baseline.binary_log_loss_improvement_support)"
+Write-Host "exotic_top3_2024_brier_bootstrap_support=$($v24.paired_bootstrap_vs_baseline.brier_improvement_support)"
+Write-Host "exotic_top3_2024_longshot_logloss_bootstrap_support=$($v24.longshot_proxy.paired_bootstrap_vs_baseline.binary_log_loss_improvement_support)"
+Write-Host "exotic_top3_2024_longshot_brier_bootstrap_support=$($v24.longshot_proxy.paired_bootstrap_vs_baseline.brier_improvement_support)"
+Write-Host "exotic_top3_development_safety_gate_passed=$($summary.development_safety_gate_passed)"

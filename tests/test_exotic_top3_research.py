@@ -6,6 +6,7 @@ import pandas as pd
 from horse_racing_predictions.exotic_top3_research import (
     TOP3_LONGSHOT_ODDS_MIN,
     add_top3_race_interaction_features,
+    paired_race_bootstrap_binary_quality,
     top3_outcomes,
 )
 
@@ -88,3 +89,69 @@ def test_phase1_protocol_preserves_holdout_and_excludes_pedigree_identifier():
 
 def test_longshot_proxy_keeps_preregistered_six_odds_boundary():
     assert TOP3_LONGSHOT_ODDS_MIN == 6.0
+
+
+
+def test_paired_race_bootstrap_detects_better_top3_challenger():
+    frame = pd.DataFrame({
+        "race_id": ["R1", "R1", "R1", "R2", "R2", "R2"],
+        "finish_position": [1, 4, 5, 2, 6, 7],
+    })
+    challenger = pd.Series(
+        [0.80, 0.10, 0.10, 0.75, 0.10, 0.10],
+        index=frame.index,
+        dtype=float,
+    )
+    baseline = pd.Series(
+        [0.55, 0.25, 0.20, 0.50, 0.25, 0.20],
+        index=frame.index,
+        dtype=float,
+    )
+
+    evidence = paired_race_bootstrap_binary_quality(
+        frame,
+        challenger,
+        baseline,
+        samples=100,
+        seed=123,
+    )
+
+    assert (
+        evidence["binary_log_loss_improvement_support"]
+        == 1.0
+    )
+    assert evidence["brier_improvement_support"] == 1.0
+
+
+def test_paired_race_bootstrap_is_deterministic():
+    frame = pd.DataFrame({
+        "race_id": ["R1", "R1", "R2", "R2"],
+        "finish_position": [1, 5, 2, 6],
+    })
+    challenger = pd.Series(
+        [0.65, 0.20, 0.60, 0.20],
+        index=frame.index,
+        dtype=float,
+    )
+    baseline = pd.Series(
+        [0.60, 0.25, 0.55, 0.25],
+        index=frame.index,
+        dtype=float,
+    )
+
+    first = paired_race_bootstrap_binary_quality(
+        frame,
+        challenger,
+        baseline,
+        samples=50,
+        seed=7,
+    )
+    second = paired_race_bootstrap_binary_quality(
+        frame,
+        challenger,
+        baseline,
+        samples=50,
+        seed=7,
+    )
+
+    assert first == second
