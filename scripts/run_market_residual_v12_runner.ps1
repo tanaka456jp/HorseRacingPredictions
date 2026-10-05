@@ -60,6 +60,7 @@ $payload = @{
     broad_market_edge_rule_tuning_2022 = $summary.broad_market_edge_rule_tuning_2022
     market_edge_odds_segment_tuning_2022 = $summary.market_edge_odds_segment_tuning_2022
     longshot_market_edge_tuning_2022 = $summary.longshot_market_edge_tuning_2022
+    stable_longshot_market_edge_tuning_2022 = $summary.stable_longshot_market_edge_tuning_2022
     validation_2023 = $v23
     validation_2024 = $v24
     development_gate_passed = [bool]$summary.development_gate_passed
@@ -68,6 +69,7 @@ $payload = @{
     broad_market_edge_development_gate_passed = [bool]$summary.broad_market_edge_development_gate_passed
     market_edge_odds_segment_development_gate_passed = [bool]$summary.market_edge_odds_segment_development_gate_passed
     longshot_market_edge_development_gate_passed = [bool]$summary.longshot_market_edge_development_gate_passed
+    stable_longshot_market_edge_development_gate_passed = [bool]$summary.stable_longshot_market_edge_development_gate_passed
     ev_constraints = $summary.ev_constraints
 }
 $validationPath = Join-Path $ProjectRoot $ValidationOutput
@@ -110,7 +112,11 @@ if (-not [string]::IsNullOrWhiteSpace($env:GITHUB_STEP_SUMMARY)) {
         "- fitted longshot market-edge rule: $($summary.longshot_market_edge_tuning_2022.fitted_rule | ConvertTo-Json -Compress)",
         "- 2023 fixed longshot result: $($v23.fixed_longshot_market_edge_result | ConvertTo-Json -Compress)",
         "- 2024 fixed longshot result: $($v24.fixed_longshot_market_edge_result | ConvertTo-Json -Compress)",
-        "- longshot development gate passed: $($summary.longshot_market_edge_development_gate_passed)"
+        "- longshot development gate passed: $($summary.longshot_market_edge_development_gate_passed)",
+        "- fitted stable longshot rule: $($summary.stable_longshot_market_edge_tuning_2022.fitted_rule | ConvertTo-Json -Compress)",
+        "- 2023 stable longshot result: $($v23.fixed_stable_longshot_market_edge_result | ConvertTo-Json -Compress)",
+        "- 2024 stable longshot result: $($v24.fixed_stable_longshot_market_edge_result | ConvertTo-Json -Compress)",
+        "- stable longshot gate passed: $($summary.stable_longshot_market_edge_development_gate_passed)"
     ) | Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Encoding UTF8
 }
 
@@ -141,3 +147,7 @@ Write-Host "fitted_longshot_market_edge_rule=$($summary.longshot_market_edge_tun
 Write-Host "v2023_fixed_longshot=$($v23.fixed_longshot_market_edge_result | ConvertTo-Json -Compress)"
 Write-Host "v2024_fixed_longshot=$($v24.fixed_longshot_market_edge_result | ConvertTo-Json -Compress)"
 Write-Host "longshot_market_edge_development_gate_passed=$($summary.longshot_market_edge_development_gate_passed)"
+Write-Host "fitted_stable_longshot_rule=$($summary.stable_longshot_market_edge_tuning_2022.fitted_rule | ConvertTo-Json -Compress)"
+Write-Host "v2023_stable_longshot=$($v23.fixed_stable_longshot_market_edge_result | ConvertTo-Json -Compress)"
+Write-Host "v2024_stable_longshot=$($v24.fixed_stable_longshot_market_edge_result | ConvertTo-Json -Compress)"
+Write-Host "stable_longshot_market_edge_development_gate_passed=$($summary.stable_longshot_market_edge_development_gate_passed)"
