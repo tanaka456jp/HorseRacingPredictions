@@ -86,3 +86,16 @@ residual model on both winner log-loss and Brier in both evaluation years.
 2023/2024 remain reused development evidence; 2025-2026 stay untouched as the
 final independent holdout. Do not change Forward Paper thresholds.
 request=2026-10-05-rolling-residual-refit-rnd-phase9
+
+
+Phase 10 safety validation: freeze the Phase 9 annual expanding-window rolling
+residual procedure exactly as selected. Do not tune gamma, thresholds, features,
+or model settings from this phase. On the reused 2023 and 2024 development
+evaluations only, compare rolling probabilities with static residual v12 using
+a deterministic paired race bootstrap (1000 samples, seed 20261006). Require at
+least 80% bootstrap support for lower winner log-loss and lower Brier in each
+year before the rolling challenger can be considered ready for a separate
+Forward Paper integration proposal. This is a safety/uncertainty gate, not a
+new tuning objective. 2025-2026 stay untouched as the final independent
+holdout. Forward Paper settings remain unchanged.
+request=2026-10-06-rolling-residual-safety-rnd-phase10
