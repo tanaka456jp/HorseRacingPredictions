@@ -56,10 +56,12 @@ $payload = @{
     selected_gamma = [double]$summary.gamma_tuning.selected_gamma
     gamma_sweep = $summary.gamma_tuning.sweep
     ev_rule_tuning_2022 = $summary.ev_rule_tuning_2022
+    market_edge_rule_tuning_2022 = $summary.market_edge_rule_tuning_2022
     validation_2023 = $v23
     validation_2024 = $v24
     development_gate_passed = [bool]$summary.development_gate_passed
     ev_development_gate_passed = [bool]$summary.ev_development_gate_passed
+    market_edge_development_gate_passed = [bool]$summary.market_edge_development_gate_passed
     ev_constraints = $summary.ev_constraints
 }
 $validationPath = Join-Path $ProjectRoot $ValidationOutput
@@ -86,7 +88,11 @@ if (-not [string]::IsNullOrWhiteSpace($env:GITHUB_STEP_SUMMARY)) {
         "- fitted EV rule: $($summary.ev_rule_tuning_2022.fitted_rule | ConvertTo-Json -Compress)",
         "- 2023 fixed EV result: $($v23.fixed_ev_rule_result | ConvertTo-Json -Compress)",
         "- 2024 fixed EV result: $($v24.fixed_ev_rule_result | ConvertTo-Json -Compress)",
-        "- EV development gate passed: $($summary.ev_development_gate_passed)"
+        "- EV development gate passed: $($summary.ev_development_gate_passed)",
+        "- fitted market-edge rule: $($summary.market_edge_rule_tuning_2022.fitted_rule | ConvertTo-Json -Compress)",
+        "- 2023 fixed market-edge result: $($v23.fixed_market_edge_rule_result | ConvertTo-Json -Compress)",
+        "- 2024 fixed market-edge result: $($v24.fixed_market_edge_rule_result | ConvertTo-Json -Compress)",
+        "- market-edge development gate passed: $($summary.market_edge_development_gate_passed)"
     ) | Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Encoding UTF8
 }
 
@@ -101,3 +107,7 @@ Write-Host "fitted_ev_rule=$($summary.ev_rule_tuning_2022.fitted_rule | ConvertT
 Write-Host "v2023_fixed_ev=$($v23.fixed_ev_rule_result | ConvertTo-Json -Compress)"
 Write-Host "v2024_fixed_ev=$($v24.fixed_ev_rule_result | ConvertTo-Json -Compress)"
 Write-Host "ev_development_gate_passed=$($summary.ev_development_gate_passed)"
+Write-Host "fitted_market_edge_rule=$($summary.market_edge_rule_tuning_2022.fitted_rule | ConvertTo-Json -Compress)"
+Write-Host "v2023_fixed_market_edge=$($v23.fixed_market_edge_rule_result | ConvertTo-Json -Compress)"
+Write-Host "v2024_fixed_market_edge=$($v24.fixed_market_edge_rule_result | ConvertTo-Json -Compress)"
+Write-Host "market_edge_development_gate_passed=$($summary.market_edge_development_gate_passed)"
