@@ -8,6 +8,7 @@ from horse_racing_predictions.exotic_top3_research import (
     add_top3_race_interaction_features,
     exotic_combination_race_evidence,
     evaluate_exotic_combination_quality,
+    evaluate_role_aware_combination_quality,
     paired_race_bootstrap_binary_quality,
     paired_race_bootstrap_joint_nll,
     top3_outcomes,
@@ -281,4 +282,48 @@ def test_phase3_protocol_freezes_models_and_preserves_holdout():
     assert "development_combination_gate_passed" in source
     assert "Phase 3" in request
     assert "Do not retrain differently" in request
+    assert "2025-2026 remain untouched" in request
+
+
+
+def test_role_aware_combination_uses_win_market_for_first_place():
+    frame = _combination_frame().copy()
+    frame["market_implied_probability"] = [
+        0.50, 0.25, 0.15, 0.10,
+        0.25, 0.50, 0.10, 0.15,
+    ]
+    baseline = pd.Series(
+        [0.50, 0.45, 0.35, 0.30, 0.45, 0.50, 0.30, 0.35],
+        index=frame.index,
+        dtype=float,
+    )
+    challenger = pd.Series(
+        [0.72, 0.65, 0.55, 0.12, 0.64, 0.74, 0.12, 0.58],
+        index=frame.index,
+        dtype=float,
+    )
+
+    evidence = evaluate_role_aware_combination_quality(
+        frame,
+        baseline,
+        challenger,
+    )
+
+    assert evidence["overall"]["trifecta_nll_delta"] < 0.0
+    assert evidence["overall"]["trio_nll_delta"] < 0.0
+    assert "historical win-market" in evidence["method"]
+
+
+def test_phase4_protocol_is_role_aware_without_phase3_threshold_tuning():
+    source = Path(
+        "src/horse_racing_predictions/exotic_top3_research.py"
+    ).read_text(encoding="utf-8")
+    request = Path(
+        "research/exotic_top3_phase1_request.txt"
+    ).read_text(encoding="utf-8")
+
+    assert "role_aware_combination_phase4" in source
+    assert '"phase3_result_required": False' in source
+    assert "Phase 4" in request
+    assert "first-place" in request
     assert "2025-2026 remain untouched" in request
