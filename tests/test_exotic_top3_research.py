@@ -6,7 +6,10 @@ import pandas as pd
 from horse_racing_predictions.exotic_top3_research import (
     TOP3_LONGSHOT_ODDS_MIN,
     add_top3_race_interaction_features,
+    exotic_combination_race_evidence,
+    evaluate_exotic_combination_quality,
     paired_race_bootstrap_binary_quality,
+    paired_race_bootstrap_joint_nll,
     top3_outcomes,
 )
 
@@ -155,3 +158,127 @@ def test_paired_race_bootstrap_is_deterministic():
     )
 
     assert first == second
+
+
+
+def _combination_frame() -> pd.DataFrame:
+    return pd.DataFrame({
+        "race_id": ["R1"] * 4 + ["R2"] * 4,
+        "finish_position": [1, 2, 3, 4, 2, 1, 4, 3],
+        "win_odds": [2.0, 4.0, 12.0, 20.0, 3.0, 2.2, 30.0, 8.0],
+    })
+
+
+def test_exotic_combination_evidence_produces_valid_probabilities():
+    frame = _combination_frame()
+    probability = pd.Series(
+        [0.75, 0.60, 0.45, 0.15, 0.60, 0.72, 0.10, 0.48],
+        index=frame.index,
+        dtype=float,
+    )
+
+    evidence = exotic_combination_race_evidence(
+        frame,
+        probability,
+    )
+
+    assert len(evidence) == 2
+    assert evidence["trifecta_probability"].between(
+        0.0,
+        1.0,
+        inclusive="both",
+    ).all()
+    assert evidence["trio_probability"].between(
+        0.0,
+        1.0,
+        inclusive="both",
+    ).all()
+    assert (
+        evidence["trio_probability"]
+        >= evidence["trifecta_probability"]
+    ).all()
+    assert evidence["contains_longshot"].all()
+
+
+def test_exotic_combination_challenger_can_improve_realized_joint_nll():
+    frame = _combination_frame()
+    baseline = pd.Series(
+        [0.50, 0.45, 0.35, 0.30, 0.45, 0.50, 0.30, 0.35],
+        index=frame.index,
+        dtype=float,
+    )
+    challenger = pd.Series(
+        [0.78, 0.65, 0.55, 0.12, 0.66, 0.80, 0.12, 0.58],
+        index=frame.index,
+        dtype=float,
+    )
+
+    evidence = evaluate_exotic_combination_quality(
+        frame,
+        baseline,
+        challenger,
+    )
+
+    assert evidence["overall"]["trifecta_nll_delta"] < 0.0
+    assert evidence["overall"]["trio_nll_delta"] < 0.0
+    assert (
+        evidence["longshot_containing"]["trifecta_nll_delta"]
+        < 0.0
+    )
+    assert (
+        evidence["longshot_containing"]["trio_nll_delta"]
+        < 0.0
+    )
+
+
+def test_joint_bootstrap_is_deterministic():
+    frame = _combination_frame()
+    baseline_probability = pd.Series(
+        [0.50, 0.45, 0.35, 0.30, 0.45, 0.50, 0.30, 0.35],
+        index=frame.index,
+        dtype=float,
+    )
+    challenger_probability = pd.Series(
+        [0.78, 0.65, 0.55, 0.12, 0.66, 0.80, 0.12, 0.58],
+        index=frame.index,
+        dtype=float,
+    )
+    baseline = exotic_combination_race_evidence(
+        frame,
+        baseline_probability,
+    )
+    challenger = exotic_combination_race_evidence(
+        frame,
+        challenger_probability,
+    )
+
+    first = paired_race_bootstrap_joint_nll(
+        challenger,
+        baseline,
+        samples=50,
+        seed=9,
+    )
+    second = paired_race_bootstrap_joint_nll(
+        challenger,
+        baseline,
+        samples=50,
+        seed=9,
+    )
+    assert first == second
+    assert first["trifecta_nll_improvement_support"] == 1.0
+    assert first["trio_nll_improvement_support"] == 1.0
+
+
+def test_phase3_protocol_freezes_models_and_preserves_holdout():
+    source = Path(
+        "src/horse_racing_predictions/exotic_top3_research.py"
+    ).read_text(encoding="utf-8")
+    request = Path(
+        "research/exotic_top3_phase1_request.txt"
+    ).read_text(encoding="utf-8")
+
+    assert "strength=q/(1-q)" in source
+    assert "development_combination_gate_passed" in source
+    assert "Phase 3" in request
+    assert "Do not retrain differently" in request
+    assert "2025-2026 remain untouched" in request

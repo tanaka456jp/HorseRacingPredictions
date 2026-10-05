@@ -100,8 +100,22 @@ def main() -> None:
                 ]
             ),
         },
+        "combination_phase3": {
+            "evaluation_2023": (
+                result["evaluation_2023"]["combination_phase3"]
+            ),
+            "evaluation_2024": (
+                result["evaluation_2024"]["combination_phase3"]
+            ),
+            "development_combination_gate_passed": (
+                result["development_combination_gate_passed"]
+            ),
+        },
         "development_gate_passed": (
             result["development_gate_passed"]
+        ),
+        "development_safety_gate_passed": (
+            result["development_safety_gate_passed"]
         ),
         "research_protocol": result["research_protocol"],
     }, ensure_ascii=False, indent=2))

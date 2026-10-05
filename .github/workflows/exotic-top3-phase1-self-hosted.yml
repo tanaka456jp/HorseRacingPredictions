@@ -1,4 +1,4 @@
-name: Exotic Top-3 Phase 1 (Self-hosted)
+name: Exotic Top-3 R&D (Self-hosted)
 
 on:
   workflow_dispatch:
@@ -17,7 +17,7 @@ concurrency:
 
 jobs:
   exotic-top3:
-    name: Exotic Top-3 Phase 1 development gate
+    name: Exotic Top-3 development gate
     runs-on: [self-hosted, Windows]
     timeout-minutes: 120
 
@@ -28,7 +28,7 @@ jobs:
           clean: false
           persist-credentials: false
 
-      - name: Run Exotic Top-3 Phase 1 research
+      - name: Run Exotic Top-3 R&D
         shell: powershell
         run: |
           & .\scripts\run_exotic_top3_phase1_runner.ps1
@@ -37,7 +37,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: exotic-top3-phase1-development-validation
+          name: exotic-top3-rnd-development-validation
           path: artifacts/exotic_top3_phase1_runner_validation.json
           if-no-files-found: warn
           retention-days: 14
