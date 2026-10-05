@@ -82,6 +82,10 @@ LONGSHOT_STABILITY_SPLIT_DATE = "2022-05-01"
 
 STANDARDIZED_RESIDUAL_VARIANCE_FLOOR = 1e-4
 
+ROLLING_REFIT_BOOTSTRAP_SAMPLES = 1000
+ROLLING_REFIT_BOOTSTRAP_SEED = 20261006
+ROLLING_REFIT_MIN_IMPROVEMENT_SUPPORT = 0.80
+
 
 def _safe_float(value) -> float | None:
     value = float(value)
@@ -161,6 +165,115 @@ def _quality(
                 outcomes,
             )
         ),
+    }
+
+
+def paired_race_bootstrap_quality_deltas(
+    frame: pd.DataFrame,
+    challenger_probability: pd.Series,
+    baseline_probability: pd.Series,
+    *,
+    samples: int = ROLLING_REFIT_BOOTSTRAP_SAMPLES,
+    seed: int = ROLLING_REFIT_BOOTSTRAP_SEED,
+) -> dict:
+    """Paired race bootstrap for challenger-minus-baseline quality deltas."""
+    if samples < 1:
+        raise ValueError("bootstrap samples must be positive")
+    if not challenger_probability.index.equals(frame.index):
+        raise ValueError("challenger probability index differs from frame")
+    if not baseline_probability.index.equals(frame.index):
+        raise ValueError("baseline probability index differs from frame")
+
+    outcomes = _outcomes(frame).astype(float)
+    evidence = pd.DataFrame(
+        {
+            "race_id": frame["race_id"].astype(str),
+            "outcome": outcomes,
+            "challenger": challenger_probability.astype(float),
+            "baseline": baseline_probability.astype(float),
+        },
+        index=frame.index,
+    )
+    if not np.isfinite(
+        evidence[["challenger", "baseline"]].to_numpy(dtype=float)
+    ).all():
+        raise ValueError("bootstrap probability contains non-finite value")
+
+    eps = 1e-15
+    race_logloss_delta: list[float] = []
+    race_brier_sum_delta: list[float] = []
+    race_row_count: list[int] = []
+    for _, group in evidence.groupby("race_id", sort=False):
+        winner = group["outcome"].eq(1.0)
+        if int(winner.sum()) != 1:
+            raise ValueError(
+                "bootstrap race must contain exactly one winner"
+            )
+        challenger = group["challenger"].clip(eps, 1.0)
+        baseline = group["baseline"].clip(eps, 1.0)
+        challenger_winner = float(challenger.loc[winner].iloc[0])
+        baseline_winner = float(baseline.loc[winner].iloc[0])
+        race_logloss_delta.append(
+            -math.log(challenger_winner)
+            + math.log(baseline_winner)
+        )
+        target = group["outcome"].to_numpy(dtype=float)
+        challenger_values = challenger.to_numpy(dtype=float)
+        baseline_values = baseline.to_numpy(dtype=float)
+        race_brier_sum_delta.append(
+            float(
+                np.square(challenger_values - target).sum()
+                - np.square(baseline_values - target).sum()
+            )
+        )
+        race_row_count.append(int(len(group)))
+
+    logloss_delta = np.asarray(race_logloss_delta, dtype=float)
+    brier_sum_delta = np.asarray(race_brier_sum_delta, dtype=float)
+    row_count = np.asarray(race_row_count, dtype=float)
+    race_count = int(len(logloss_delta))
+    if race_count < 1:
+        raise ValueError("bootstrap evidence contains no races")
+
+    observed_logloss_delta = float(logloss_delta.mean())
+    observed_brier_delta = float(
+        brier_sum_delta.sum() / row_count.sum()
+    )
+    rng = np.random.default_rng(seed)
+    draws = rng.integers(
+        0,
+        race_count,
+        size=(int(samples), race_count),
+    )
+    sampled_logloss_delta = logloss_delta[draws].mean(axis=1)
+    sampled_brier_delta = (
+        brier_sum_delta[draws].sum(axis=1)
+        / row_count[draws].sum(axis=1)
+    )
+
+    return {
+        "samples": int(samples),
+        "seed": int(seed),
+        "races": race_count,
+        "rows": int(row_count.sum()),
+        "winner_log_loss_delta": _safe_float(
+            observed_logloss_delta
+        ),
+        "brier_delta": _safe_float(observed_brier_delta),
+        "winner_log_loss_improvement_support": _safe_float(
+            np.mean(sampled_logloss_delta < 0.0)
+        ),
+        "brier_improvement_support": _safe_float(
+            np.mean(sampled_brier_delta < 0.0)
+        ),
+        "winner_log_loss_delta_ci90": [
+            _safe_float(np.quantile(sampled_logloss_delta, 0.05)),
+            _safe_float(np.quantile(sampled_logloss_delta, 0.95)),
+        ],
+        "brier_delta_ci90": [
+            _safe_float(np.quantile(sampled_brier_delta, 0.05)),
+            _safe_float(np.quantile(sampled_brier_delta, 0.95)),
+        ],
     }
 
 
@@ -1457,6 +1570,7 @@ def evaluate_rolling_residual_fold(
     evaluation_start: str,
     evaluation_end: str,
     iterations: int = 350,
+    baseline_probability: pd.Series | None = None,
 ) -> dict:
     train_end_ts = pd.Timestamp(
         train_end
@@ -1565,6 +1679,22 @@ def evaluate_rolling_residual_fold(
         evaluation,
         evaluation_adjusted,
     )
+    paired_bootstrap_vs_static = None
+    if baseline_probability is not None:
+        baseline = baseline_probability.reindex(
+            evaluation.index
+        )
+        if baseline.isna().any():
+            raise ValueError(
+                "baseline probability missing rolling evaluation rows"
+            )
+        paired_bootstrap_vs_static = (
+            paired_race_bootstrap_quality_deltas(
+                evaluation,
+                evaluation_adjusted,
+                baseline.astype(float),
+            )
+        )
     return {
         "train_end": str(train_end_ts.date()),
         "train_rows": int(len(train)),
@@ -1605,6 +1735,7 @@ def evaluate_rolling_residual_fold(
             float(residual_quality["brier"])
             - float(market_quality["brier"])
         ),
+        "paired_bootstrap_vs_static": paired_bootstrap_vs_static,
     }
 
 
@@ -2166,6 +2297,33 @@ def evaluate_market_residual_v12_development(
         validation_2024
     )
 
+    def _static_probability_for_rolling_benchmark(
+        period: pd.DataFrame,
+    ) -> pd.Series:
+        market = normalized_market_probability(
+            period.rename(
+                columns={"win_odds": "decimal_odds"}
+            )
+        )
+        residual = model.predict(period)
+        return residual_adjusted_probability(
+            period,
+            market,
+            residual,
+            gamma=gamma,
+        )
+
+    static_2023_probability = (
+        _static_probability_for_rolling_benchmark(
+            validation_2023
+        )
+    )
+    static_2024_probability = (
+        _static_probability_for_rolling_benchmark(
+            validation_2024
+        )
+    )
+
     rolling_2023 = evaluate_rolling_residual_fold(
         frame,
         list(features),
@@ -2175,6 +2333,7 @@ def evaluate_market_residual_v12_development(
         evaluation_start="2023-01-01",
         evaluation_end="2023-12-31",
         iterations=iterations,
+        baseline_probability=static_2023_probability,
     )
     rolling_2024 = evaluate_rolling_residual_fold(
         frame,
@@ -2185,6 +2344,7 @@ def evaluate_market_residual_v12_development(
         evaluation_start="2024-01-01",
         evaluation_end="2024-12-31",
         iterations=iterations,
+        baseline_probability=static_2024_probability,
     )
 
     def _annotate_rolling_vs_static(
@@ -2250,6 +2410,32 @@ def evaluate_market_residual_v12_development(
         and rolling_2024[
             "beats_static_residual_brier"
         ]
+    )
+
+    def _rolling_safety_fold_passed(
+        rolling: dict,
+    ) -> bool:
+        evidence = rolling[
+            "paired_bootstrap_vs_static"
+        ]
+        return bool(
+            evidence is not None
+            and float(
+                evidence[
+                    "winner_log_loss_improvement_support"
+                ]
+            )
+            >= ROLLING_REFIT_MIN_IMPROVEMENT_SUPPORT
+            and float(
+                evidence["brier_improvement_support"]
+            )
+            >= ROLLING_REFIT_MIN_IMPROVEMENT_SUPPORT
+        )
+
+    rolling_refit_safety_gate = bool(
+        rolling_refit_gate
+        and _rolling_safety_fold_passed(rolling_2023)
+        and _rolling_safety_fold_passed(rolling_2024)
     )
 
     gate = bool(
@@ -2659,6 +2845,26 @@ def evaluate_market_residual_v12_development(
             "fold_2024": rolling_2024,
             "development_gate_passed": rolling_refit_gate,
         },
+        "rolling_refit_safety_phase10": {
+            "method": (
+                "paired race bootstrap of frozen phase-9 rolling "
+                "probabilities versus static residual v12"
+            ),
+            "samples": ROLLING_REFIT_BOOTSTRAP_SAMPLES,
+            "seed": ROLLING_REFIT_BOOTSTRAP_SEED,
+            "minimum_improvement_support": (
+                ROLLING_REFIT_MIN_IMPROVEMENT_SUPPORT
+            ),
+            "fold_2023": rolling_2023[
+                "paired_bootstrap_vs_static"
+            ],
+            "fold_2024": rolling_2024[
+                "paired_bootstrap_vs_static"
+            ],
+            "development_safety_gate_passed": (
+                rolling_refit_safety_gate
+            ),
+        },
         "validation_2023": result_2023,
         "validation_2024": result_2024,
         "development_gate_passed": gate,
@@ -2686,6 +2892,9 @@ def evaluate_market_residual_v12_development(
         ),
         "rolling_refit_development_gate_passed": (
             rolling_refit_gate
+        ),
+        "rolling_refit_safety_gate_passed": (
+            rolling_refit_safety_gate
         ),
         "ev_constraints": {
             "min_probability": float(min_probability),
