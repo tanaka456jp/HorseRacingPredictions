@@ -841,6 +841,242 @@ def evaluate_role_aware_combination_quality(
     }
 
 
+def _conditioned_exact_three_set_probability(
+    strengths: np.ndarray,
+    selected: tuple[int, int, int],
+) -> float:
+    """Probability of one 3-runner set under Bernoulli odds conditioned on K=3."""
+    if len(strengths) < 3:
+        return 0.0
+    maximum = float(np.max(strengths))
+    if maximum <= 0.0:
+        return 0.0
+    scaled = strengths.astype(float) / maximum
+    sum1 = float(np.sum(scaled))
+    sum2 = float(np.sum(np.square(scaled)))
+    sum3 = float(np.sum(np.power(scaled, 3)))
+    normalizer = (
+        sum1 ** 3
+        - 3.0 * sum1 * sum2
+        + 2.0 * sum3
+    ) / 6.0
+    if normalizer <= 0.0:
+        return 0.0
+    numerator = float(
+        scaled[selected[0]]
+        * scaled[selected[1]]
+        * scaled[selected[2]]
+    )
+    return float(numerator / normalizer)
+
+
+def _market_order_probability_within_selected(
+    market_strengths: np.ndarray,
+    order: tuple[int, int, int],
+) -> float:
+    selected_strength = np.asarray(
+        [market_strengths[index] for index in order],
+        dtype=float,
+    )
+    total = float(selected_strength.sum())
+    if total <= 0.0:
+        return 0.0
+    first_p = float(selected_strength[0] / total)
+    second_denominator = float(
+        selected_strength[1] + selected_strength[2]
+    )
+    if second_denominator <= 0.0:
+        return 0.0
+    second_p = float(
+        selected_strength[1] / second_denominator
+    )
+    return float(first_p * second_p)
+
+
+def exact_three_combination_race_evidence(
+    frame: pd.DataFrame,
+    top3_probability: pd.Series,
+) -> pd.DataFrame:
+    """Phase 5: condition inclusion propensities on exactly three finishers."""
+    if frame.empty:
+        raise ValueError("exact-three combination frame is empty")
+    if not top3_probability.index.equals(frame.index):
+        raise ValueError("exact-three probability index differs from frame")
+    if "market_implied_probability" not in frame.columns:
+        raise ValueError(
+            "exact-three combinations require market_implied_probability"
+        )
+
+    q = top3_probability.astype(float).clip(
+        lower=1e-9,
+        upper=1.0 - 1e-9,
+    )
+    rows: list[dict] = []
+
+    for race_id, race in frame.groupby("race_id", sort=False):
+        finish = pd.to_numeric(
+            race["finish_position"],
+            errors="coerce",
+        )
+        actual_indices: list[object] = []
+        valid = True
+        for place in (1, 2, 3):
+            matches = race.index[finish.eq(place)].tolist()
+            if len(matches) != 1:
+                valid = False
+                break
+            actual_indices.append(matches[0])
+        if not valid or len(race) < 3:
+            continue
+
+        local_indices = list(race.index)
+        local_position = {
+            index: idx
+            for idx, index in enumerate(local_indices)
+        }
+        ordered = tuple(
+            local_position[index]
+            for index in actual_indices
+        )
+        selected_set = tuple(sorted(ordered))
+
+        race_q = q.loc[local_indices].to_numpy(dtype=float)
+        inclusion_strengths = race_q / (1.0 - race_q)
+        trio_probability = _conditioned_exact_three_set_probability(
+            inclusion_strengths,
+            selected_set,
+        )
+
+        market_strengths = pd.to_numeric(
+            race.loc[
+                local_indices,
+                "market_implied_probability",
+            ],
+            errors="raise",
+        ).to_numpy(dtype=float)
+        market_strengths = np.clip(
+            market_strengths,
+            1e-12,
+            None,
+        )
+        order_probability = _market_order_probability_within_selected(
+            market_strengths,
+            ordered,
+        )
+        trifecta_probability = float(
+            trio_probability * order_probability
+        )
+
+        top3_odds = pd.to_numeric(
+            race.loc[actual_indices, "win_odds"],
+            errors="coerce",
+        )
+        rows.append({
+            "race_id": str(race_id),
+            "trifecta_probability": max(
+                float(trifecta_probability),
+                1e-300,
+            ),
+            "trio_probability": max(
+                min(float(trio_probability), 1.0),
+                1e-300,
+            ),
+            "contains_longshot": bool(
+                top3_odds.ge(TOP3_LONGSHOT_ODDS_MIN).any()
+            ),
+        })
+
+    evidence = pd.DataFrame(rows)
+    if evidence.empty:
+        raise ValueError(
+            "no races with unique first/second/third finishers "
+            "for exact-three combination evidence"
+        )
+    evidence["trifecta_nll"] = -np.log(
+        evidence["trifecta_probability"]
+    )
+    evidence["trio_nll"] = -np.log(
+        evidence["trio_probability"]
+    )
+    return evidence
+
+
+def evaluate_exact_three_combination_quality(
+    frame: pd.DataFrame,
+    baseline_probability: pd.Series,
+    challenger_probability: pd.Series,
+) -> dict:
+    baseline = exact_three_combination_race_evidence(
+        frame,
+        baseline_probability,
+    )
+    challenger = exact_three_combination_race_evidence(
+        frame,
+        challenger_probability,
+    )
+
+    def _segment(
+        baseline_segment: pd.DataFrame,
+        challenger_segment: pd.DataFrame,
+    ) -> dict:
+        baseline_quality = _joint_quality(baseline_segment)
+        challenger_quality = _joint_quality(challenger_segment)
+        bootstrap = paired_race_bootstrap_joint_nll(
+            challenger_segment,
+            baseline_segment,
+        )
+        return {
+            "baseline": baseline_quality,
+            "challenger": challenger_quality,
+            "trifecta_nll_delta": _safe_float(
+                float(challenger_quality["mean_trifecta_nll"])
+                - float(baseline_quality["mean_trifecta_nll"])
+            ),
+            "trio_nll_delta": _safe_float(
+                float(challenger_quality["mean_trio_nll"])
+                - float(baseline_quality["mean_trio_nll"])
+            ),
+            "paired_bootstrap_vs_baseline": bootstrap,
+        }
+
+    overall = _segment(baseline, challenger)
+    longshot_ids = set(
+        challenger.loc[
+            challenger["contains_longshot"],
+            "race_id",
+        ].astype(str)
+    )
+    baseline_longshot = baseline.loc[
+        baseline["race_id"].astype(str).isin(longshot_ids)
+    ].copy()
+    challenger_longshot = challenger.loc[
+        challenger["race_id"].astype(str).isin(longshot_ids)
+    ].copy()
+    if baseline_longshot.empty or challenger_longshot.empty:
+        raise ValueError(
+            "no exact-three realized combinations contain a longshot proxy"
+        )
+
+    return {
+        "method": (
+            "Top-3 q/(1-q) inclusion odds conditioned on exactly three "
+            "selected runners; market-implied strengths only allocate "
+            "the six within-set finishing orders"
+        ),
+        "overall": overall,
+        "longshot_containing": {
+            "definition": (
+                "realized top three contains at least one runner with "
+                "historical final win odds >= 6.0; development proxy only"
+            ),
+            **_segment(
+                baseline_longshot,
+                challenger_longshot,
+            ),
+        },
+    }
+
+
 def _evaluate_period(
     frame: pd.DataFrame,
     baseline_probability: pd.Series,
@@ -908,6 +1144,13 @@ def _evaluate_period(
         ),
         "role_aware_combination_phase4": (
             evaluate_role_aware_combination_quality(
+                frame,
+                baseline_probability,
+                challenger_probability,
+            )
+        ),
+        "exact_three_combination_phase5": (
+            evaluate_exact_three_combination_quality(
                 frame,
                 baseline_probability,
                 challenger_probability,
@@ -1192,6 +1435,32 @@ def evaluate_exotic_top3_development(
         and _role_aware_period_passed(result_2024)
     )
 
+    def _exact_three_period_passed(result: dict) -> bool:
+        evidence = result["exact_three_combination_phase5"]
+        for segment_name in ("overall", "longshot_containing"):
+            segment = evidence[segment_name]
+            bootstrap = segment["paired_bootstrap_vs_baseline"]
+            if not (
+                float(segment["trifecta_nll_delta"]) < 0.0
+                and float(segment["trio_nll_delta"]) < 0.0
+                and float(
+                    bootstrap[
+                        "trifecta_nll_improvement_support"
+                    ]
+                ) >= TOP3_MIN_IMPROVEMENT_SUPPORT
+                and float(
+                    bootstrap["trio_nll_improvement_support"]
+                ) >= TOP3_MIN_IMPROVEMENT_SUPPORT
+            ):
+                return False
+        return True
+
+    exact_three_gate = bool(
+        safety_gate
+        and _exact_three_period_passed(result_2023)
+        and _exact_three_period_passed(result_2024)
+    )
+
     return {
         "status": "research_only_exotic_top3_development",
         "hypothesis": (
@@ -1200,11 +1469,11 @@ def evaluate_exotic_top3_development(
             "historical final-odds >= 6.0 longshot proxy."
         ),
         "warning": (
-            "Phase 4 evaluates a role-aware trifecta/trio probability "
-            "distribution but not betting expected value. Historical final "
-            "win odds are development-only market inputs/proxies. No pre-race "
-            "exotic combination odds are available in the current free "
-            "pipeline, so no three-leg bet is selected."
+            "Phase 5 evaluates exact-three conditioned trio/trifecta "
+            "probability quality but not betting expected value. Historical "
+            "final win odds are development-only market inputs/proxies. No "
+            "pre-race exotic combination odds are available in the current "
+            "free pipeline, so no three-leg bet is selected."
         ),
         "training": {
             "period_start": str(
@@ -1249,6 +1518,20 @@ def evaluate_exotic_top3_development(
             "forward_paper": "unchanged",
             "paid_data": "not_used",
         },
+        "exact_three_combination_phase5": {
+            "transform": (
+                "condition frozen Top-3 q/(1-q) inclusion odds on exactly "
+                "three selected runners; market strengths order the set"
+            ),
+            "minimum_improvement_support": (
+                TOP3_MIN_IMPROVEMENT_SUPPORT
+            ),
+            "development_exact_three_gate_passed": (
+                exact_three_gate
+            ),
+            "phase3_result_required": False,
+            "phase4_result_required": False,
+        },
         "role_aware_combination_phase4": {
             "transform": (
                 "historical win-market first-place probability + "
@@ -1291,4 +1574,5 @@ def evaluate_exotic_top3_development(
         "development_safety_gate_passed": safety_gate,
         "development_combination_gate_passed": combination_gate,
         "development_role_aware_gate_passed": role_aware_gate,
+        "development_exact_three_gate_passed": exact_three_gate,
     }

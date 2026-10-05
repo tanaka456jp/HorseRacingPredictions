@@ -7,6 +7,7 @@ from horse_racing_predictions.exotic_top3_research import (
     TOP3_LONGSHOT_ODDS_MIN,
     add_top3_race_interaction_features,
     exotic_combination_race_evidence,
+    evaluate_exact_three_combination_quality,
     evaluate_exotic_combination_quality,
     evaluate_role_aware_combination_quality,
     paired_race_bootstrap_binary_quality,
@@ -326,4 +327,52 @@ def test_phase4_protocol_is_role_aware_without_phase3_threshold_tuning():
     assert '"phase3_result_required": False' in source
     assert "Phase 4" in request
     assert "first-place" in request
+    assert "2025-2026 remain untouched" in request
+
+
+
+def test_exact_three_conditioning_improves_when_actual_set_gets_higher_odds():
+    frame = _combination_frame().copy()
+    frame["market_implied_probability"] = [
+        0.50, 0.25, 0.15, 0.10,
+        0.25, 0.50, 0.10, 0.15,
+    ]
+    baseline = pd.Series(
+        [0.50, 0.45, 0.35, 0.30, 0.45, 0.50, 0.30, 0.35],
+        index=frame.index,
+        dtype=float,
+    )
+    challenger = pd.Series(
+        [0.75, 0.66, 0.58, 0.12, 0.66, 0.76, 0.12, 0.60],
+        index=frame.index,
+        dtype=float,
+    )
+
+    evidence = evaluate_exact_three_combination_quality(
+        frame,
+        baseline,
+        challenger,
+    )
+
+    assert evidence["overall"]["trifecta_nll_delta"] < 0.0
+    assert evidence["overall"]["trio_nll_delta"] < 0.0
+    assert (
+        evidence["overall"]["paired_bootstrap_vs_baseline"][
+            "trio_nll_improvement_support"
+        ] == 1.0
+    )
+
+
+def test_phase5_protocol_conditions_inclusion_on_exactly_three():
+    source = Path(
+        "src/horse_racing_predictions/exotic_top3_research.py"
+    ).read_text(encoding="utf-8")
+    request = Path(
+        "research/exotic_top3_phase1_request.txt"
+    ).read_text(encoding="utf-8")
+
+    assert "exact_three_combination_phase5" in source
+    assert "conditioned on exactly three" in source
+    assert "Phase 5" in request
+    assert "exactly three" in request
     assert "2025-2026 remain untouched" in request

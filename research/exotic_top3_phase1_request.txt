@@ -139,3 +139,39 @@ is allowed without timestamped pre-race exotic-combination odds.
 API, or data source may be used.
 
 request=2026-10-06-exotic-role-aware-rnd-phase4
+
+
+Phase 5 exact-three inclusion hypothesis:
+Phase 4 also failed its pre-registered gate. Do not tune its thresholds or
+weights. Test a different structural interpretation of the frozen Top-3
+marginal probabilities.
+
+Hypothesis:
+The frozen Top-3 model estimates inclusion in the top three, so first construct
+a probability distribution over unordered sets of exactly three runners.
+For each horse use inclusion odds w=q/(1-q). For every size-three set S,
+P(S | exactly 3) is proportional to the product of the three inclusion odds.
+Normalize across all size-three sets exactly (implemented with the third
+elementary symmetric polynomial; no fitting or Monte Carlo approximation).
+
+For the realized three-runner set:
+- trio probability proxy = the exact conditioned set probability;
+- trifecta probability proxy = trio set probability multiplied by an order
+  probability within those three runners derived only from the same historical
+  win-market strengths for baseline and challenger.
+
+This explicitly separates "which three horses make the placings" from "how
+those three are ordered". It is a replacement hypothesis after Phase 3/4
+failure, not a retune of either failed transform.
+
+Freeze Phase 2 model features/hyperparameters, longshot boundary, and bootstrap
+settings. Evaluate 2023 and 2024 reused development evidence, overall and
+realized-top-three-containing-longshot segments. Require lower trifecta/trio
+NLL and >=80% paired-race-bootstrap improvement support in both segments and
+both years. Phase 3 and Phase 4 do not need to pass.
+
+No EV claim or real ticket generation is allowed without timestamped pre-race
+exotic-combination odds. 2025-2026 remain untouched. Forward Paper remains
+unchanged. No paid tool, API, or data source may be used.
+
+request=2026-10-06-exotic-exact3-rnd-phase5
