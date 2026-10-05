@@ -55,3 +55,13 @@ overall 200 rows / 100 races evidence floor. Select the broadest qualifying
 threshold and freeze it unchanged for 2023 and 2024 validation. Do not inspect
 or reuse 2025-2026 holdout rows and do not change Forward Paper thresholds.
 request=2026-10-05-stable-longshot-rnd-phase6
+
+Phase 7 challenger: train a second research-only regressor on the direct
+realized flat-bet return target winner * final_win_odds - 1 over the original
+training period. Do not tune a score threshold: use the pre-registered fixed
+rule predicted_return > 0. On the through-2022 tuning period, require positive
+ROI plus the unchanged 200 rows / 100 races evidence floor. If it qualifies,
+freeze the zero-threshold rule unchanged for 2023 and 2024 validation. This is
+a research proxy using historical final odds only; do not inspect or reuse
+2025-2026 holdout rows and do not change Forward Paper thresholds.
+request=2026-10-05-direct-value-rnd-phase7
