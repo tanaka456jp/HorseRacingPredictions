@@ -98,3 +98,44 @@ trifecta/trio combination odds. Do not generate real tickets or change staking.
 unchanged. No paid tool, API, or data source may be used.
 
 request=2026-10-06-exotic-combinations-rnd-phase3
+
+
+Phase 4 role-aware exotic-combination hypothesis:
+Phase 3 failed its pre-registered gate. Do not tune the Phase 3 transform or
+lower its support threshold. Test a new structural hypothesis instead.
+
+Hypothesis:
+A horse's Top-3 marginal probability is suitable for estimating inclusion in
+the placings but is not necessarily a suitable first-place strength. Use role-
+specific information:
+- first-place probability: the already available normalized historical final
+  win-market probability, identical for baseline and challenger;
+- second/third conditional strength among remaining runners: frozen Phase 2
+  Top-3 marginal q transformed as q/(1-q).
+
+For each permutation i->j->k, compute:
+P(i first from win market) *
+P(j second from remaining Top-3 strengths) *
+P(k third from remaining Top-3 strengths).
+The unordered trio probability proxy is again the sum of all six permutations.
+
+Freeze all Phase 2 model features/hyperparameters and the existing longshot
+proxy boundary (historical final win odds >= 6.0). Do not introduce a new
+threshold, model fit, odds segment, or staking rule.
+
+Evaluate 2023 and 2024 reused development evidence with the same Phase 3
+criteria:
+- lower trifecta-proxy NLL and trio-proxy NLL;
+- paired race bootstrap 1000 samples, seed 20261006;
+- >=80% support for improvement;
+- both overall and realized-top-three-containing-longshot segments;
+- both years must pass.
+
+Phase 4 does not require Phase 3 to pass; it is a replacement structural
+hypothesis prompted by the Phase 3 failure, not threshold tuning.
+Historical final win odds remain development-only proxies. No betting EV claim
+is allowed without timestamped pre-race exotic-combination odds.
+2025-2026 remain untouched. Forward Paper remains unchanged. No paid tool,
+API, or data source may be used.
+
+request=2026-10-06-exotic-role-aware-rnd-phase4
