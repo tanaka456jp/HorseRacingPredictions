@@ -1062,6 +1062,126 @@ def fit_residual_stable_longshot_market_edge_rule(
     )
 
 
+def realized_flat_bet_return(
+    frame: pd.DataFrame,
+) -> pd.Series:
+    odds = pd.to_numeric(
+        frame["win_odds"],
+        errors="raise",
+    ).astype(float)
+    return (
+        _outcomes(frame).astype(float) * odds
+        - 1.0
+    )
+
+
+def direct_value_rule_result(
+    frame: pd.DataFrame,
+    predicted_return: pd.Series,
+    *,
+    threshold: float = 0.0,
+) -> dict:
+    if not frame.index.equals(
+        predicted_return.index
+    ):
+        raise ValueError(
+            "frame and predicted return indexes differ"
+        )
+    score = pd.to_numeric(
+        predicted_return,
+        errors="raise",
+    ).astype(float)
+    if not np.isfinite(score.to_numpy()).all():
+        raise ValueError(
+            "predicted return contains non-finite values"
+        )
+
+    selected = frame.loc[
+        score.gt(float(threshold))
+    ].copy()
+    if selected.empty:
+        return {
+            "predicted_return_threshold": float(threshold),
+            "rows": 0,
+            "races": 0,
+            "wins": 0,
+            "hit_rate": None,
+            "average_predicted_return": None,
+            "flat_bet_roi_final_odds": None,
+        }
+
+    selected_score = score.loc[selected.index]
+    realized = realized_flat_bet_return(
+        selected
+    )
+    wins = int(
+        _outcomes(selected).sum()
+    )
+    return {
+        "predicted_return_threshold": float(threshold),
+        "rows": int(len(selected)),
+        "races": int(
+            selected["race_id"].nunique()
+        ),
+        "wins": wins,
+        "hit_rate": _safe_float(
+            wins / len(selected)
+        ),
+        "average_predicted_return": _safe_float(
+            selected_score.mean()
+        ),
+        "flat_bet_roi_final_odds": _safe_float(
+            realized.mean()
+        ),
+    }
+
+
+def fit_direct_value_rule(
+    frame: pd.DataFrame,
+    predicted_return: pd.Series,
+    *,
+    threshold: float = 0.0,
+    min_rows: int = 200,
+    min_races: int = 100,
+) -> tuple[dict | None, dict]:
+    evidence = direct_value_rule_result(
+        frame,
+        predicted_return,
+        threshold=threshold,
+    )
+    qualifies = bool(
+        evidence["rows"] >= min_rows
+        and evidence["races"] >= min_races
+        and evidence["flat_bet_roi_final_odds"] is not None
+        and float(
+            evidence["flat_bet_roi_final_odds"]
+        ) > 0.0
+    )
+    rule = (
+        {
+            "predicted_return_threshold": float(threshold),
+            "selection": "predicted_return_gt_threshold",
+        }
+        if qualifies
+        else None
+    )
+    return rule, evidence
+
+
+def evaluate_fixed_direct_value_rule(
+    frame: pd.DataFrame,
+    predicted_return: pd.Series,
+    rule: dict,
+) -> dict:
+    return direct_value_rule_result(
+        frame,
+        predicted_return,
+        threshold=float(
+            rule["predicted_return_threshold"]
+        ),
+    )
+
+
 class MarketResidualRegressor:
     def __init__(
         self,
@@ -1385,6 +1505,13 @@ def evaluate_market_residual_v12_development(
         train,
         train_target,
     )
+    direct_value_model = MarketResidualRegressor(
+        list(features),
+        iterations=iterations,
+    ).fit(
+        train,
+        realized_flat_bet_return(train),
+    )
 
     tuning_market = normalized_market_probability(
         tuning.rename(
@@ -1466,6 +1593,19 @@ def evaluate_market_residual_v12_development(
         min_races=min_ev_races,
         min_fold_rows=max(1, min_ev_rows // 2),
         min_fold_races=max(1, min_ev_races // 2),
+    )
+    tuning_direct_value_score = (
+        direct_value_model.predict(tuning)
+    )
+    (
+        fitted_direct_value_rule,
+        direct_value_tuning_evidence,
+    ) = fit_direct_value_rule(
+        tuning,
+        tuning_direct_value_score,
+        threshold=0.0,
+        min_rows=min_ev_rows,
+        min_races=min_ev_races,
     )
 
     def _evaluate_period(
@@ -1550,6 +1690,18 @@ def evaluate_market_residual_v12_development(
                 min_probability=min_probability,
             )
         )
+        direct_value_score = (
+            direct_value_model.predict(period)
+        )
+        fixed_direct_value_rule_result = (
+            None
+            if fitted_direct_value_rule is None
+            else evaluate_fixed_direct_value_rule(
+                period,
+                direct_value_score,
+                fitted_direct_value_rule,
+            )
+        )
         market_quality = _quality(
             period,
             market,
@@ -1632,6 +1784,15 @@ def evaluate_market_residual_v12_development(
             ),
             "fixed_stable_longshot_market_edge_result": (
                 fixed_stable_longshot_market_edge_result
+            ),
+            "fixed_direct_value_rule_result": (
+                fixed_direct_value_rule_result
+            ),
+            "direct_value_score_mean": _safe_float(
+                direct_value_score.mean()
+            ),
+            "direct_value_score_std": _safe_float(
+                direct_value_score.std(ddof=0)
             ),
         }
 
@@ -1830,6 +1991,36 @@ def evaluate_market_residual_v12_development(
         )
     )
 
+    def _direct_value_period_passed(
+        result: dict,
+    ) -> bool:
+        value_result = result[
+            "fixed_direct_value_rule_result"
+        ]
+        return bool(
+            value_result is not None
+            and value_result[
+                "flat_bet_roi_final_odds"
+            ] is not None
+            and float(
+                value_result[
+                    "flat_bet_roi_final_odds"
+                ]
+            ) > 0.0
+            and int(value_result["rows"]) >= min_ev_rows
+            and int(value_result["races"]) >= min_ev_races
+        )
+
+    direct_value_gate = bool(
+        fitted_direct_value_rule is not None
+        and _direct_value_period_passed(
+            result_2023
+        )
+        and _direct_value_period_passed(
+            result_2024
+        )
+    )
+
     return {
         "status": (
             "research_only_market_residual_v12_development"
@@ -1950,6 +2141,18 @@ def evaluate_market_residual_v12_development(
             "fitted_rule": fitted_stable_longshot_market_edge_rule,
             "threshold_sweep": stable_longshot_market_edge_sweep,
         },
+        "direct_value_tuning_2022": {
+            "period_start": str(
+                tuning["race_date"].min().date()
+            ),
+            "period_end": str(
+                tuning["race_date"].max().date()
+            ),
+            "target": "winner_times_final_odds_minus_one",
+            "selection": "predicted_return_gt_zero",
+            "fitted_rule": fitted_direct_value_rule,
+            "evidence": direct_value_tuning_evidence,
+        },
         "validation_2023": result_2023,
         "validation_2024": result_2024,
         "development_gate_passed": gate,
@@ -1968,6 +2171,9 @@ def evaluate_market_residual_v12_development(
         ),
         "stable_longshot_market_edge_development_gate_passed": (
             stable_longshot_market_edge_gate
+        ),
+        "direct_value_development_gate_passed": (
+            direct_value_gate
         ),
         "ev_constraints": {
             "min_probability": float(min_probability),
