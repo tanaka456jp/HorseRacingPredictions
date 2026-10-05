@@ -24,6 +24,7 @@ from horse_racing_predictions.market_residual_v12 import (
     select_broad_positive_longshot_market_edge_rule,
     select_temporally_stable_longshot_market_edge_rule,
     market_residual_scale,
+    paired_race_bootstrap_quality_deltas,
     realized_flat_bet_return,
     residual_adjusted_probability,
     restore_standardized_market_residual,
@@ -256,6 +257,14 @@ def test_residual_v12_development_keeps_2025_holdout_untouched():
     )
     assert (
         "rolling_refit_development_gate_passed"
+        in result
+    )
+    assert (
+        "rolling_refit_safety_phase10"
+        in result
+    )
+    assert (
+        "rolling_refit_safety_gate_passed"
         in result
     )
     assert (
@@ -901,3 +910,87 @@ def test_phase9_rolling_refit_uses_past_only_year_boundaries():
     assert 'tuning_start="2023-01-01"' in source
     assert 'evaluation_start="2024-01-01"' in source
     assert '"2025-2026 untouched"' in source
+
+
+
+def test_paired_race_bootstrap_quality_deltas_detects_better_challenger():
+    frame = pd.DataFrame({
+        "race_id": ["R1", "R1", "R2", "R2", "R3", "R3"],
+        "finish_position": [1, 2, 2, 1, 1, 2],
+    })
+    challenger = pd.Series(
+        [0.80, 0.20, 0.20, 0.80, 0.75, 0.25],
+        index=frame.index,
+        dtype=float,
+    )
+    baseline = pd.Series(
+        [0.55, 0.45, 0.45, 0.55, 0.55, 0.45],
+        index=frame.index,
+        dtype=float,
+    )
+
+    evidence = paired_race_bootstrap_quality_deltas(
+        frame,
+        challenger,
+        baseline,
+        samples=200,
+        seed=123,
+    )
+
+    assert evidence["winner_log_loss_delta"] < 0.0
+    assert evidence["brier_delta"] < 0.0
+    assert (
+        evidence["winner_log_loss_improvement_support"]
+        == 1.0
+    )
+    assert evidence["brier_improvement_support"] == 1.0
+    assert evidence["races"] == 3
+    assert evidence["rows"] == 6
+
+
+def test_paired_race_bootstrap_quality_deltas_is_deterministic():
+    frame = pd.DataFrame({
+        "race_id": ["R1", "R1", "R2", "R2"],
+        "finish_position": [1, 2, 2, 1],
+    })
+    challenger = pd.Series(
+        [0.60, 0.40, 0.40, 0.60],
+        index=frame.index,
+        dtype=float,
+    )
+    baseline = pd.Series(
+        [0.55, 0.45, 0.45, 0.55],
+        index=frame.index,
+        dtype=float,
+    )
+
+    first = paired_race_bootstrap_quality_deltas(
+        frame,
+        challenger,
+        baseline,
+        samples=50,
+        seed=7,
+    )
+    second = paired_race_bootstrap_quality_deltas(
+        frame,
+        challenger,
+        baseline,
+        samples=50,
+        seed=7,
+    )
+
+    assert first == second
+
+
+def test_phase10_safety_keeps_final_holdout_untouched():
+    source = Path(
+        "src/horse_racing_predictions/market_residual_v12.py"
+    ).read_text(encoding="utf-8")
+    request = Path(
+        "research/market_residual_v12_request.txt"
+    ).read_text(encoding="utf-8")
+
+    assert "ROLLING_REFIT_BOOTSTRAP_SAMPLES = 1000" in source
+    assert "ROLLING_REFIT_MIN_IMPROVEMENT_SUPPORT = 0.80" in source
+    assert '"2025-2026 untouched"' in source
+    assert "2025-2026 stay untouched" in request
