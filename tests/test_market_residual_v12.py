@@ -9,7 +9,9 @@ from horse_racing_predictions.market_residual_v12 import (
     evaluate_fixed_residual_market_edge_rule,
     fit_residual_ev_rule,
     fit_residual_market_edge_rule,
+    fit_residual_market_edge_odds_segment_rule,
     fit_residual_gamma,
+    select_broad_positive_market_edge_odds_segment,
     select_broad_positive_market_edge_rule,
     residual_adjusted_probability,
 )
@@ -192,6 +194,14 @@ def test_residual_v12_development_keeps_2025_holdout_untouched():
     )
     assert (
         "broad_market_edge_development_gate_passed"
+        in result
+    )
+    assert (
+        "market_edge_odds_segment_tuning_2022"
+        in result
+    )
+    assert (
+        "market_edge_odds_segment_development_gate_passed"
         in result
     )
     assert (
@@ -394,3 +404,88 @@ def test_broad_market_edge_requires_positive_tuning_roi():
     )
 
     assert rule is None
+
+
+def test_odds_segment_selection_prefers_broadest_positive_evidence():
+    sweep = [
+        {
+            "segment_name": "odds_1_to_3",
+            "odds_min": 1.0,
+            "odds_max": 3.0,
+            "edge_ratio_threshold": 1.15,
+            "policy": "all_candidates",
+            "rows": 205,
+            "races": 180,
+            "flat_bet_roi_final_odds": 0.08,
+        },
+        {
+            "segment_name": "odds_3_to_6",
+            "odds_min": 3.0,
+            "odds_max": 6.0,
+            "edge_ratio_threshold": 1.15,
+            "policy": "all_candidates",
+            "rows": 260,
+            "races": 230,
+            "flat_bet_roi_final_odds": 0.02,
+        },
+        {
+            "segment_name": "odds_6_to_12",
+            "odds_min": 6.0,
+            "odds_max": 12.0,
+            "edge_ratio_threshold": 1.15,
+            "policy": "all_candidates",
+            "rows": 90,
+            "races": 80,
+            "flat_bet_roi_final_odds": 0.20,
+        },
+    ]
+
+    rule = select_broad_positive_market_edge_odds_segment(
+        sweep,
+        min_rows=200,
+        min_races=100,
+    )
+
+    assert rule is not None
+    assert rule["segment_name"] == "odds_3_to_6"
+    assert rule["rows"] == 260
+    assert rule["races"] == 230
+
+
+def test_odds_segment_rule_uses_frozen_broad_market_edge_rule():
+    frame = pd.DataFrame({
+        "race_id": ["R1", "R1", "R2", "R2", "R3", "R3"],
+        "finish_position": [1, 2, 2, 1, 1, 2],
+        "win_odds": [2.5, 4.5, 3.2, 5.0, 2.2, 7.0],
+    })
+    probability = pd.Series(
+        [0.45, 0.25, 0.32, 0.35, 0.50, 0.20],
+        index=frame.index,
+        dtype=float,
+    )
+    market_probability = pd.Series(
+        [0.38, 0.22, 0.27, 0.29, 0.42, 0.18],
+        index=frame.index,
+        dtype=float,
+    )
+    base_rule = {
+        "edge_ratio_threshold": 1.10,
+        "policy": "all_candidates",
+    }
+
+    rule, sweep = fit_residual_market_edge_odds_segment_rule(
+        frame,
+        probability,
+        market_probability,
+        base_rule,
+        min_rows=1,
+        min_races=1,
+    )
+
+    assert len(sweep) == 4
+    if rule is not None:
+        assert (
+            rule["edge_ratio_threshold"]
+            == base_rule["edge_ratio_threshold"]
+        )
+        assert rule["policy"] == base_rule["policy"]

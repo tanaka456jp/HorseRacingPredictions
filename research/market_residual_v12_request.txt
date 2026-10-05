@@ -27,3 +27,12 @@ for 2023 and 2024 validation. This is intended to reduce tuning overfit after
 the phase-2 max-ROI rule failed both validation years. Do not inspect or reuse
 2025-2026 holdout rows and do not change Forward Paper thresholds.
 request=2026-10-05-broad-market-edge-rnd-phase3
+
+Phase 4 challenger: segment only the frozen broad market-edge candidates by
+four pre-registered final-win-odds bands: [1,3), [3,6), [6,12), and [12,+inf).
+On the through-2022 tuning period, select the broadest positive-ROI segment
+meeting the unchanged 200 rows / 100 races evidence floor. Freeze both the
+broad market-edge rule and the chosen odds band unchanged for 2023 and 2024.
+Do not search additional dimensions in this phase. Do not inspect or reuse
+2025-2026 holdout rows, and do not change Forward Paper thresholds.
+request=2026-10-05-odds-segment-rnd-phase4
