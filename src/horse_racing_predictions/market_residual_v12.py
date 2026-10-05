@@ -80,6 +80,8 @@ LONGSHOT_SEGMENT_NAME = "odds_6_plus"
 
 LONGSHOT_STABILITY_SPLIT_DATE = "2022-05-01"
 
+STANDARDIZED_RESIDUAL_VARIANCE_FLOOR = 1e-4
+
 
 def _safe_float(value) -> float | None:
     value = float(value)
@@ -1062,6 +1064,89 @@ def fit_residual_stable_longshot_market_edge_rule(
     )
 
 
+def market_residual_scale(
+    market_probability: pd.Series,
+    *,
+    variance_floor: float = STANDARDIZED_RESIDUAL_VARIANCE_FLOOR,
+) -> pd.Series:
+    if variance_floor <= 0.0:
+        raise ValueError(
+            "variance_floor must be positive"
+        )
+    market = market_probability.astype(float).clip(
+        lower=1e-12,
+        upper=1.0 - 1e-12,
+    )
+    variance = (
+        market * (1.0 - market)
+    ).clip(lower=float(variance_floor))
+    return pd.Series(
+        np.sqrt(variance),
+        index=market_probability.index,
+        dtype=float,
+    )
+
+
+def standardized_market_residual_target(
+    frame: pd.DataFrame,
+    market_probability: pd.Series,
+    *,
+    variance_floor: float = STANDARDIZED_RESIDUAL_VARIANCE_FLOOR,
+) -> pd.Series:
+    if not frame.index.equals(
+        market_probability.index
+    ):
+        raise ValueError(
+            "frame and market probability indexes differ"
+        )
+    raw_residual = (
+        _outcomes(frame).astype(float)
+        - market_probability.astype(float)
+    )
+    scale = market_residual_scale(
+        market_probability,
+        variance_floor=variance_floor,
+    )
+    return pd.Series(
+        raw_residual / scale,
+        index=frame.index,
+        dtype=float,
+    )
+
+
+def restore_standardized_market_residual(
+    market_probability: pd.Series,
+    standardized_prediction: pd.Series,
+    *,
+    variance_floor: float = STANDARDIZED_RESIDUAL_VARIANCE_FLOOR,
+) -> pd.Series:
+    if not market_probability.index.equals(
+        standardized_prediction.index
+    ):
+        raise ValueError(
+            "market probability and standardized prediction indexes differ"
+        )
+    prediction = pd.to_numeric(
+        standardized_prediction,
+        errors="raise",
+    ).astype(float)
+    if not np.isfinite(
+        prediction.to_numpy()
+    ).all():
+        raise ValueError(
+            "standardized prediction contains non-finite values"
+        )
+    scale = market_residual_scale(
+        market_probability,
+        variance_floor=variance_floor,
+    )
+    return pd.Series(
+        prediction * scale,
+        index=market_probability.index,
+        dtype=float,
+    )
+
+
 def realized_flat_bet_return(
     frame: pd.DataFrame,
 ) -> pd.Series:
@@ -1505,6 +1590,16 @@ def evaluate_market_residual_v12_development(
         train,
         train_target,
     )
+    standardized_model = MarketResidualRegressor(
+        list(features),
+        iterations=iterations,
+    ).fit(
+        train,
+        standardized_market_residual_target(
+            train,
+            train_market,
+        ),
+    )
     direct_value_model = MarketResidualRegressor(
         list(features),
         iterations=iterations,
@@ -1531,6 +1626,35 @@ def evaluate_market_residual_v12_development(
         tuning_market,
         tuning_residual,
         gamma=gamma,
+    )
+    tuning_standardized_prediction = (
+        standardized_model.predict(tuning)
+    )
+    tuning_standardized_residual = (
+        restore_standardized_market_residual(
+            tuning_market,
+            tuning_standardized_prediction,
+        )
+    )
+    (
+        standardized_gamma,
+        standardized_gamma_sweep,
+    ) = fit_residual_gamma(
+        tuning,
+        tuning_market,
+        tuning_standardized_residual,
+    )
+    tuning_standardized_adjusted = (
+        residual_adjusted_probability(
+            tuning,
+            tuning_market,
+            tuning_standardized_residual,
+            gamma=standardized_gamma,
+        )
+    )
+    standardized_tuning_quality = _quality(
+        tuning,
+        tuning_standardized_adjusted,
     )
     fitted_ev_rule, ev_threshold_sweep = (
         fit_residual_ev_rule(
@@ -1625,6 +1749,23 @@ def evaluate_market_residual_v12_development(
             residual,
             gamma=gamma,
         )
+        standardized_prediction = (
+            standardized_model.predict(period)
+        )
+        standardized_residual = (
+            restore_standardized_market_residual(
+                market,
+                standardized_prediction,
+            )
+        )
+        standardized_adjusted = (
+            residual_adjusted_probability(
+                period,
+                market,
+                standardized_residual,
+                gamma=standardized_gamma,
+            )
+        )
         fixed_ev_rule_result = (
             None
             if fitted_ev_rule is None
@@ -1710,6 +1851,10 @@ def evaluate_market_residual_v12_development(
             period,
             adjusted,
         )
+        standardized_quality = _quality(
+            period,
+            standardized_adjusted,
+        )
         return {
             "period_start": str(
                 period["race_date"].min().date()
@@ -1723,6 +1868,63 @@ def evaluate_market_residual_v12_development(
             ),
             "market_quality": market_quality,
             "residual_quality": adjusted_quality,
+            "standardized_residual_quality": (
+                standardized_quality
+            ),
+            "standardized_winner_log_loss_delta_vs_market": _safe_float(
+                float(
+                    standardized_quality[
+                        "winner_log_loss"
+                    ]
+                )
+                - float(
+                    market_quality[
+                        "winner_log_loss"
+                    ]
+                )
+            ),
+            "standardized_brier_delta_vs_market": _safe_float(
+                float(
+                    standardized_quality["brier"]
+                )
+                - float(
+                    market_quality["brier"]
+                )
+            ),
+            "standardized_winner_log_loss_delta_vs_baseline_residual": _safe_float(
+                float(
+                    standardized_quality[
+                        "winner_log_loss"
+                    ]
+                )
+                - float(
+                    adjusted_quality[
+                        "winner_log_loss"
+                    ]
+                )
+            ),
+            "standardized_brier_delta_vs_baseline_residual": _safe_float(
+                float(
+                    standardized_quality["brier"]
+                )
+                - float(
+                    adjusted_quality["brier"]
+                )
+            ),
+            "standardized_beats_baseline_winner_log_loss": bool(
+                standardized_quality["winner_log_loss"]
+                < adjusted_quality["winner_log_loss"]
+            ),
+            "standardized_beats_baseline_brier": bool(
+                standardized_quality["brier"]
+                < adjusted_quality["brier"]
+            ),
+            "standardized_prediction_mean": _safe_float(
+                standardized_prediction.mean()
+            ),
+            "standardized_prediction_std": _safe_float(
+                standardized_prediction.std(ddof=0)
+            ),
             "winner_log_loss_delta_vs_market": _safe_float(
                 float(
                     adjusted_quality[
@@ -2021,6 +2223,22 @@ def evaluate_market_residual_v12_development(
         )
     )
 
+    standardized_residual_gate = bool(
+        standardized_gamma > 0.0
+        and result_2023[
+            "standardized_beats_baseline_winner_log_loss"
+        ]
+        and result_2023[
+            "standardized_beats_baseline_brier"
+        ]
+        and result_2024[
+            "standardized_beats_baseline_winner_log_loss"
+        ]
+        and result_2024[
+            "standardized_beats_baseline_brier"
+        ]
+    )
+
     return {
         "status": (
             "research_only_market_residual_v12_development"
@@ -2153,6 +2371,38 @@ def evaluate_market_residual_v12_development(
             "fitted_rule": fitted_direct_value_rule,
             "evidence": direct_value_tuning_evidence,
         },
+        "standardized_residual_tuning_2022": {
+            "period_start": str(
+                tuning["race_date"].min().date()
+            ),
+            "period_end": str(
+                tuning["race_date"].max().date()
+            ),
+            "target": (
+                "(winner - market_probability) / "
+                "sqrt(max(p*(1-p), variance_floor))"
+            ),
+            "variance_floor": float(
+                STANDARDIZED_RESIDUAL_VARIANCE_FLOOR
+            ),
+            "selected_gamma": _safe_float(
+                standardized_gamma
+            ),
+            "gamma_sweep": standardized_gamma_sweep,
+            "quality": standardized_tuning_quality,
+        },
+        "research_protocol": {
+            "development_periods": [
+                "through_2022_tuning",
+                "2023_development_reused",
+                "2024_development_reused",
+            ],
+            "final_holdout": "2025-2026 untouched",
+            "note": (
+                "2023 and 2024 have been inspected in prior phases "
+                "and are development evidence, not independent holdout."
+            ),
+        },
         "validation_2023": result_2023,
         "validation_2024": result_2024,
         "development_gate_passed": gate,
@@ -2174,6 +2424,9 @@ def evaluate_market_residual_v12_development(
         ),
         "direct_value_development_gate_passed": (
             direct_value_gate
+        ),
+        "standardized_residual_development_gate_passed": (
+            standardized_residual_gate
         ),
         "ev_constraints": {
             "min_probability": float(min_probability),

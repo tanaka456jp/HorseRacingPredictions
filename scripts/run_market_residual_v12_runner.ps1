@@ -62,6 +62,8 @@ $payload = @{
     longshot_market_edge_tuning_2022 = $summary.longshot_market_edge_tuning_2022
     stable_longshot_market_edge_tuning_2022 = $summary.stable_longshot_market_edge_tuning_2022
     direct_value_tuning_2022 = $summary.direct_value_tuning_2022
+    standardized_residual_tuning_2022 = $summary.standardized_residual_tuning_2022
+    research_protocol = $summary.research_protocol
     validation_2023 = $v23
     validation_2024 = $v24
     development_gate_passed = [bool]$summary.development_gate_passed
@@ -72,6 +74,7 @@ $payload = @{
     longshot_market_edge_development_gate_passed = [bool]$summary.longshot_market_edge_development_gate_passed
     stable_longshot_market_edge_development_gate_passed = [bool]$summary.stable_longshot_market_edge_development_gate_passed
     direct_value_development_gate_passed = [bool]$summary.direct_value_development_gate_passed
+    standardized_residual_development_gate_passed = [bool]$summary.standardized_residual_development_gate_passed
     ev_constraints = $summary.ev_constraints
 }
 $validationPath = Join-Path $ProjectRoot $ValidationOutput
@@ -123,7 +126,13 @@ if (-not [string]::IsNullOrWhiteSpace($env:GITHUB_STEP_SUMMARY)) {
         "- fitted direct-value rule: $($summary.direct_value_tuning_2022.fitted_rule | ConvertTo-Json -Compress)",
         "- 2023 fixed direct-value result: $($v23.fixed_direct_value_rule_result | ConvertTo-Json -Compress)",
         "- 2024 fixed direct-value result: $($v24.fixed_direct_value_rule_result | ConvertTo-Json -Compress)",
-        "- direct-value gate passed: $($summary.direct_value_development_gate_passed)"
+        "- direct-value gate passed: $($summary.direct_value_development_gate_passed)",
+        "- standardized residual gamma: $($summary.standardized_residual_tuning_2022.selected_gamma)",
+        "- 2023 standardized delta vs baseline log-loss: $($v23.standardized_winner_log_loss_delta_vs_baseline_residual)",
+        "- 2023 standardized delta vs baseline brier: $($v23.standardized_brier_delta_vs_baseline_residual)",
+        "- 2024 standardized delta vs baseline log-loss: $($v24.standardized_winner_log_loss_delta_vs_baseline_residual)",
+        "- 2024 standardized delta vs baseline brier: $($v24.standardized_brier_delta_vs_baseline_residual)",
+        "- standardized residual gate passed: $($summary.standardized_residual_development_gate_passed)"
     ) | Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Encoding UTF8
 }
 
@@ -163,3 +172,9 @@ Write-Host "fitted_direct_value_rule=$($summary.direct_value_tuning_2022.fitted_
 Write-Host "v2023_fixed_direct_value=$($v23.fixed_direct_value_rule_result | ConvertTo-Json -Compress)"
 Write-Host "v2024_fixed_direct_value=$($v24.fixed_direct_value_rule_result | ConvertTo-Json -Compress)"
 Write-Host "direct_value_development_gate_passed=$($summary.direct_value_development_gate_passed)"
+Write-Host "standardized_residual_gamma=$($summary.standardized_residual_tuning_2022.selected_gamma)"
+Write-Host "v2023_standardized_logloss_delta_vs_baseline=$($v23.standardized_winner_log_loss_delta_vs_baseline_residual)"
+Write-Host "v2023_standardized_brier_delta_vs_baseline=$($v23.standardized_brier_delta_vs_baseline_residual)"
+Write-Host "v2024_standardized_logloss_delta_vs_baseline=$($v24.standardized_winner_log_loss_delta_vs_baseline_residual)"
+Write-Host "v2024_standardized_brier_delta_vs_baseline=$($v24.standardized_brier_delta_vs_baseline_residual)"
+Write-Host "standardized_residual_development_gate_passed=$($summary.standardized_residual_development_gate_passed)"
