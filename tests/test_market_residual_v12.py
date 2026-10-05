@@ -10,6 +10,7 @@ from horse_racing_predictions.market_residual_v12 import (
     fit_residual_ev_rule,
     fit_residual_market_edge_rule,
     fit_residual_gamma,
+    select_broad_positive_market_edge_rule,
     residual_adjusted_probability,
 )
 
@@ -186,6 +187,14 @@ def test_residual_v12_development_keeps_2025_holdout_untouched():
         in result
     )
     assert (
+        "broad_market_edge_rule_tuning_2022"
+        in result
+    )
+    assert (
+        "broad_market_edge_development_gate_passed"
+        in result
+    )
+    assert (
         result["validation_2023"]["fixed_ev_rule_result"]
         is None
         or result["validation_2023"]["fixed_ev_rule_result"][
@@ -322,6 +331,64 @@ def test_market_edge_rule_requires_minimum_evidence():
         frame,
         probability,
         market_probability,
+        min_rows=200,
+        min_races=100,
+    )
+
+    assert rule is None
+
+
+def test_broad_market_edge_prefers_evidence_over_peak_tuning_roi():
+    sweep = [
+        {
+            "edge_ratio_threshold": 1.15,
+            "policy": "all_candidates",
+            "rows": 648,
+            "races": 590,
+            "flat_bet_roi_final_odds": 0.0125,
+        },
+        {
+            "edge_ratio_threshold": 1.20,
+            "policy": "all_candidates",
+            "rows": 217,
+            "races": 200,
+            "flat_bet_roi_final_odds": 0.1534,
+        },
+        {
+            "edge_ratio_threshold": 1.20,
+            "policy": "top1_edge_per_race",
+            "rows": 200,
+            "races": 200,
+            "flat_bet_roi_final_odds": 0.015,
+        },
+    ]
+
+    rule = select_broad_positive_market_edge_rule(
+        sweep,
+        min_rows=200,
+        min_races=100,
+    )
+
+    assert rule is not None
+    assert rule["edge_ratio_threshold"] == 1.15
+    assert rule["policy"] == "all_candidates"
+    assert rule["rows"] == 648
+    assert rule["races"] == 590
+
+
+def test_broad_market_edge_requires_positive_tuning_roi():
+    sweep = [
+        {
+            "edge_ratio_threshold": 1.10,
+            "policy": "all_candidates",
+            "rows": 2223,
+            "races": 1797,
+            "flat_bet_roi_final_odds": -0.028,
+        },
+    ]
+
+    rule = select_broad_positive_market_edge_rule(
+        sweep,
         min_rows=200,
         min_races=100,
     )
