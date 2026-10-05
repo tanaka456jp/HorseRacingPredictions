@@ -11,10 +11,12 @@ from horse_racing_predictions.market_residual_v12 import (
     fit_residual_market_edge_rule,
     fit_residual_market_edge_odds_segment_rule,
     fit_residual_longshot_market_edge_rule,
+    fit_residual_stable_longshot_market_edge_rule,
     fit_residual_gamma,
     select_broad_positive_market_edge_odds_segment,
     select_broad_positive_market_edge_rule,
     select_broad_positive_longshot_market_edge_rule,
+    select_temporally_stable_longshot_market_edge_rule,
     residual_adjusted_probability,
 )
 
@@ -212,6 +214,14 @@ def test_residual_v12_development_keeps_2025_holdout_untouched():
     )
     assert (
         "longshot_market_edge_development_gate_passed"
+        in result
+    )
+    assert (
+        "stable_longshot_market_edge_tuning_2022"
+        in result
+    )
+    assert (
+        "stable_longshot_market_edge_development_gate_passed"
         in result
     )
     assert (
@@ -575,5 +585,87 @@ def test_longshot_rule_keeps_odds_six_plus_fixed():
     assert len(sweep) > 0
     assert all(row["odds_min"] == 6.0 for row in sweep)
     assert all(row["odds_max"] is None for row in sweep)
+    if rule is not None:
+        assert rule["policy"] == "all_candidates"
+
+
+def test_stable_longshot_rule_requires_positive_both_tuning_folds():
+    sweep = [
+        {
+            "edge_ratio_threshold": 1.05,
+            "policy": "all_candidates",
+            "rows": 500,
+            "races": 350,
+            "flat_bet_roi_final_odds": 0.03,
+            "early_rows": 240,
+            "early_races": 170,
+            "early_flat_bet_roi_final_odds": -0.01,
+            "late_rows": 260,
+            "late_races": 180,
+            "late_flat_bet_roi_final_odds": 0.07,
+        },
+        {
+            "edge_ratio_threshold": 1.10,
+            "policy": "all_candidates",
+            "rows": 420,
+            "races": 300,
+            "flat_bet_roi_final_odds": 0.04,
+            "early_rows": 200,
+            "early_races": 140,
+            "early_flat_bet_roi_final_odds": 0.02,
+            "late_rows": 220,
+            "late_races": 160,
+            "late_flat_bet_roi_final_odds": 0.06,
+        },
+    ]
+
+    rule = select_temporally_stable_longshot_market_edge_rule(
+        sweep,
+        min_rows=200,
+        min_races=100,
+        min_fold_rows=100,
+        min_fold_races=50,
+    )
+
+    assert rule is not None
+    assert rule["edge_ratio_threshold"] == 1.10
+
+
+def test_stable_longshot_sweep_uses_fixed_time_split():
+    frame = pd.DataFrame({
+        "race_id": ["R1", "R1", "R2", "R2"],
+        "race_date": [
+            "2022-01-01", "2022-01-01",
+            "2022-08-01", "2022-08-01",
+        ],
+        "finish_position": [1, 2, 2, 1],
+        "win_odds": [7.0, 8.0, 9.0, 10.0],
+    })
+    probability = pd.Series(
+        [0.18, 0.15, 0.14, 0.13],
+        index=frame.index,
+        dtype=float,
+    )
+    market_probability = pd.Series(
+        [0.14, 0.13, 0.12, 0.11],
+        index=frame.index,
+        dtype=float,
+    )
+
+    rule, sweep = fit_residual_stable_longshot_market_edge_rule(
+        frame,
+        probability,
+        market_probability,
+        min_rows=1,
+        min_races=1,
+        min_fold_rows=1,
+        min_fold_races=1,
+    )
+
+    assert len(sweep) > 0
+    assert all(
+        row["stability_split_date"] == "2022-05-01"
+        for row in sweep
+    )
     if rule is not None:
         assert rule["policy"] == "all_candidates"

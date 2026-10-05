@@ -46,3 +46,12 @@ the unchanged 200 rows / 100 races evidence floor, then freeze it unchanged for
 Do not inspect or reuse 2025-2026 holdout rows and do not change Forward Paper
 thresholds.
 request=2026-10-05-longshot-market-edge-rnd-phase5
+
+Phase 6 challenger: keep final win odds >= 6 fixed, but reject tuning rules that
+are not temporally stable before validation. Split the through-2022 tuning
+period at 2022-05-01. A threshold must have positive ROI in both tuning
+subperiods, at least 100 rows / 50 races in each subperiod, and still meet the
+overall 200 rows / 100 races evidence floor. Select the broadest qualifying
+threshold and freeze it unchanged for 2023 and 2024 validation. Do not inspect
+or reuse 2025-2026 holdout rows and do not change Forward Paper thresholds.
+request=2026-10-05-stable-longshot-rnd-phase6
