@@ -63,3 +63,38 @@ objective and it does not authorize trifecta/trio selection or Forward Paper
 changes. 2025-2026 remain untouched. No paid tool/API/data source may be used.
 
 request=2026-10-06-exotic-top3-safety-rnd-phase2
+
+
+Phase 3 exotic-combination probability validation:
+Freeze the Phase 2 Top-3 baseline/challenger models, features, hyperparameters,
+longshot boundary, bootstrap sample count, seed, and support threshold.
+Do not retrain differently, tune another threshold, or select any betting rule
+from Phase 3 evidence.
+
+Convert each frozen horse-level Top-3 marginal probability q to a fixed
+Plackett-Luce ranking strength q/(1-q). For every completed development race
+with unique first/second/third finishers:
+- ordered top-three probability is the Plackett-Luce probability of the actual
+  1st->2nd->3rd sequence (trifecta probability proxy);
+- unordered top-three-set probability is the sum of the six permutations of
+  those same three actual horses (trio probability proxy).
+No parameter is fitted in this conversion.
+
+Evaluate unchanged on reused development years 2023 and 2024:
+- mean negative log likelihood of the realized ordered top three;
+- mean negative log likelihood of the realized unordered top-three set;
+- the same two metrics for races whose realized top three contains at least one
+  pre-registered longshot proxy (historical final win odds >= 6.0);
+- deterministic paired race bootstrap, 1000 samples, seed 20261006.
+
+Phase 3 passes only if challenger-minus-baseline NLL is below zero AND bootstrap
+support for lower NLL is at least 80% for BOTH trifecta and trio probability
+proxies, BOTH overall and longshot-containing races, in BOTH 2023 and 2024.
+
+This is probability-quality research only. It does not establish betting EV
+because the current free pipeline does not contain timestamped pre-race
+trifecta/trio combination odds. Do not generate real tickets or change staking.
+2025-2026 remain untouched as final independent holdout. Forward Paper remains
+unchanged. No paid tool, API, or data source may be used.
+
+request=2026-10-06-exotic-combinations-rnd-phase3
