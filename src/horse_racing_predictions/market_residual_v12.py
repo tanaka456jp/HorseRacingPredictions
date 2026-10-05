@@ -67,6 +67,14 @@ MARKET_EDGE_POLICIES = (
 )
 
 
+MARKET_EDGE_ODDS_SEGMENTS = (
+    ("odds_1_to_3", 1.0, 3.0),
+    ("odds_3_to_6", 3.0, 6.0),
+    ("odds_6_to_12", 6.0, 12.0),
+    ("odds_12_plus", 12.0, None),
+)
+
+
 def _safe_float(value) -> float | None:
     value = float(value)
     return value if math.isfinite(value) else None
@@ -639,6 +647,171 @@ def evaluate_fixed_residual_market_edge_rule(
     )
 
 
+def _odds_segment_mask(
+    frame: pd.DataFrame,
+    *,
+    odds_min: float,
+    odds_max: float | None,
+) -> pd.Series:
+    odds = pd.to_numeric(
+        frame["win_odds"],
+        errors="coerce",
+    )
+    mask = odds.ge(float(odds_min))
+    if odds_max is not None:
+        mask &= odds.lt(float(odds_max))
+    return mask.fillna(False)
+
+
+def _market_edge_odds_segment_result(
+    selected: pd.DataFrame,
+    *,
+    base_rule: dict,
+    segment_name: str,
+    odds_min: float,
+    odds_max: float | None,
+) -> dict:
+    segment = selected.loc[
+        _odds_segment_mask(
+            selected,
+            odds_min=odds_min,
+            odds_max=odds_max,
+        )
+    ].copy()
+    result = _market_edge_rule_result(
+        segment,
+        edge_ratio_threshold=float(
+            base_rule["edge_ratio_threshold"]
+        ),
+        policy=str(base_rule["policy"]),
+    )
+    result.update({
+        "segment_name": segment_name,
+        "odds_min": float(odds_min),
+        "odds_max": (
+            None
+            if odds_max is None
+            else float(odds_max)
+        ),
+    })
+    return result
+
+
+def residual_market_edge_odds_segment_sweep(
+    frame: pd.DataFrame,
+    probability: pd.Series,
+    market_probability: pd.Series,
+    base_rule: dict,
+    *,
+    min_probability: float = 0.03,
+) -> list[dict]:
+    selected = _select_market_edge_candidates(
+        frame,
+        probability,
+        market_probability,
+        edge_ratio_threshold=float(
+            base_rule["edge_ratio_threshold"]
+        ),
+        min_probability=min_probability,
+        policy=str(base_rule["policy"]),
+    )
+    return [
+        _market_edge_odds_segment_result(
+            selected,
+            base_rule=base_rule,
+            segment_name=name,
+            odds_min=odds_min,
+            odds_max=odds_max,
+        )
+        for name, odds_min, odds_max
+        in MARKET_EDGE_ODDS_SEGMENTS
+    ]
+
+
+def select_broad_positive_market_edge_odds_segment(
+    sweep: list[dict],
+    *,
+    min_rows: int = 200,
+    min_races: int = 100,
+) -> dict | None:
+    eligible = [
+        row
+        for row in sweep
+        if row["rows"] >= min_rows
+        and row["races"] >= min_races
+        and row["flat_bet_roi_final_odds"] is not None
+        and float(
+            row["flat_bet_roi_final_odds"]
+        ) > 0.0
+    ]
+    if not eligible:
+        return None
+    return dict(max(
+        eligible,
+        key=lambda row: (
+            int(row["races"]),
+            int(row["rows"]),
+            -float(row["odds_min"]),
+        ),
+    ))
+
+
+def fit_residual_market_edge_odds_segment_rule(
+    frame: pd.DataFrame,
+    probability: pd.Series,
+    market_probability: pd.Series,
+    base_rule: dict | None,
+    *,
+    min_probability: float = 0.03,
+    min_rows: int = 200,
+    min_races: int = 100,
+) -> tuple[dict | None, list[dict]]:
+    if base_rule is None:
+        return None, []
+    sweep = residual_market_edge_odds_segment_sweep(
+        frame,
+        probability,
+        market_probability,
+        base_rule,
+        min_probability=min_probability,
+    )
+    return (
+        select_broad_positive_market_edge_odds_segment(
+            sweep,
+            min_rows=min_rows,
+            min_races=min_races,
+        ),
+        sweep,
+    )
+
+
+def evaluate_fixed_residual_market_edge_odds_segment_rule(
+    frame: pd.DataFrame,
+    probability: pd.Series,
+    market_probability: pd.Series,
+    rule: dict,
+    *,
+    min_probability: float = 0.03,
+) -> dict:
+    selected = _select_market_edge_candidates(
+        frame,
+        probability,
+        market_probability,
+        edge_ratio_threshold=float(
+            rule["edge_ratio_threshold"]
+        ),
+        min_probability=min_probability,
+        policy=str(rule["policy"]),
+    )
+    return _market_edge_odds_segment_result(
+        selected,
+        base_rule=rule,
+        segment_name=str(rule["segment_name"]),
+        odds_min=float(rule["odds_min"]),
+        odds_max=rule["odds_max"],
+    )
+
+
 class MarketResidualRegressor:
     def __init__(
         self,
@@ -1008,6 +1181,18 @@ def evaluate_market_residual_v12_development(
             min_races=min_ev_races,
         )
     )
+    (
+        fitted_market_edge_odds_segment_rule,
+        market_edge_odds_segment_sweep,
+    ) = fit_residual_market_edge_odds_segment_rule(
+        tuning,
+        tuning_adjusted,
+        tuning_market,
+        fitted_broad_market_edge_rule,
+        min_probability=min_probability,
+        min_rows=min_ev_rows,
+        min_races=min_ev_races,
+    )
 
     def _evaluate_period(
         period: pd.DataFrame,
@@ -1055,6 +1240,17 @@ def evaluate_market_residual_v12_development(
                 adjusted,
                 market,
                 fitted_broad_market_edge_rule,
+                min_probability=min_probability,
+            )
+        )
+        fixed_market_edge_odds_segment_result = (
+            None
+            if fitted_market_edge_odds_segment_rule is None
+            else evaluate_fixed_residual_market_edge_odds_segment_rule(
+                period,
+                adjusted,
+                market,
+                fitted_market_edge_odds_segment_rule,
                 min_probability=min_probability,
             )
         )
@@ -1131,6 +1327,9 @@ def evaluate_market_residual_v12_development(
             ),
             "fixed_broad_market_edge_rule_result": (
                 fixed_broad_market_edge_rule_result
+            ),
+            "fixed_market_edge_odds_segment_result": (
+                fixed_market_edge_odds_segment_result
             ),
         }
 
@@ -1239,6 +1438,36 @@ def evaluate_market_residual_v12_development(
         )
     )
 
+    def _odds_segment_period_passed(
+        result: dict,
+    ) -> bool:
+        segment_result = result[
+            "fixed_market_edge_odds_segment_result"
+        ]
+        return bool(
+            segment_result is not None
+            and segment_result[
+                "flat_bet_roi_final_odds"
+            ] is not None
+            and float(
+                segment_result[
+                    "flat_bet_roi_final_odds"
+                ]
+            ) > 0.0
+            and int(segment_result["rows"]) >= min_ev_rows
+            and int(segment_result["races"]) >= min_ev_races
+        )
+
+    market_edge_odds_segment_gate = bool(
+        fitted_market_edge_odds_segment_rule is not None
+        and _odds_segment_period_passed(
+            result_2023
+        )
+        and _odds_segment_period_passed(
+            result_2024
+        )
+    )
+
     return {
         "status": (
             "research_only_market_residual_v12_development"
@@ -1313,6 +1542,20 @@ def evaluate_market_residual_v12_development(
             ),
             "fitted_rule": fitted_broad_market_edge_rule,
         },
+        "market_edge_odds_segment_tuning_2022": {
+            "period_start": str(
+                tuning["race_date"].min().date()
+            ),
+            "period_end": str(
+                tuning["race_date"].max().date()
+            ),
+            "selection": (
+                "broadest positive-ROI final-odds segment "
+                "within the frozen broad market-edge rule"
+            ),
+            "fitted_rule": fitted_market_edge_odds_segment_rule,
+            "segment_sweep": market_edge_odds_segment_sweep,
+        },
         "validation_2023": result_2023,
         "validation_2024": result_2024,
         "development_gate_passed": gate,
@@ -1322,6 +1565,9 @@ def evaluate_market_residual_v12_development(
         ),
         "broad_market_edge_development_gate_passed": (
             broad_market_edge_gate
+        ),
+        "market_edge_odds_segment_development_gate_passed": (
+            market_edge_odds_segment_gate
         ),
         "ev_constraints": {
             "min_probability": float(min_probability),
