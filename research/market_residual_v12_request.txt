@@ -76,3 +76,13 @@ independent holdout; the standardized challenger must beat baseline residual
 v12 on both winner log-loss and Brier in both years. Keep 2025-2026 untouched
 as the final independent holdout. Do not change Forward Paper thresholds.
 request=2026-10-05-standardized-market-residual-rnd-phase8
+
+Phase 9 challenger: test whether static residual model decay is the main
+limitation. Use annual expanding-window raw-residual refits with strictly
+past-only data. Fold A trains through 2021-12-31, tunes gamma on 2022 only, and
+evaluates 2023. Fold B trains through 2022-12-31, tunes gamma on 2023 only, and
+evaluates 2024. A rolling refit passes only if it beats the existing static v12
+residual model on both winner log-loss and Brier in both evaluation years.
+2023/2024 remain reused development evidence; 2025-2026 stay untouched as the
+final independent holdout. Do not change Forward Paper thresholds.
+request=2026-10-05-rolling-residual-refit-rnd-phase9

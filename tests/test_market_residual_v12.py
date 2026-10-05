@@ -1,3 +1,4 @@
+from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
@@ -6,6 +7,7 @@ import pytest
 
 from horse_racing_predictions.market_residual_v12 import (
     evaluate_market_residual_v12_development,
+    evaluate_rolling_residual_fold,
     evaluate_fixed_residual_ev_rule,
     direct_value_rule_result,
     evaluate_fixed_direct_value_rule,
@@ -246,6 +248,14 @@ def test_residual_v12_development_keeps_2025_holdout_untouched():
     )
     assert (
         "standardized_residual_development_gate_passed"
+        in result
+    )
+    assert (
+        "rolling_refit_phase9"
+        in result
+    )
+    assert (
+        "rolling_refit_development_gate_passed"
         in result
     )
     assert (
@@ -853,3 +863,41 @@ def test_standardized_residual_helpers_reject_bad_inputs():
             market,
             pd.Series([float("nan")], index=frame.index),
         )
+
+
+def test_rolling_residual_fold_rejects_invalid_time_order_before_fit():
+    frame = pd.DataFrame({
+        "race_date": ["2022-01-01"],
+        "race_id": ["R1"],
+        "finish_position": [1],
+        "win_odds": [3.0],
+    })
+
+    with pytest.raises(
+        ValueError,
+        match="invalid rolling residual fold time split",
+    ):
+        evaluate_rolling_residual_fold(
+            frame,
+            [],
+            train_end="2022-12-31",
+            tuning_start="2022-01-01",
+            tuning_end="2022-12-31",
+            evaluation_start="2023-01-01",
+            evaluation_end="2023-12-31",
+            iterations=1,
+        )
+
+
+def test_phase9_rolling_refit_uses_past_only_year_boundaries():
+    source = Path(
+        "src/horse_racing_predictions/market_residual_v12.py"
+    ).read_text(encoding="utf-8")
+
+    assert 'train_end="2021-12-31"' in source
+    assert 'tuning_start="2022-01-01"' in source
+    assert 'evaluation_start="2023-01-01"' in source
+    assert 'train_end="2022-12-31"' in source
+    assert 'tuning_start="2023-01-01"' in source
+    assert 'evaluation_start="2024-01-01"' in source
+    assert '"2025-2026 untouched"' in source

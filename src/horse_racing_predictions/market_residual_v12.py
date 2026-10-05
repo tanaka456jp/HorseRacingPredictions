@@ -1447,6 +1447,167 @@ def fit_residual_gamma(
     return float(best["gamma"]), rows
 
 
+def evaluate_rolling_residual_fold(
+    frame: pd.DataFrame,
+    feature_columns: list[str],
+    *,
+    train_end: str,
+    tuning_start: str,
+    tuning_end: str,
+    evaluation_start: str,
+    evaluation_end: str,
+    iterations: int = 350,
+) -> dict:
+    train_end_ts = pd.Timestamp(
+        train_end
+    ).normalize()
+    tuning_start_ts = pd.Timestamp(
+        tuning_start
+    ).normalize()
+    tuning_end_ts = pd.Timestamp(
+        tuning_end
+    ).normalize()
+    evaluation_start_ts = pd.Timestamp(
+        evaluation_start
+    ).normalize()
+    evaluation_end_ts = pd.Timestamp(
+        evaluation_end
+    ).normalize()
+    if not (
+        train_end_ts
+        < tuning_start_ts
+        <= tuning_end_ts
+        < evaluation_start_ts
+        <= evaluation_end_ts
+    ):
+        raise ValueError(
+            "invalid rolling residual fold time split"
+        )
+
+    dates = pd.to_datetime(
+        frame["race_date"],
+        errors="raise",
+    )
+    train = frame.loc[
+        dates.le(train_end_ts)
+    ].copy()
+    tuning = frame.loc[
+        dates.between(
+            tuning_start_ts,
+            tuning_end_ts,
+            inclusive="both",
+        )
+    ].copy()
+    evaluation = frame.loc[
+        dates.between(
+            evaluation_start_ts,
+            evaluation_end_ts,
+            inclusive="both",
+        )
+    ].copy()
+    if (
+        train.empty
+        or tuning.empty
+        or evaluation.empty
+    ):
+        raise ValueError(
+            "rolling residual fold contains an empty period"
+        )
+
+    train_market = normalized_market_probability(
+        train.rename(
+            columns={"win_odds": "decimal_odds"}
+        )
+    )
+    train_target = (
+        _outcomes(train).astype(float)
+        - train_market
+    )
+    model = MarketResidualRegressor(
+        list(feature_columns),
+        iterations=iterations,
+    ).fit(
+        train,
+        train_target,
+    )
+
+    tuning_market = normalized_market_probability(
+        tuning.rename(
+            columns={"win_odds": "decimal_odds"}
+        )
+    )
+    tuning_residual = model.predict(tuning)
+    gamma, gamma_sweep = fit_residual_gamma(
+        tuning,
+        tuning_market,
+        tuning_residual,
+    )
+
+    evaluation_market = normalized_market_probability(
+        evaluation.rename(
+            columns={"win_odds": "decimal_odds"}
+        )
+    )
+    evaluation_residual = model.predict(
+        evaluation
+    )
+    evaluation_adjusted = residual_adjusted_probability(
+        evaluation,
+        evaluation_market,
+        evaluation_residual,
+        gamma=gamma,
+    )
+    market_quality = _quality(
+        evaluation,
+        evaluation_market,
+    )
+    residual_quality = _quality(
+        evaluation,
+        evaluation_adjusted,
+    )
+    return {
+        "train_end": str(train_end_ts.date()),
+        "train_rows": int(len(train)),
+        "train_races": int(
+            train["race_id"].nunique()
+        ),
+        "tuning_start": str(tuning_start_ts.date()),
+        "tuning_end": str(tuning_end_ts.date()),
+        "tuning_rows": int(len(tuning)),
+        "tuning_races": int(
+            tuning["race_id"].nunique()
+        ),
+        "selected_gamma": _safe_float(
+            gamma
+        ),
+        "gamma_sweep": gamma_sweep,
+        "evaluation_start": str(
+            evaluation_start_ts.date()
+        ),
+        "evaluation_end": str(
+            evaluation_end_ts.date()
+        ),
+        "evaluation_rows": int(len(evaluation)),
+        "evaluation_races": int(
+            evaluation["race_id"].nunique()
+        ),
+        "market_quality": market_quality,
+        "residual_quality": residual_quality,
+        "winner_log_loss_delta_vs_market": _safe_float(
+            float(
+                residual_quality["winner_log_loss"]
+            )
+            - float(
+                market_quality["winner_log_loss"]
+            )
+        ),
+        "brier_delta_vs_market": _safe_float(
+            float(residual_quality["brier"])
+            - float(market_quality["brier"])
+        ),
+    }
+
+
 def evaluate_market_residual_v12_development(
     history: pd.DataFrame,
     champion: LoadedChampion,
@@ -2005,6 +2166,92 @@ def evaluate_market_residual_v12_development(
         validation_2024
     )
 
+    rolling_2023 = evaluate_rolling_residual_fold(
+        frame,
+        list(features),
+        train_end="2021-12-31",
+        tuning_start="2022-01-01",
+        tuning_end="2022-12-31",
+        evaluation_start="2023-01-01",
+        evaluation_end="2023-12-31",
+        iterations=iterations,
+    )
+    rolling_2024 = evaluate_rolling_residual_fold(
+        frame,
+        list(features),
+        train_end="2022-12-31",
+        tuning_start="2023-01-01",
+        tuning_end="2023-12-31",
+        evaluation_start="2024-01-01",
+        evaluation_end="2024-12-31",
+        iterations=iterations,
+    )
+
+    def _annotate_rolling_vs_static(
+        rolling: dict,
+        static_result: dict,
+    ) -> None:
+        rolling_quality = rolling[
+            "residual_quality"
+        ]
+        static_quality = static_result[
+            "residual_quality"
+        ]
+        rolling[
+            "winner_log_loss_delta_vs_static_residual"
+        ] = _safe_float(
+            float(
+                rolling_quality["winner_log_loss"]
+            )
+            - float(
+                static_quality["winner_log_loss"]
+            )
+        )
+        rolling[
+            "brier_delta_vs_static_residual"
+        ] = _safe_float(
+            float(rolling_quality["brier"])
+            - float(static_quality["brier"])
+        )
+        rolling[
+            "beats_static_residual_winner_log_loss"
+        ] = bool(
+            rolling_quality["winner_log_loss"]
+            < static_quality["winner_log_loss"]
+        )
+        rolling[
+            "beats_static_residual_brier"
+        ] = bool(
+            rolling_quality["brier"]
+            < static_quality["brier"]
+        )
+
+    _annotate_rolling_vs_static(
+        rolling_2023,
+        result_2023,
+    )
+    _annotate_rolling_vs_static(
+        rolling_2024,
+        result_2024,
+    )
+
+    rolling_refit_gate = bool(
+        float(rolling_2023["selected_gamma"]) > 0.0
+        and float(rolling_2024["selected_gamma"]) > 0.0
+        and rolling_2023[
+            "beats_static_residual_winner_log_loss"
+        ]
+        and rolling_2023[
+            "beats_static_residual_brier"
+        ]
+        and rolling_2024[
+            "beats_static_residual_winner_log_loss"
+        ]
+        and rolling_2024[
+            "beats_static_residual_brier"
+        ]
+    )
+
     gate = bool(
         gamma > 0.0
         and result_2023[
@@ -2403,6 +2650,15 @@ def evaluate_market_residual_v12_development(
                 "and are development evidence, not independent holdout."
             ),
         },
+        "rolling_refit_phase9": {
+            "selection": (
+                "annual expanding-window raw residual refit; "
+                "gamma tuned only on the immediately prior year"
+            ),
+            "fold_2023": rolling_2023,
+            "fold_2024": rolling_2024,
+            "development_gate_passed": rolling_refit_gate,
+        },
         "validation_2023": result_2023,
         "validation_2024": result_2024,
         "development_gate_passed": gate,
@@ -2427,6 +2683,9 @@ def evaluate_market_residual_v12_development(
         ),
         "standardized_residual_development_gate_passed": (
             standardized_residual_gate
+        ),
+        "rolling_refit_development_gate_passed": (
+            rolling_refit_gate
         ),
         "ev_constraints": {
             "min_probability": float(min_probability),
