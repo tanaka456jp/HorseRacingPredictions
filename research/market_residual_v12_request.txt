@@ -19,3 +19,11 @@ market-edge rule unchanged for 2023 and 2024 validation. Require at least
 comparison. Do not inspect or reuse 2025-2026 holdout rows, and do not change
 Forward Paper thresholds.
 request=2026-10-05-market-edge-rnd-phase2
+
+Phase 3 challenger: among through-2022 market-edge candidates that meet at least
+200 rows / 100 races and have positive tuning ROI, choose the rule with the
+broadest race coverage rather than the maximum tuning ROI. Freeze it unchanged
+for 2023 and 2024 validation. This is intended to reduce tuning overfit after
+the phase-2 max-ROI rule failed both validation years. Do not inspect or reuse
+2025-2026 holdout rows and do not change Forward Paper thresholds.
+request=2026-10-05-broad-market-edge-rnd-phase3
