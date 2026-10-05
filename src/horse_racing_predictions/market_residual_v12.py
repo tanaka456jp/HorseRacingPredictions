@@ -556,6 +556,62 @@ def fit_residual_market_edge_rule(
     return dict(best), sweep
 
 
+def select_broad_positive_market_edge_rule(
+    sweep: list[dict],
+    *,
+    min_rows: int = 200,
+    min_races: int = 100,
+) -> dict | None:
+    eligible = [
+        row
+        for row in sweep
+        if row["rows"] >= min_rows
+        and row["races"] >= min_races
+        and row["flat_bet_roi_final_odds"] is not None
+        and float(
+            row["flat_bet_roi_final_odds"]
+        ) > 0.0
+    ]
+    if not eligible:
+        return None
+
+    broadest = max(
+        eligible,
+        key=lambda row: (
+            int(row["races"]),
+            int(row["rows"]),
+            -float(row["edge_ratio_threshold"]),
+            row["policy"] == "all_candidates",
+        ),
+    )
+    return dict(broadest)
+
+
+def fit_broad_residual_market_edge_rule(
+    frame: pd.DataFrame,
+    probability: pd.Series,
+    market_probability: pd.Series,
+    *,
+    min_probability: float = 0.03,
+    min_rows: int = 200,
+    min_races: int = 100,
+) -> tuple[dict | None, list[dict]]:
+    sweep = residual_market_edge_sweep(
+        frame,
+        probability,
+        market_probability,
+        min_probability=min_probability,
+    )
+    return (
+        select_broad_positive_market_edge_rule(
+            sweep,
+            min_rows=min_rows,
+            min_races=min_races,
+        ),
+        sweep,
+    )
+
+
 def evaluate_fixed_residual_market_edge_rule(
     frame: pd.DataFrame,
     probability: pd.Series,
@@ -945,6 +1001,13 @@ def evaluate_market_residual_v12_development(
             min_races=min_ev_races,
         )
     )
+    fitted_broad_market_edge_rule = (
+        select_broad_positive_market_edge_rule(
+            market_edge_sweep,
+            min_rows=min_ev_rows,
+            min_races=min_ev_races,
+        )
+    )
 
     def _evaluate_period(
         period: pd.DataFrame,
@@ -981,6 +1044,17 @@ def evaluate_market_residual_v12_development(
                 adjusted,
                 market,
                 fitted_market_edge_rule,
+                min_probability=min_probability,
+            )
+        )
+        fixed_broad_market_edge_rule_result = (
+            None
+            if fitted_broad_market_edge_rule is None
+            else evaluate_fixed_residual_market_edge_rule(
+                period,
+                adjusted,
+                market,
+                fitted_broad_market_edge_rule,
                 min_probability=min_probability,
             )
         )
@@ -1054,6 +1128,9 @@ def evaluate_market_residual_v12_development(
             "fixed_ev_rule_result": fixed_ev_rule_result,
             "fixed_market_edge_rule_result": (
                 fixed_market_edge_rule_result
+            ),
+            "fixed_broad_market_edge_rule_result": (
+                fixed_broad_market_edge_rule_result
             ),
         }
 
@@ -1136,6 +1213,32 @@ def evaluate_market_residual_v12_development(
         )
     )
 
+    def _broad_market_edge_period_passed(
+        result: dict,
+    ) -> bool:
+        edge_result = result[
+            "fixed_broad_market_edge_rule_result"
+        ]
+        return bool(
+            edge_result is not None
+            and edge_result["flat_bet_roi_final_odds"] is not None
+            and float(
+                edge_result["flat_bet_roi_final_odds"]
+            ) > 0.0
+            and int(edge_result["rows"]) >= min_ev_rows
+            and int(edge_result["races"]) >= min_ev_races
+        )
+
+    broad_market_edge_gate = bool(
+        fitted_broad_market_edge_rule is not None
+        and _broad_market_edge_period_passed(
+            result_2023
+        )
+        and _broad_market_edge_period_passed(
+            result_2024
+        )
+    )
+
     return {
         "status": (
             "research_only_market_residual_v12_development"
@@ -1197,12 +1300,28 @@ def evaluate_market_residual_v12_development(
             "fitted_rule": fitted_market_edge_rule,
             "threshold_sweep": market_edge_sweep,
         },
+        "broad_market_edge_rule_tuning_2022": {
+            "period_start": str(
+                tuning["race_date"].min().date()
+            ),
+            "period_end": str(
+                tuning["race_date"].max().date()
+            ),
+            "selection": (
+                "broadest positive-ROI rule meeting "
+                "minimum rows/races"
+            ),
+            "fitted_rule": fitted_broad_market_edge_rule,
+        },
         "validation_2023": result_2023,
         "validation_2024": result_2024,
         "development_gate_passed": gate,
         "ev_development_gate_passed": ev_gate,
         "market_edge_development_gate_passed": (
             market_edge_gate
+        ),
+        "broad_market_edge_development_gate_passed": (
+            broad_market_edge_gate
         ),
         "ev_constraints": {
             "min_probability": float(min_probability),
