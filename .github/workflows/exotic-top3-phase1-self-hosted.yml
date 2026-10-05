@@ -1,0 +1,43 @@
+name: Exotic Top-3 Phase 1 (Self-hosted)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "research/exotic_top3_phase1_request.txt"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: exotic-top3-phase1-self-hosted
+  cancel-in-progress: true
+
+jobs:
+  exotic-top3:
+    name: Exotic Top-3 Phase 1 development gate
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout without deleting local ignored data
+        uses: actions/checkout@v4
+        with:
+          clean: false
+          persist-credentials: false
+
+      - name: Run Exotic Top-3 Phase 1 research
+        shell: powershell
+        run: |
+          & .\scripts\run_exotic_top3_phase1_runner.ps1
+
+      - name: Publish sanitized validation only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: exotic-top3-phase1-development-validation
+          path: artifacts/exotic_top3_phase1_runner_validation.json
+          if-no-files-found: warn
+          retention-days: 14

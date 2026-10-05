@@ -1,0 +1,41 @@
+Research-only Exotic / Top-3 Phase 1 request.
+
+Hypothesis:
+Popular/non-popular runners may be mispriced for place-in-the-top-three outcomes
+when past-only horse form, jockey history, running-style context, and the
+composition of the current field are evaluated jointly rather than runner by
+runner.
+
+Design:
+- Build a baseline Top-3 probability model using the existing pre-race v10
+  history features plus existing win-market context.
+- Build one challenger with fixed runner-vs-field interaction features:
+  within-race means, deltas, dispersion, ranks, and market concentration.
+- Use the same fixed CatBoost classifier settings for baseline and challenger.
+- Train through 2022-12-31.
+- Evaluate unchanged on reused development years 2023 and 2024.
+- Report both overall Top-3 binary log-loss/Brier and the pre-registered
+  historical-final-win-odds >= 6.0 longshot proxy.
+- The development gate passes only if challenger binary log-loss and Brier are
+  both lower than baseline overall AND in the longshot proxy in BOTH 2023 and
+  2024.
+- Do not tune a probability threshold, odds band, feature threshold, or staking
+  rule in this phase.
+
+Pedigree:
+The current free history exposes a blood registration identifier but not
+semantic sire/dam/broodmare-sire fields. Do not use the identifier as a
+categorical memorization proxy. Pedigree features require a separately verified
+free/legal semantic source before they may enter a later research phase.
+
+Boundaries:
+- 2023/2024 are reused development evidence, not independent holdout.
+- 2025-2026 remain untouched as the final independent holdout.
+- Do not read or evaluate 2025-2026.
+- Forward Paper settings remain unchanged.
+- Do not create or recommend real trifecta/trio tickets in this phase.
+- Current free pipeline has no pre-race exotic-combination odds, so this phase
+  tests probability quality only, not exotic-bet expected value.
+- No paid tool, API, or data source may be used.
+
+request=2026-10-06-exotic-top3-rnd-phase1
