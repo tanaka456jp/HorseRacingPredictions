@@ -20,8 +20,11 @@ from horse_racing_predictions.market_residual_v12 import (
     select_broad_positive_market_edge_rule,
     select_broad_positive_longshot_market_edge_rule,
     select_temporally_stable_longshot_market_edge_rule,
+    market_residual_scale,
     realized_flat_bet_return,
     residual_adjusted_probability,
+    restore_standardized_market_residual,
+    standardized_market_residual_target,
 )
 
 
@@ -235,6 +238,18 @@ def test_residual_v12_development_keeps_2025_holdout_untouched():
     assert (
         "direct_value_development_gate_passed"
         in result
+    )
+    assert (
+        "standardized_residual_tuning_2022"
+        in result
+    )
+    assert (
+        "standardized_residual_development_gate_passed"
+        in result
+    )
+    assert (
+        result["research_protocol"]["final_holdout"]
+        == "2025-2026 untouched"
     )
     assert (
         result["validation_2023"]["fixed_ev_rule_result"]
@@ -765,4 +780,75 @@ def test_direct_value_result_rejects_nonfinite_score():
         direct_value_rule_result(
             frame,
             score,
+        )
+
+
+def test_standardized_market_residual_target_round_trips_to_raw_residual():
+    frame = pd.DataFrame({
+        "finish_position": [1, 2],
+    })
+    market = pd.Series(
+        [0.25, 0.25],
+        index=frame.index,
+        dtype=float,
+    )
+
+    target = standardized_market_residual_target(
+        frame,
+        market,
+    )
+    restored = restore_standardized_market_residual(
+        market,
+        target,
+    )
+
+    expected = pd.Series(
+        [0.75, -0.25],
+        index=frame.index,
+        dtype=float,
+    )
+    assert np.allclose(
+        restored.to_numpy(),
+        expected.to_numpy(),
+    )
+
+
+def test_market_residual_scale_uses_positive_variance_floor():
+    market = pd.Series(
+        [1e-12, 0.5],
+        dtype=float,
+    )
+
+    scale = market_residual_scale(
+        market,
+        variance_floor=1e-4,
+    )
+
+    assert np.isfinite(scale.to_numpy()).all()
+    assert scale.iloc[0] >= 0.01
+    assert scale.iloc[1] == pytest.approx(0.5)
+
+
+def test_standardized_residual_helpers_reject_bad_inputs():
+    frame = pd.DataFrame({
+        "finish_position": [1],
+    })
+    market = pd.Series([0.2], index=frame.index)
+
+    with pytest.raises(
+        ValueError,
+        match="variance_floor must be positive",
+    ):
+        market_residual_scale(
+            market,
+            variance_floor=0.0,
+        )
+
+    with pytest.raises(
+        ValueError,
+        match="standardized prediction contains non-finite",
+    ):
+        restore_standardized_market_residual(
+            market,
+            pd.Series([float("nan")], index=frame.index),
         )
