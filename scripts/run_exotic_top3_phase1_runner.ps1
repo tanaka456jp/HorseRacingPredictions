@@ -66,9 +66,11 @@ $payload = @{
     }
     bootstrap_safety_phase2 = $summary.bootstrap_safety_phase2
     combination_phase3 = $summary.combination_phase3
+    role_aware_combination_phase4 = $summary.role_aware_combination_phase4
     development_gate_passed = [bool]$summary.development_gate_passed
     development_safety_gate_passed = [bool]$summary.development_safety_gate_passed
     development_combination_gate_passed = [bool]$summary.development_combination_gate_passed
+    development_role_aware_gate_passed = [bool]$summary.development_role_aware_gate_passed
 }
 $validationPath = Join-Path $ProjectRoot $ValidationOutput
 $validationDir = Split-Path -Parent $validationPath
@@ -108,6 +110,15 @@ if (-not [string]::IsNullOrWhiteSpace($env:GITHUB_STEP_SUMMARY)) {
         "- 2024 longshot-containing trifecta NLL delta: $($v24.combination_phase3.longshot_containing.trifecta_nll_delta)",
         "- 2024 longshot-containing trio NLL delta: $($v24.combination_phase3.longshot_containing.trio_nll_delta)",
         "- Phase 3 combination gate passed: $($summary.development_combination_gate_passed)",
+        "- Phase 4 2023 trifecta NLL delta: $($v23.role_aware_combination_phase4.overall.trifecta_nll_delta)",
+        "- Phase 4 2023 trio NLL delta: $($v23.role_aware_combination_phase4.overall.trio_nll_delta)",
+        "- Phase 4 2023 longshot trifecta NLL delta: $($v23.role_aware_combination_phase4.longshot_containing.trifecta_nll_delta)",
+        "- Phase 4 2023 longshot trio NLL delta: $($v23.role_aware_combination_phase4.longshot_containing.trio_nll_delta)",
+        "- Phase 4 2024 trifecta NLL delta: $($v24.role_aware_combination_phase4.overall.trifecta_nll_delta)",
+        "- Phase 4 2024 trio NLL delta: $($v24.role_aware_combination_phase4.overall.trio_nll_delta)",
+        "- Phase 4 2024 longshot trifecta NLL delta: $($v24.role_aware_combination_phase4.longshot_containing.trifecta_nll_delta)",
+        "- Phase 4 2024 longshot trio NLL delta: $($v24.role_aware_combination_phase4.longshot_containing.trio_nll_delta)",
+        "- Phase 4 role-aware gate passed: $($summary.development_role_aware_gate_passed)",
         "- final holdout: $($summary.research_protocol.final_holdout)",
         "- Forward Paper: $($summary.research_protocol.forward_paper)"
     ) | Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Encoding UTF8
@@ -149,3 +160,21 @@ Write-Host "exotic_phase3_2024_longshot_trio_nll_delta=$($v24.combination_phase3
 Write-Host "exotic_phase3_2024_longshot_trifecta_bootstrap_support=$($v24.combination_phase3.longshot_containing.paired_bootstrap_vs_baseline.trifecta_nll_improvement_support)"
 Write-Host "exotic_phase3_2024_longshot_trio_bootstrap_support=$($v24.combination_phase3.longshot_containing.paired_bootstrap_vs_baseline.trio_nll_improvement_support)"
 Write-Host "exotic_phase3_development_combination_gate_passed=$($summary.development_combination_gate_passed)"
+
+Write-Host "exotic_phase4_2023_trifecta_nll_delta=$($v23.role_aware_combination_phase4.overall.trifecta_nll_delta)"
+Write-Host "exotic_phase4_2023_trio_nll_delta=$($v23.role_aware_combination_phase4.overall.trio_nll_delta)"
+Write-Host "exotic_phase4_2023_trifecta_bootstrap_support=$($v23.role_aware_combination_phase4.overall.paired_bootstrap_vs_baseline.trifecta_nll_improvement_support)"
+Write-Host "exotic_phase4_2023_trio_bootstrap_support=$($v23.role_aware_combination_phase4.overall.paired_bootstrap_vs_baseline.trio_nll_improvement_support)"
+Write-Host "exotic_phase4_2023_longshot_trifecta_nll_delta=$($v23.role_aware_combination_phase4.longshot_containing.trifecta_nll_delta)"
+Write-Host "exotic_phase4_2023_longshot_trio_nll_delta=$($v23.role_aware_combination_phase4.longshot_containing.trio_nll_delta)"
+Write-Host "exotic_phase4_2023_longshot_trifecta_bootstrap_support=$($v23.role_aware_combination_phase4.longshot_containing.paired_bootstrap_vs_baseline.trifecta_nll_improvement_support)"
+Write-Host "exotic_phase4_2023_longshot_trio_bootstrap_support=$($v23.role_aware_combination_phase4.longshot_containing.paired_bootstrap_vs_baseline.trio_nll_improvement_support)"
+Write-Host "exotic_phase4_2024_trifecta_nll_delta=$($v24.role_aware_combination_phase4.overall.trifecta_nll_delta)"
+Write-Host "exotic_phase4_2024_trio_nll_delta=$($v24.role_aware_combination_phase4.overall.trio_nll_delta)"
+Write-Host "exotic_phase4_2024_trifecta_bootstrap_support=$($v24.role_aware_combination_phase4.overall.paired_bootstrap_vs_baseline.trifecta_nll_improvement_support)"
+Write-Host "exotic_phase4_2024_trio_bootstrap_support=$($v24.role_aware_combination_phase4.overall.paired_bootstrap_vs_baseline.trio_nll_improvement_support)"
+Write-Host "exotic_phase4_2024_longshot_trifecta_nll_delta=$($v24.role_aware_combination_phase4.longshot_containing.trifecta_nll_delta)"
+Write-Host "exotic_phase4_2024_longshot_trio_nll_delta=$($v24.role_aware_combination_phase4.longshot_containing.trio_nll_delta)"
+Write-Host "exotic_phase4_2024_longshot_trifecta_bootstrap_support=$($v24.role_aware_combination_phase4.longshot_containing.paired_bootstrap_vs_baseline.trifecta_nll_improvement_support)"
+Write-Host "exotic_phase4_2024_longshot_trio_bootstrap_support=$($v24.role_aware_combination_phase4.longshot_containing.paired_bootstrap_vs_baseline.trio_nll_improvement_support)"
+Write-Host "exotic_phase4_development_role_aware_gate_passed=$($summary.development_role_aware_gate_passed)"
