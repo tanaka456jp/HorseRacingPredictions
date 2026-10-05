@@ -36,3 +36,13 @@ broad market-edge rule and the chosen odds band unchanged for 2023 and 2024.
 Do not search additional dimensions in this phase. Do not inspect or reuse
 2025-2026 holdout rows, and do not change Forward Paper thresholds.
 request=2026-10-05-odds-segment-rnd-phase4
+
+Phase 5 challenger: fix the odds segment at final win odds >= 6 based on the
+phase-4 tuning-only finding. Within that single fixed segment, sweep only the
+existing market-edge thresholds using the all-candidates policy on the
+through-2022 tuning period. Select the broadest positive-ROI rule that meets
+the unchanged 200 rows / 100 races evidence floor, then freeze it unchanged for
+2023 and 2024 validation. Do not add any other segment dimension in this phase.
+Do not inspect or reuse 2025-2026 holdout rows and do not change Forward Paper
+thresholds.
+request=2026-10-05-longshot-market-edge-rnd-phase5
