@@ -623,6 +623,224 @@ def evaluate_exotic_combination_quality(
     }
 
 
+def _role_aware_top3_probability(
+    first_probability: np.ndarray,
+    top3_strengths: np.ndarray,
+    order: tuple[int, int, int],
+) -> float:
+    """Use win-market probability for first and Top-3 strength thereafter."""
+    first, second, third = order
+    first_p = float(first_probability[first])
+    remaining_after_first = float(
+        np.sum(top3_strengths) - top3_strengths[first]
+    )
+    if first_p <= 0.0 or remaining_after_first <= 0.0:
+        return 0.0
+
+    second_strength = float(top3_strengths[second])
+    second_p = second_strength / remaining_after_first
+
+    remaining_after_second = float(
+        remaining_after_first - second_strength
+    )
+    if second_p <= 0.0 or remaining_after_second <= 0.0:
+        return 0.0
+
+    third_strength = float(top3_strengths[third])
+    third_p = third_strength / remaining_after_second
+    if third_p <= 0.0:
+        return 0.0
+    return float(first_p * second_p * third_p)
+
+
+def role_aware_combination_race_evidence(
+    frame: pd.DataFrame,
+    top3_probability: pd.Series,
+) -> pd.DataFrame:
+    """Phase 4 joint distribution: win market first, Top-3 model second/third."""
+    if frame.empty:
+        raise ValueError("role-aware combination frame is empty")
+    if not top3_probability.index.equals(frame.index):
+        raise ValueError("role-aware probability index differs from frame")
+    if "market_implied_probability" not in frame.columns:
+        raise ValueError(
+            "role-aware combinations require market_implied_probability"
+        )
+
+    q = top3_probability.astype(float).clip(
+        lower=1e-9,
+        upper=1.0 - 1e-9,
+    )
+    rows: list[dict] = []
+
+    for race_id, race in frame.groupby("race_id", sort=False):
+        finish = pd.to_numeric(
+            race["finish_position"],
+            errors="coerce",
+        )
+        actual_indices: list[object] = []
+        valid = True
+        for place in (1, 2, 3):
+            matches = race.index[finish.eq(place)].tolist()
+            if len(matches) != 1:
+                valid = False
+                break
+            actual_indices.append(matches[0])
+        if not valid or len(race) < 3:
+            continue
+
+        local_indices = list(race.index)
+        local_position = {
+            index: idx
+            for idx, index in enumerate(local_indices)
+        }
+        ordered = tuple(
+            local_position[index]
+            for index in actual_indices
+        )
+
+        race_q = q.loc[local_indices].to_numpy(dtype=float)
+        strengths = race_q / (1.0 - race_q)
+        first_probability = pd.to_numeric(
+            race.loc[
+                local_indices,
+                "market_implied_probability",
+            ],
+            errors="raise",
+        ).to_numpy(dtype=float)
+        first_probability = np.clip(
+            first_probability,
+            1e-12,
+            None,
+        )
+        first_probability = (
+            first_probability / first_probability.sum()
+        )
+
+        trifecta_probability = _role_aware_top3_probability(
+            first_probability,
+            strengths,
+            ordered,
+        )
+        trio_probability = float(sum(
+            _role_aware_top3_probability(
+                first_probability,
+                strengths,
+                tuple(order),
+            )
+            for order in permutations(ordered, 3)
+        ))
+
+        top3_odds = pd.to_numeric(
+            race.loc[actual_indices, "win_odds"],
+            errors="coerce",
+        )
+        rows.append({
+            "race_id": str(race_id),
+            "trifecta_probability": max(
+                float(trifecta_probability),
+                1e-300,
+            ),
+            "trio_probability": max(
+                min(float(trio_probability), 1.0),
+                1e-300,
+            ),
+            "contains_longshot": bool(
+                top3_odds.ge(TOP3_LONGSHOT_ODDS_MIN).any()
+            ),
+        })
+
+    evidence = pd.DataFrame(rows)
+    if evidence.empty:
+        raise ValueError(
+            "no races with unique first/second/third finishers "
+            "for role-aware combination evidence"
+        )
+    evidence["trifecta_nll"] = -np.log(
+        evidence["trifecta_probability"]
+    )
+    evidence["trio_nll"] = -np.log(
+        evidence["trio_probability"]
+    )
+    return evidence
+
+
+def evaluate_role_aware_combination_quality(
+    frame: pd.DataFrame,
+    baseline_probability: pd.Series,
+    challenger_probability: pd.Series,
+) -> dict:
+    baseline = role_aware_combination_race_evidence(
+        frame,
+        baseline_probability,
+    )
+    challenger = role_aware_combination_race_evidence(
+        frame,
+        challenger_probability,
+    )
+
+    def _segment(
+        baseline_segment: pd.DataFrame,
+        challenger_segment: pd.DataFrame,
+    ) -> dict:
+        baseline_quality = _joint_quality(baseline_segment)
+        challenger_quality = _joint_quality(challenger_segment)
+        bootstrap = paired_race_bootstrap_joint_nll(
+            challenger_segment,
+            baseline_segment,
+        )
+        return {
+            "baseline": baseline_quality,
+            "challenger": challenger_quality,
+            "trifecta_nll_delta": _safe_float(
+                float(challenger_quality["mean_trifecta_nll"])
+                - float(baseline_quality["mean_trifecta_nll"])
+            ),
+            "trio_nll_delta": _safe_float(
+                float(challenger_quality["mean_trio_nll"])
+                - float(baseline_quality["mean_trio_nll"])
+            ),
+            "paired_bootstrap_vs_baseline": bootstrap,
+        }
+
+    overall = _segment(baseline, challenger)
+    longshot_ids = set(
+        challenger.loc[
+            challenger["contains_longshot"],
+            "race_id",
+        ].astype(str)
+    )
+    baseline_longshot = baseline.loc[
+        baseline["race_id"].astype(str).isin(longshot_ids)
+    ].copy()
+    challenger_longshot = challenger.loc[
+        challenger["race_id"].astype(str).isin(longshot_ids)
+    ].copy()
+    if baseline_longshot.empty or challenger_longshot.empty:
+        raise ValueError(
+            "no role-aware realized combinations contain a longshot proxy"
+        )
+
+    return {
+        "method": (
+            "role-aware fixed distribution: normalized historical win-market "
+            "probability for first place; Top-3 q/(1-q) strengths for "
+            "second and third among remaining runners"
+        ),
+        "overall": overall,
+        "longshot_containing": {
+            "definition": (
+                "realized top three contains at least one runner with "
+                "historical final win odds >= 6.0; development proxy only"
+            ),
+            **_segment(
+                baseline_longshot,
+                challenger_longshot,
+            ),
+        },
+    }
+
+
 def _evaluate_period(
     frame: pd.DataFrame,
     baseline_probability: pd.Series,
@@ -687,6 +905,13 @@ def _evaluate_period(
             frame,
             baseline_probability,
             challenger_probability,
+        ),
+        "role_aware_combination_phase4": (
+            evaluate_role_aware_combination_quality(
+                frame,
+                baseline_probability,
+                challenger_probability,
+            )
         ),
         "longshot_proxy": {
             "definition": (
@@ -941,6 +1166,32 @@ def evaluate_exotic_top3_development(
         and _combination_period_passed(result_2024)
     )
 
+    def _role_aware_period_passed(result: dict) -> bool:
+        evidence = result["role_aware_combination_phase4"]
+        for segment_name in ("overall", "longshot_containing"):
+            segment = evidence[segment_name]
+            bootstrap = segment["paired_bootstrap_vs_baseline"]
+            if not (
+                float(segment["trifecta_nll_delta"]) < 0.0
+                and float(segment["trio_nll_delta"]) < 0.0
+                and float(
+                    bootstrap[
+                        "trifecta_nll_improvement_support"
+                    ]
+                ) >= TOP3_MIN_IMPROVEMENT_SUPPORT
+                and float(
+                    bootstrap["trio_nll_improvement_support"]
+                ) >= TOP3_MIN_IMPROVEMENT_SUPPORT
+            ):
+                return False
+        return True
+
+    role_aware_gate = bool(
+        safety_gate
+        and _role_aware_period_passed(result_2023)
+        and _role_aware_period_passed(result_2024)
+    )
+
     return {
         "status": "research_only_exotic_top3_development",
         "hypothesis": (
@@ -949,9 +1200,9 @@ def evaluate_exotic_top3_development(
             "historical final-odds >= 6.0 longshot proxy."
         ),
         "warning": (
-            "Phase 3 estimates relative trifecta/trio outcome probability "
-            "quality but not betting expected value. Historical final win "
-            "odds are development-only market inputs/proxies. No pre-race "
+            "Phase 4 evaluates a role-aware trifecta/trio probability "
+            "distribution but not betting expected value. Historical final "
+            "win odds are development-only market inputs/proxies. No pre-race "
             "exotic combination odds are available in the current free "
             "pipeline, so no three-leg bet is selected."
         ),
@@ -998,6 +1249,19 @@ def evaluate_exotic_top3_development(
             "forward_paper": "unchanged",
             "paid_data": "not_used",
         },
+        "role_aware_combination_phase4": {
+            "transform": (
+                "historical win-market first-place probability + "
+                "frozen Top-3 q/(1-q) second/third strengths"
+            ),
+            "minimum_improvement_support": (
+                TOP3_MIN_IMPROVEMENT_SUPPORT
+            ),
+            "development_role_aware_gate_passed": (
+                role_aware_gate
+            ),
+            "phase3_result_required": False,
+        },
         "combination_phase3": {
             "transform": (
                 "fixed Plackett-Luce q/(1-q); no Phase 3 fitting"
@@ -1026,4 +1290,5 @@ def evaluate_exotic_top3_development(
         "development_gate_passed": gate,
         "development_safety_gate_passed": safety_gate,
         "development_combination_gate_passed": combination_gate,
+        "development_role_aware_gate_passed": role_aware_gate,
     }
