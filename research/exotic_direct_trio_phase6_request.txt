@@ -1,0 +1,58 @@
+Research-only Exotic Direct Trio Phase 6 request.
+
+Context:
+- Phase 1/2 showed that runner-vs-field features improve horse-level Top-3
+  probability, including the pre-registered longshot proxy.
+- Phase 3, Phase 4, and Phase 5 failed their pre-registered gates when those
+  horse-level marginals were transformed into three-runner combination
+  probabilities.
+- Do not retune any failed transform or lower its support threshold.
+
+Phase 6 structural hypothesis:
+Train a race-group ranking model directly on unordered three-runner sets rather
+than converting horse-level marginals into a set probability.
+
+Training design:
+- Source data: existing leakage-safe pre-race v10 history features plus current
+  race market context and runner-vs-field interaction features.
+- Train through 2022-12-31 only.
+- For each training race, keep exactly one positive set: the actual first,
+  second, and third finishers.
+- Cap negatives at 31 per race, fixed before evaluation:
+  - up to 8 highest market-product hard negatives;
+  - up to 12 negatives containing a pre-registered longshot proxy;
+  - fill the remaining slots by deterministic random sampling.
+- Seed: 20261006.
+- Direct set model: CatBoostRanker YetiRankPairwise, 250 iterations, depth 7,
+  learning rate 0.05. Do not tune these settings from 2023/2024 evidence.
+- Candidate set representation is permutation invariant by sorting the three
+  members by market probability before slotting features, with fixed set-level
+  aggregates for market, recent Top-3 form, running-style history, jockey,
+  trainer, and horse-jockey history.
+
+Evaluation:
+- Enumerate ALL three-runner sets in each reused development race.
+- Normalize direct model scores across all sets in each race.
+- Compare the probability assigned to the realized unordered top-three set with
+  the frozen Phase 5 exact-three probability produced from the frozen Phase 2
+  Top-3 challenger.
+- Evaluate 2023 and 2024 separately.
+- Evaluate both all races and races whose realized top three includes at least
+  one runner with historical final win odds >= 6.0.
+- Metric: realized trio-set negative log likelihood.
+- Paired race bootstrap: 1000 samples, seed 20261006.
+- Phase 6 passes only if direct-minus-Phase5 NLL < 0 and bootstrap improvement
+  support >= 80% in BOTH overall and longshot-containing segments in BOTH
+  2023 and 2024.
+
+Boundaries:
+- This is trio set probability research only. It does not estimate betting EV.
+- Historical final win odds are development-only market proxies.
+- No real ticket generation or staking change.
+- 2025-2026 final independent holdout must remain untouched and unread.
+- Forward Paper remains unchanged.
+- No paid tool, API, or data source may be used.
+- If Phase 6 fails, do not lower thresholds or tune on 2023/2024; move to a new
+  structural hypothesis.
+
+request=2026-10-06-exotic-direct-trio-rnd-phase6
