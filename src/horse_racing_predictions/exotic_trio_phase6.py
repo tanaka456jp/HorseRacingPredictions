@@ -262,6 +262,277 @@ def _triple_feature_row(
     return row
 
 
+def _build_race_candidates_vectorized(
+    race: pd.DataFrame,
+    *,
+    training: bool,
+    member_features: tuple[str, ...],
+    rng: np.random.Generator,
+) -> pd.DataFrame | None:
+    race = race.copy()
+    n = int(len(race))
+    if n < 3:
+        return None
+
+    finish = pd.to_numeric(
+        race["finish_position"],
+        errors="coerce",
+    ).to_numpy(dtype=float)
+    actual_positions: list[int] = []
+    for place in (1, 2, 3):
+        positions = np.flatnonzero(finish == float(place))
+        if len(positions) != 1:
+            return None
+        actual_positions.append(int(positions[0]))
+    actual_set = np.sort(
+        np.asarray(actual_positions, dtype=int)
+    )
+
+    combo_positions = np.asarray(
+        list(combinations(range(n), 3)),
+        dtype=int,
+    )
+    is_actual = np.all(
+        combo_positions == actual_set,
+        axis=1,
+    )
+    if int(is_actual.sum()) != 1:
+        raise ValueError(
+            "direct trio race must contain exactly one actual set"
+        )
+
+    market = pd.to_numeric(
+        race["market_implied_probability"],
+        errors="coerce",
+    ).fillna(0.0).to_numpy(dtype=float)
+    market_rank = pd.to_numeric(
+        race["market_probability_rank"],
+        errors="coerce",
+    ).to_numpy(dtype=float)
+    win_odds = pd.to_numeric(
+        race["win_odds"],
+        errors="coerce",
+    ).to_numpy(dtype=float)
+
+    combo_market = market[combo_positions]
+    combo_odds = win_odds[combo_positions]
+    contains_longshot = np.any(
+        combo_odds >= TOP3_LONGSHOT_ODDS_MIN,
+        axis=1,
+    )
+
+    selected_rows = np.arange(
+        len(combo_positions),
+        dtype=int,
+    )
+    if training:
+        actual_row = int(np.flatnonzero(is_actual)[0])
+        negative_rows = np.flatnonzero(~is_actual)
+        if (
+            len(negative_rows)
+            > DIRECT_TRIO_MAX_NEGATIVES_PER_RACE
+        ):
+            market_product = np.prod(
+                combo_market,
+                axis=1,
+            )
+            hard_order = np.argsort(
+                -market_product[negative_rows],
+                kind="stable",
+            )
+            hard_rows = negative_rows[
+                hard_order[
+                    :DIRECT_TRIO_HARD_MARKET_NEGATIVES
+                ]
+            ]
+            chosen = list(
+                map(int, hard_rows.tolist())
+            )
+            chosen_set = set(chosen)
+
+            longshot_rows = np.asarray([
+                int(row)
+                for row in negative_rows
+                if int(row) not in chosen_set
+                and bool(contains_longshot[int(row)])
+            ], dtype=int)
+            if len(longshot_rows):
+                take = min(
+                    DIRECT_TRIO_LONGSHOT_NEGATIVES,
+                    len(longshot_rows),
+                )
+                draw = rng.choice(
+                    len(longshot_rows),
+                    size=take,
+                    replace=False,
+                )
+                for pos in np.atleast_1d(draw):
+                    row = int(
+                        longshot_rows[int(pos)]
+                    )
+                    chosen.append(row)
+                    chosen_set.add(row)
+
+            slots = (
+                DIRECT_TRIO_MAX_NEGATIVES_PER_RACE
+                - len(chosen)
+            )
+            if slots > 0:
+                remaining = np.asarray([
+                    int(row)
+                    for row in negative_rows
+                    if int(row) not in chosen_set
+                ], dtype=int)
+                if len(remaining):
+                    take = min(
+                        slots,
+                        len(remaining),
+                    )
+                    draw = rng.choice(
+                        len(remaining),
+                        size=take,
+                        replace=False,
+                    )
+                    chosen.extend(
+                        int(remaining[int(pos)])
+                        for pos in np.atleast_1d(draw)
+                    )
+            selected_rows = np.asarray(
+                [actual_row] + chosen,
+                dtype=int,
+            )
+        else:
+            selected_rows = np.concatenate([
+                np.flatnonzero(is_actual),
+                negative_rows,
+            ]).astype(int)
+
+    selected_combos = combo_positions[
+        selected_rows
+    ]
+    selected_market = market[
+        selected_combos
+    ]
+    slot_order = np.argsort(
+        -selected_market,
+        axis=1,
+        kind="stable",
+    )
+    ordered_positions = np.take_along_axis(
+        selected_combos,
+        slot_order,
+        axis=1,
+    )
+    ordered_market = market[
+        ordered_positions
+    ]
+    ordered_rank = market_rank[
+        ordered_positions
+    ]
+    ordered_odds = win_odds[
+        ordered_positions
+    ]
+
+    out: dict[str, object] = {
+        "race_id": np.repeat(
+            str(race["race_id"].iloc[0]),
+            len(selected_rows),
+        ),
+        "is_actual_top3_set": is_actual[
+            selected_rows
+        ].astype(int),
+        "contains_longshot": contains_longshot[
+            selected_rows
+        ].astype(bool),
+    }
+
+    numeric_sources: dict[str, np.ndarray] = {}
+    for feature in member_features:
+        numeric_sources[feature] = pd.to_numeric(
+            race[feature],
+            errors="coerce",
+        ).to_numpy(dtype=float)
+    for slot in range(3):
+        positions = ordered_positions[:, slot]
+        for feature in member_features:
+            out[
+                f"member{slot + 1}_{feature}"
+            ] = numeric_sources[feature][
+                positions
+            ]
+
+    clipped_market = np.clip(
+        ordered_market,
+        1e-12,
+        None,
+    )
+    out.update({
+        "set_market_probability_sum": (
+            ordered_market.sum(axis=1)
+        ),
+        "set_market_log_probability_sum": (
+            np.log(clipped_market).sum(axis=1)
+        ),
+        "set_market_probability_min": (
+            ordered_market.min(axis=1)
+        ),
+        "set_market_probability_max": (
+            ordered_market.max(axis=1)
+        ),
+        "set_market_rank_sum": (
+            ordered_rank.sum(axis=1)
+        ),
+        "set_market_rank_max": (
+            ordered_rank.max(axis=1)
+        ),
+        "set_win_odds_min": (
+            np.nanmin(ordered_odds, axis=1)
+        ),
+        "set_win_odds_max": (
+            np.nanmax(ordered_odds, axis=1)
+        ),
+        "set_longshot_count": (
+            ordered_odds
+            >= TOP3_LONGSHOT_ODDS_MIN
+        ).sum(axis=1),
+        "set_contains_market_favorite": (
+            ordered_rank == 1.0
+        ).any(axis=1).astype(int),
+    })
+
+    aggregate_sources = (
+        "horse_recent_top3_rate_5",
+        "horse_recent_finish_percentile_mean_5",
+        "horse_recent_early_ratio_mean_5",
+        "horse_recent_late_ratio_mean_5",
+        "jockey_past_win_rate",
+        "trainer_past_win_rate",
+        "horse_jockey_past_win_rate",
+    )
+    for source in aggregate_sources:
+        if source not in numeric_sources:
+            continue
+        values = numeric_sources[source][
+            ordered_positions
+        ]
+        values_frame = pd.DataFrame(values)
+        out[f"set_{source}_mean"] = (
+            values_frame.mean(axis=1).to_numpy()
+        )
+        out[f"set_{source}_std"] = (
+            values_frame.std(
+                axis=1,
+                ddof=0,
+            ).to_numpy()
+        )
+        out[f"set_{source}_range"] = (
+            values_frame.max(axis=1)
+            - values_frame.min(axis=1)
+        ).to_numpy()
+
+    return pd.DataFrame(out)
+
+
 def build_direct_trio_candidates(
     frame: pd.DataFrame,
     *,
@@ -287,44 +558,33 @@ def build_direct_trio_candidates(
         if feature in frame.columns
     )
     rng = np.random.default_rng(random_seed)
-    rows: list[dict] = []
+    race_frames: list[pd.DataFrame] = []
 
     for _race_id, race in frame.groupby(
         "race_id",
         sort=False,
     ):
-        if len(race) < 3:
-            continue
-        actual = _actual_top3_indices(race)
-        if actual is None:
-            continue
-
-        triples = list(combinations(race.index.tolist(), 3))
-        selected = (
-            _select_training_triples(
+        candidate_frame = (
+            _build_race_candidates_vectorized(
                 race,
-                triples,
-                actual,
-                rng,
+                training=training,
+                member_features=member_features,
+                rng=rng,
             )
-            if training
-            else triples
         )
-        for triple in selected:
-            rows.append(
-                _triple_feature_row(
-                    race,
-                    triple,
-                    actual=actual,
-                    member_features=member_features,
-                )
+        if candidate_frame is not None:
+            race_frames.append(
+                candidate_frame
             )
 
-    candidates = pd.DataFrame(rows)
-    if candidates.empty:
+    if not race_frames:
         raise ValueError(
             "direct trio candidate generation produced no rows"
         )
+    candidates = pd.concat(
+        race_frames,
+        ignore_index=True,
+    )
     if training:
         positive_per_race = candidates.groupby(
             "race_id"

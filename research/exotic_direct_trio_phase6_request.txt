@@ -56,3 +56,14 @@ Boundaries:
   structural hypothesis.
 
 request=2026-10-06-exotic-direct-trio-rnd-phase6
+
+
+Phase 6 execution optimization:
+The scientific protocol above is unchanged. Candidate generation is vectorized
+within each race so all evaluation triples are produced with NumPy/Pandas array
+operations rather than repeated per-combination DataFrame lookups. The model,
+features, negative counts/categories, random seed, evaluation periods, baseline,
+metrics, bootstrap, and pass threshold are unchanged. This is an execution-time
+optimization only and must not use Phase 6 result values to alter the design.
+
+request=2026-10-06-exotic-direct-trio-rnd-phase6-vectorized
