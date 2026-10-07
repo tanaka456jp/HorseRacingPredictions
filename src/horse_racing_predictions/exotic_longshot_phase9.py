@@ -315,6 +315,8 @@ def _build_oof_residual_training(
     specialist_frame: pd.DataFrame,
     general_features: tuple[str, ...],
     specialist_base_features: tuple[str, ...],
+    *,
+    oof_years: tuple[int, ...] = RESIDUAL_OOF_YEARS,
 ) -> tuple[
     pd.DataFrame,
     pd.Series,
@@ -337,7 +339,7 @@ def _build_oof_residual_training(
         tuple[str, ...] | None
     ) = None
 
-    for year in RESIDUAL_OOF_YEARS:
+    for year in oof_years:
         train_mask, validation_mask = (
             annual_oof_masks(
                 dates,
