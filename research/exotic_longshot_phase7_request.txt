@@ -1,0 +1,65 @@
+Research-only Exotic Longshot Intrusion Phase 7 request.
+
+Context:
+- Phase 1/2 established that runner-vs-field features improve horse-level Top-3
+  probability, including the pre-registered historical-final-win-odds >= 6.0
+  longshot proxy.
+- Phase 3-5 failed to convert those marginal probabilities into robust exotic
+  combination probabilities for longshot-containing outcomes.
+- Phase 6 direct three-runner set ranking failed decisively versus Phase 5.
+- Do not retune failed Phase 3-6 transforms or lower their gates.
+
+Phase 7 structural hypothesis:
+Model the first hard subproblem directly: among unpopular runners, identify
+which one is most likely to intrude into the top three.
+
+Baseline:
+- General Phase 2-style Top-3 challenger.
+- Train on all eligible runners through 2022-12-31.
+- Existing v10 history, market context, and runner-vs-field interaction features.
+
+Specialist:
+- Same fixed CatBoost classifier family/settings.
+- Train only on the pre-registered development proxy:
+  historical final win odds >= 6.0 through 2022-12-31.
+- Add fixed intrusion features comparing each candidate continuously against:
+  - the market favorite;
+  - the market top-three mean;
+  for past-only horse form, early/late running-style history, jockey history,
+  horse-jockey history, trainer history, plus market rank/probability position.
+- These features must not depend on same-race finish outcomes.
+
+Evaluation:
+- Reused development years 2023 and 2024 separately.
+- Evaluate only the same historical-final-win-odds >= 6.0 development proxy.
+- Compare specialist versus general baseline on:
+  1. binary Top-3 log-loss;
+  2. Brier score;
+  3. top-longshot selection hit rate: in each race, choose the longshot candidate
+     with the highest predicted Top-3 probability and test whether it actually
+     finished first/second/third.
+- Deterministic paired race bootstrap:
+  1000 samples, seed 20261006.
+
+Pre-registered Phase 7 gate:
+For BOTH 2023 and 2024:
+- specialist-minus-baseline log-loss < 0;
+- specialist-minus-baseline Brier < 0;
+- specialist top-pick hit-rate delta > 0;
+- bootstrap support for lower log-loss >= 80%;
+- bootstrap support for lower Brier >= 80%;
+- bootstrap support for higher top-pick hit rate >= 80%.
+
+If Phase 7 fails, do not lower thresholds or tune on 2023/2024. Move to a new
+structural hypothesis.
+
+Boundaries:
+- Historical final win odds are a development-only proxy; this phase does not
+  claim deployable pre-race longshot identification until a timestamped lawful
+  pre-race market source is verified.
+- No trio/trifecta EV claim, no real ticket generation, no staking changes.
+- 2025-2026 final independent holdout remain untouched and unread.
+- Forward Paper remains unchanged.
+- No paid tool, API, or data source may be used.
+
+request=2026-10-07-exotic-longshot-intrusion-rnd-phase7
