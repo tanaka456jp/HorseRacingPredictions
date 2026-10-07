@@ -1,0 +1,68 @@
+Research-only Exotic Longshot Residual Phase 9 request.
+
+Context:
+- Phase 7 specialist worsened Top-3 log-loss/Brier but improved top-longshot
+  selection hit rate in both reused development years.
+- Phase 8 direct longshot ranking objective did not reproduce that signal.
+- Do not tune Phase 7/8 thresholds or model parameters on 2023/2024.
+
+Phase 9 structural hypothesis:
+Treat the longshot signal as a residual around the calibrated general Top-3
+model rather than as a standalone classifier or ranker.
+
+Stacking-safety design:
+- General Top-3 baseline uses the frozen Phase 2-style feature/model family.
+- Build residual training examples only from annual out-of-fold predictions:
+  - 2018 validation: baseline trained only on dates before 2018-01-01;
+  - 2019 validation: baseline trained only on dates before 2019-01-01;
+  - 2020 validation: baseline trained only on dates before 2020-01-01;
+  - 2021 validation: baseline trained only on dates before 2021-01-01;
+  - 2022 validation: baseline trained only on dates before 2022-01-01.
+- Residual target for a longshot candidate is:
+  actual_top3_indicator - annual_OOF_general_top3_probability.
+- Candidate regime remains historical final win odds >= 6.0, development proxy.
+- No same-row in-sample baseline prediction may be used to create a residual
+  training target.
+
+Residual model:
+- CatBoostRegressor with RMSE.
+- Fixed before evaluation: 250 iterations, depth 6, learning rate 0.03,
+  random seed 42, l2_leaf_reg 8.
+- Inputs are the Phase 7 leakage-safe specialist features plus fixed baseline
+  overlay features:
+  general Top-3 probability, general-minus-market probability, general/market
+  ratio, general probability minus longshot-race mean, and within-race
+  longshot general-probability rank percentile.
+- Predicted residual is clipped to [-0.5, 0.5].
+- Corrected probability is fixed as:
+  clip(general_top3_probability + predicted_residual, 1e-6, 1-1e-6).
+- No blend weight, calibration parameter, threshold, or odds band is tuned.
+
+Evaluation:
+- Final general baseline is trained through 2022-12-31.
+- Reused development years 2023 and 2024 are evaluated separately.
+- Longshot proxy candidates only.
+- Compare corrected versus general baseline on:
+  1. binary Top-3 log-loss;
+  2. Brier score;
+  3. per-race top1 longshot Top-3 hit rate;
+  4. mean reciprocal rank of first actual Top-3 longshot.
+- Paired race bootstrap: 1000 samples, seed 20261006.
+
+Pre-registered gate, required in BOTH 2023 and 2024:
+- log-loss delta < 0 and bootstrap support >= 80%;
+- Brier delta < 0 and bootstrap support >= 80%;
+- top1 hit-rate delta > 0 and bootstrap support >= 80%;
+- MRR delta > 0 and bootstrap support >= 80%.
+
+If Phase 9 fails, do not tune residual scale or thresholds on 2023/2024. Use the
+failure pattern to choose a new structural hypothesis.
+
+Boundaries:
+- Historical final win odds remain a development-only proxy.
+- No trio/trifecta EV claim, no real ticket generation, no staking changes.
+- 2025-2026 final independent holdout remain untouched and unread.
+- Forward Paper remains unchanged.
+- No paid tool, API, or data source may be used.
+
+request=2026-10-07-exotic-longshot-oof-residual-rnd-phase9
