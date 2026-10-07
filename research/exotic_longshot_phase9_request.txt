@@ -11,6 +11,7 @@ Treat the longshot signal as a residual around the calibrated general Top-3
 model rather than as a standalone classifier or ranker.
 
 Stacking-safety design:
+- Fixed annual OOF years: 2018-2022.
 - General Top-3 baseline uses the frozen Phase 2-style feature/model family.
 - Build residual training examples only from annual out-of-fold predictions:
   - 2018 validation: baseline trained only on dates before 2018-01-01;
