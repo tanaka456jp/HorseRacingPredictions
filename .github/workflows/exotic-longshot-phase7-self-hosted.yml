@@ -1,0 +1,43 @@
+name: Exotic Longshot Phase 7 (Self-hosted)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "research/exotic_longshot_phase7_request.txt"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: exotic-longshot-phase7-self-hosted
+  cancel-in-progress: true
+
+jobs:
+  longshot-intrusion:
+    name: Longshot intrusion Phase 7 gate
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 180
+
+    steps:
+      - name: Checkout without deleting local ignored data
+        uses: actions/checkout@v4
+        with:
+          clean: false
+          persist-credentials: false
+
+      - name: Run longshot intrusion Phase 7 research
+        shell: powershell
+        run: |
+          & .\scripts\run_exotic_longshot_phase7_runner.ps1
+
+      - name: Publish sanitized validation only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: exotic-longshot-phase7-development-validation
+          path: artifacts/exotic_longshot_phase7_runner_validation.json
+          if-no-files-found: warn
+          retention-days: 14
