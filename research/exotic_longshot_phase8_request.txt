@@ -1,0 +1,56 @@
+Research-only Exotic Longshot Ranking Phase 8 request.
+
+Context:
+Phase 7 failed its full probability gate:
+- conditional specialist log-loss/Brier were worse than the general Top-3 model;
+- however, the specialist's top-longshot selection hit rate improved in both
+  reused development years, with bootstrap support 86.8% in 2023 and 78.9% in
+  2024.
+
+Do not recalibrate or blend Phase 7 probabilities from 2023/2024 evidence.
+Instead test the structural interpretation suggested by the result:
+the specialist may contain ranking signal but not calibrated probability signal.
+
+Phase 8 hypothesis:
+- Keep the general Phase 2-style Top-3 model as the probability source.
+- Train a separate longshot-only CatBoostRanker with YetiRankPairwise objective
+  through 2022-12-31.
+- Candidate regime remains the same pre-registered development proxy:
+  historical final win odds >= 6.0.
+- Use the same leakage-safe v10 history, market context, runner-vs-field
+  interactions, and fixed Phase 7 favorite/top-market comparison features.
+- Rank target is binary Top-3 relevance within each race.
+- Fixed settings before evaluation:
+  350 iterations, depth 7, learning rate 0.05, seed 42.
+
+Evaluation:
+- Reused 2023 and 2024 development years separately.
+- Longshot proxy candidates only.
+- Baseline ordering: general Top-3 probability descending.
+- Specialist ordering: Phase 8 longshot ranker score descending.
+- Metrics:
+  1. per-race top1 longshot Top-3 hit rate;
+  2. mean reciprocal rank of the first actual Top-3 longshot, with zero for
+     races where no longshot candidate enters the Top 3.
+- Deterministic paired race bootstrap:
+  1000 samples, seed 20261006.
+
+Pre-registered gate for BOTH 2023 and 2024:
+- top1 hit-rate delta > 0;
+- MRR delta > 0;
+- bootstrap support for higher top1 hit rate >= 80%;
+- bootstrap support for higher MRR >= 80%.
+
+Phase 8 is ranking-only. It does not replace calibrated general Top-3
+probabilities. If it passes, the next phase may use the ranker only to nominate
+a longshot candidate before selecting companion horses. If it fails, do not
+lower thresholds or tune on 2023/2024.
+
+Boundaries:
+- No trio/trifecta EV claim, no real ticket generation, no staking change.
+- Historical final win odds are a development-only proxy.
+- 2025-2026 final independent holdout remain untouched and unread.
+- Forward Paper remains unchanged.
+- No paid tool, API, or data source may be used.
+
+request=2026-10-07-exotic-longshot-ranker-rnd-phase8
