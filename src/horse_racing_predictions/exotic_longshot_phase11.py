@@ -18,6 +18,25 @@ from .exotic_longshot_phase9 import (
 from .exotic_longshot_phase10 import ROLLING_RESIDUAL_OOF_YEARS, _period_passed
 
 
+def canonicalize_phase11_race_ids(frame: pd.DataFrame) -> pd.DataFrame:
+    """Use calendar day plus source race ID for every Phase 11 race grouping.
+
+    Older feature, overlay, and bootstrap helpers group by race_id alone.
+    Work on a Phase 11 copy, leaving historical source data unchanged.
+    """
+    if "race_id" not in frame.columns or "race_date" not in frame.columns:
+        raise ValueError("Phase 11 requires race_id and race_date")
+    source_ids = frame["race_id"].astype("string")
+    if source_ids.isna().any() or source_ids.str.strip().eq("").any():
+        raise ValueError("Phase 11 race_id contains missing/blank values")
+    dates = pd.to_datetime(frame["race_date"], errors="raise")
+    if dates.isna().any():
+        raise ValueError("Phase 11 race_date contains missing values")
+    out = frame.copy()
+    out["race_id"] = dates.dt.strftime("%Y-%m-%d") + ":" + source_ids
+    return out
+
+
 def center_residual_within_race(frame: pd.DataFrame, raw: pd.Series) -> pd.Series:
     """Remove only a race-common residual offset; never inspect outcomes."""
     if not frame.index.equals(raw.index):
@@ -90,6 +109,8 @@ def evaluate_longshot_race_centered_phase11(
         & data["finish_position"].notna()
         & data["win_odds"].gt(1.0)
     ].copy()
+    # Canonicalize before race-size eligibility, features, and bootstrap.
+    data = canonicalize_phase11_race_ids(data)
     data = data.loc[
         data.groupby("race_id")["race_id"].transform("size").ge(3)
     ].copy()
