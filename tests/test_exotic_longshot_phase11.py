@@ -75,3 +75,39 @@ def test_phase11_rejects_post_2024_history_before_model_training():
     })
     with pytest.raises(ValueError, match="post-2024"):
         evaluate_longshot_race_centered_phase11(sample)
+
+
+def _phase11_path_guard():
+    import importlib.util
+    script = Path("scripts/evaluate_exotic_longshot_phase11.py").resolve()
+    spec = importlib.util.spec_from_file_location("phase11_cli_guard", script)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.approved_development_history_path
+
+
+def test_phase11_snapshot_guard_rejects_alias_and_missing_file(tmp_path):
+    guard = _phase11_path_guard()
+    approved = tmp_path / "data/jravan/development/history_through_2024.csv"
+    with pytest.raises(FileNotFoundError, match="Missing isolated"):
+        guard("data/jravan/development/history_through_2024.csv", project_root=tmp_path)
+    approved.parent.mkdir(parents=True)
+    approved.write_text("race_date,race_id\\n2024-01-01,A\\n", encoding="utf-8")
+    assert guard(approved, project_root=tmp_path) == approved
+    with pytest.raises(ValueError, match="refuses general/full"):
+        guard("data/jravan/full/current_history.csv", project_root=tmp_path)
+
+
+def test_phase11_snapshot_guard_rejects_symlink(tmp_path):
+    guard = _phase11_path_guard()
+    approved = tmp_path / "data/jravan/development/history_through_2024.csv"
+    approved.parent.mkdir(parents=True)
+    target = tmp_path / "other.csv"
+    target.write_text("sample", encoding="utf-8")
+    try:
+        approved.symlink_to(target)
+    except (OSError, NotImplementedError):
+        pytest.skip("symlink creation unavailable")
+    with pytest.raises(ValueError, match="symlinks/junctions"):
+        guard(approved, project_root=tmp_path)
