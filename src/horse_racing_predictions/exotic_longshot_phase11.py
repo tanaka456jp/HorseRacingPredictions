@@ -24,6 +24,10 @@ def center_residual_within_race(frame: pd.DataFrame, raw: pd.Series) -> pd.Serie
         raise ValueError("residual index does not match candidates")
     if "race_id" not in frame.columns:
         raise ValueError("race_id missing")
+    if frame["race_id"].isna().any():
+        raise ValueError("race_id contains missing values")
+    if not frame.index.is_unique:
+        raise ValueError("candidate index must be unique")
     values = pd.to_numeric(raw, errors="raise").astype(float)
     if not bool(np.isfinite(values.to_numpy()).all()):
         raise ValueError("non-finite residual")
@@ -55,6 +59,11 @@ def evaluate_longshot_race_centered_phase11(
     )
     if not (start < v23s <= v23e < v24s <= v24e):
         raise ValueError("invalid Phase 11 development split")
+    if (v23s, v23e, v24s, v24e) != (
+        pd.Timestamp("2023-01-01"), pd.Timestamp("2023-12-31"),
+        pd.Timestamp("2024-01-01"), pd.Timestamp("2024-12-31"),
+    ):
+        raise ValueError("Phase 11 development windows are frozen to 2023/2024")
     data = align_history_to_training_start(
         history, train_start=str(start.date())
     )
