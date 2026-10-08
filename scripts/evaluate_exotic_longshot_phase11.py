@@ -28,17 +28,32 @@ def approved_development_history_path(
         if project_root is not None
         else Path(__file__).resolve().parents[1]
     )
-    approved = (root / DEVELOPMENT_HISTORY_RELATIVE_PATH).resolve()
+    root = root.resolve(strict=True)
+    approved = root / DEVELOPMENT_HISTORY_RELATIVE_PATH
     requested = Path(candidate)
     if not requested.is_absolute():
         requested = root / requested
-    if requested.resolve() != approved:
+    # Compare the lexical path before following any filesystem aliases.
+    # In particular, an attacker must not substitute a symlinked snapshot.
+    if requested != approved:
         raise ValueError(
             "Phase 11 refuses general/full history files. Stage a separately "
             "sourced pre-2025 development snapshot at "
             f"{DEVELOPMENT_HISTORY_RELATIVE_PATH}; do not extract it from the "
             "2025-2026 final holdout."
         )
+    component = root
+    for part in DEVELOPMENT_HISTORY_RELATIVE_PATH.parts:
+        component = component / part
+        if component.is_symlink() or getattr(
+            component, "is_junction", lambda: False
+        )():
+            raise ValueError(
+                "Phase 11 refuses symlinks/junctions in the development "
+                f"snapshot path: {component}"
+            )
+    if not approved.resolve().is_relative_to(root):
+        raise ValueError("Phase 11 development snapshot escapes project root")
     if not approved.is_file():
         raise FileNotFoundError(
             f"Missing isolated development-only snapshot: {approved}. "
