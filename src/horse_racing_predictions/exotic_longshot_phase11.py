@@ -64,6 +64,13 @@ def evaluate_longshot_race_centered_phase11(
         pd.Timestamp("2024-01-01"), pd.Timestamp("2024-12-31"),
     ):
         raise ValueError("Phase 11 development windows are frozen to 2023/2024")
+    # Fail before feature engineering or model fitting if an isolated snapshot
+    # contains final-holdout rows by mistake. No post-2024 rows may be used.
+    if "race_date" not in history.columns:
+        raise ValueError("Phase 11 history has no race_date")
+    input_dates = pd.to_datetime(history["race_date"], errors="raise")
+    if input_dates.isna().any() or input_dates.gt(v24e).any():
+        raise ValueError("Phase 11 refuses missing or post-2024 race dates")
     data = align_history_to_training_start(
         history, train_start=str(start.date())
     )
