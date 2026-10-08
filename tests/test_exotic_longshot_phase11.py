@@ -13,6 +13,7 @@ from horse_racing_predictions.exotic_longshot_phase11 import (
 def test_centering_is_race_relative_zero_sum_and_order_preserving():
     frame = pd.DataFrame(
         {"race_id": ["B", "A", "B", "A", "C"],
+         "race_date": ["2023-01-01"] * 5,
          "finish_position": [1, 2, 3, 4, 5]},
         index=[7, 2, 9, 4, 12],
     )
@@ -38,7 +39,7 @@ def test_centering_is_race_relative_zero_sum_and_order_preserving():
 
 
 def test_centering_fails_closed_on_bad_inputs():
-    frame = pd.DataFrame({"race_id": ["A", "A"]}, index=[3, 4])
+    frame = pd.DataFrame({"race_id": ["A", "A"], "race_date": ["2023-01-01"] * 2}, index=[3, 4])
     with pytest.raises(ValueError, match="index"):
         center_residual_within_race(frame, pd.Series([0.1, 0.2]))
     with pytest.raises(ValueError, match="non-finite"):
@@ -50,6 +51,36 @@ def test_centering_fails_closed_on_bad_inputs():
             frame.drop(columns="race_id"),
             pd.Series([0.1, 0.2], index=frame.index),
         )
+
+
+
+def test_centering_separates_reused_ids_across_dates():
+    frame = pd.DataFrame(
+        {
+            "race_id": ["A", "A", "A", "A"],
+            "race_date": [
+                "2023-01-01", "2023-01-01",
+                "2023-01-02", "2023-01-02",
+            ],
+        },
+        index=[7, 2, 9, 4],
+    )
+    raw = pd.Series([0.4, 0.2, 0.8, 0.4], index=frame.index)
+    centered = center_residual_within_race(frame, raw)
+    np.testing.assert_allclose(centered.to_numpy(), [0.1, -0.1, 0.2, -0.2])
+    assert centered.groupby(frame["race_date"]).sum().abs().max() < 1e-12
+    shifted = raw + pd.Series([10.0, 10.0, -20.0, -20.0], index=frame.index)
+    np.testing.assert_allclose(
+        center_residual_within_race(frame, shifted).to_numpy(),
+        centered.to_numpy(),
+    )
+
+
+def test_centering_rejects_missing_race_dates():
+    frame = pd.DataFrame({"race_id": ["A"], "race_date": [None]})
+    with pytest.raises(ValueError, match="race_date"):
+        center_residual_within_race(frame, pd.Series([0.1]))
+
 
 
 def test_phase11_does_not_change_paper_or_final_holdout():
