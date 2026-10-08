@@ -63,3 +63,15 @@ def test_phase11_does_not_change_paper_or_final_holdout():
     assert '"forward_paper": "unchanged"' in source
     assert "2025-2026" in request
     assert "subtract within-race longshot residual mean" in source
+
+
+def test_phase11_rejects_post_2024_history_before_model_training():
+    from horse_racing_predictions.exotic_longshot_phase11 import (
+        evaluate_longshot_race_centered_phase11,
+    )
+    sample = pd.DataFrame({
+        "race_date": ["2024-12-31", "2025-01-01"],
+        "race_id": ["A", "B"],
+    })
+    with pytest.raises(ValueError, match="post-2024"):
+        evaluate_longshot_race_centered_phase11(sample)
