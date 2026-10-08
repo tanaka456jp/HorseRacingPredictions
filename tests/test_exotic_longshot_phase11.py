@@ -130,3 +130,14 @@ def test_phase11_snapshot_guard_requires_approval_before_data_access(tmp_path):
     approved.write_text("synthetic", encoding="utf-8")
     with pytest.raises(FileNotFoundError, match="approval manifest"):
         guard(approved, project_root=tmp_path)
+
+def test_phase11_snapshot_guard_rejects_invalid_source_approval(tmp_path):
+    guard = _phase11_path_guard()
+    approved = tmp_path / "data/research/development/free_history_through_2024.csv"
+    approved.parent.mkdir(parents=True)
+    approved.write_text("synthetic", encoding="utf-8")
+    (approved.parent / "source_approval.json").write_text(
+        json.dumps({"schema_version": 1}), encoding="utf-8"
+    )
+    with pytest.raises(ValueError, match="approved free-source"):
+        guard(approved, project_root=tmp_path)
