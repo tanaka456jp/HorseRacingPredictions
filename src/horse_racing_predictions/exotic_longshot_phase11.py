@@ -24,14 +24,20 @@ def center_residual_within_race(frame: pd.DataFrame, raw: pd.Series) -> pd.Serie
         raise ValueError("residual index does not match candidates")
     if "race_id" not in frame.columns:
         raise ValueError("race_id missing")
+    if "race_date" not in frame.columns:
+        raise ValueError("race_date missing")
     if frame["race_id"].isna().any():
         raise ValueError("race_id contains missing values")
+    race_dates = pd.to_datetime(frame["race_date"], errors="raise")
+    if race_dates.isna().any():
+        raise ValueError("race_date contains missing values")
     if not frame.index.is_unique:
         raise ValueError("candidate index must be unique")
     values = pd.to_numeric(raw, errors="raise").astype(float)
     if not bool(np.isfinite(values.to_numpy()).all()):
         raise ValueError("non-finite residual")
-    return values - values.groupby(frame["race_id"], sort=False).transform("mean")
+    race_keys = [race_dates.dt.normalize(), frame["race_id"]]
+    return values - values.groupby(race_keys, sort=False).transform("mean")
 
 
 class RaceCenteredResidualRegressor(LongshotResidualRegressor):
