@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import argparse
 import json
+from datetime import date
 from pathlib import Path
 
 from horse_racing_predictions.data_sources import read_csv_flexible
@@ -15,8 +16,68 @@ from horse_racing_predictions.exotic_longshot_phase11 import (
 )
 
 DEVELOPMENT_HISTORY_RELATIVE_PATH = Path(
-    "data/jravan/development/history_through_2024.csv"
+    "data/research/development/free_history_through_2024.csv"
 )
+SOURCE_APPROVAL_RELATIVE_PATH = Path(
+    "data/research/development/source_approval.json"
+)
+
+
+
+def _reject_path_aliases(root: Path, relative: Path) -> Path:
+    """Reject filesystem aliases without opening historical race data."""
+    component = root
+    for part in relative.parts:
+        component = component / part
+        if component.is_symlink() or getattr(
+            component, "is_junction", lambda: False
+        )():
+            raise ValueError(
+                f"Phase 11 refuses symlinks/junctions: {component}"
+            )
+    if not component.resolve().is_relative_to(root):
+        raise ValueError("Phase 11 path escapes project root")
+    return component
+
+
+def _require_approved_free_source(root: Path) -> None:
+    """Require independent free-source attestation BEFORE opening the CSV.
+
+    The manifest is a provenance assertion, not proof of the CSV contents.
+    Do not create it automatically from the combined/full history file.
+    """
+    manifest = _reject_path_aliases(root, SOURCE_APPROVAL_RELATIVE_PATH)
+    if not manifest.is_file():
+        raise FileNotFoundError(
+            "Phase 11 requires a manually verified independent free-source "
+            f"approval manifest at {SOURCE_APPROVAL_RELATIVE_PATH}; "
+            "no full-history fallback is permitted."
+        )
+    try:
+        approval = json.loads(manifest.read_text(encoding="utf-8"))
+    except (ValueError, UnicodeError) as exc:
+        raise ValueError("Phase 11 source approval manifest is invalid") from exc
+    if not isinstance(approval, dict):
+        raise ValueError("Phase 11 source approval manifest must be an object")
+    required = {
+        "schema_version": 1,
+        "approved_for_phase11": True,
+        "source_type": "independent_free_pre2025_export",
+        "contains_final_holdout": False,
+    }
+    if any(type(approval.get(k)) is not type(v) or approval.get(k) != v
+           for k, v in required.items()):
+        raise ValueError("Phase 11 requires explicit approved free-source provenance")
+    if not isinstance(approval.get("source_name"), str) or not approval[
+        "source_name"
+    ].strip():
+        raise ValueError("Phase 11 source name is missing")
+    try:
+        cutoff = date.fromisoformat(approval["source_cutoff"])
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ValueError("Phase 11 source cutoff is invalid") from exc
+    if cutoff > date(2024, 12, 31):
+        raise ValueError("Phase 11 source approval includes final holdout dates")
 
 
 def approved_development_history_path(
@@ -42,18 +103,8 @@ def approved_development_history_path(
             f"{DEVELOPMENT_HISTORY_RELATIVE_PATH}; do not extract it from the "
             "2025-2026 final holdout."
         )
-    component = root
-    for part in DEVELOPMENT_HISTORY_RELATIVE_PATH.parts:
-        component = component / part
-        if component.is_symlink() or getattr(
-            component, "is_junction", lambda: False
-        )():
-            raise ValueError(
-                "Phase 11 refuses symlinks/junctions in the development "
-                f"snapshot path: {component}"
-            )
-    if not approved.resolve().is_relative_to(root):
-        raise ValueError("Phase 11 development snapshot escapes project root")
+    _reject_path_aliases(root, DEVELOPMENT_HISTORY_RELATIVE_PATH)
+    _require_approved_free_source(root)
     if not approved.is_file():
         raise FileNotFoundError(
             f"Missing isolated development-only snapshot: {approved}. "
