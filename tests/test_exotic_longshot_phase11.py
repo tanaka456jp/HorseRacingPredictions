@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import numpy as np
@@ -89,9 +90,19 @@ def _phase11_path_guard():
 
 def test_phase11_snapshot_guard_rejects_alias_and_missing_file(tmp_path):
     guard = _phase11_path_guard()
-    approved = tmp_path / "data/jravan/development/history_through_2024.csv"
+    approved = tmp_path / "data/research/development/free_history_through_2024.csv"
+    manifest = approved.parent / "source_approval.json"
+    approved.parent.mkdir(parents=True)
+    manifest.write_text(json.dumps({
+        "schema_version": 1,
+        "approved_for_phase11": True,
+        "source_type": "independent_free_pre2025_export",
+        "contains_final_holdout": False,
+        "source_name": "synthetic-fixture",
+        "source_cutoff": "2024-12-31",
+    }), encoding="utf-8")
     with pytest.raises(FileNotFoundError, match="Missing isolated"):
-        guard("data/jravan/development/history_through_2024.csv", project_root=tmp_path)
+        guard("data/research/development/free_history_through_2024.csv", project_root=tmp_path)
     approved.parent.mkdir(parents=True)
     approved.write_text("race_date,race_id\\n2024-01-01,A\\n", encoding="utf-8")
     assert guard(approved, project_root=tmp_path) == approved
@@ -101,7 +112,7 @@ def test_phase11_snapshot_guard_rejects_alias_and_missing_file(tmp_path):
 
 def test_phase11_snapshot_guard_rejects_symlink(tmp_path):
     guard = _phase11_path_guard()
-    approved = tmp_path / "data/jravan/development/history_through_2024.csv"
+    approved = tmp_path / "data/research/development/free_history_through_2024.csv"
     approved.parent.mkdir(parents=True)
     target = tmp_path / "other.csv"
     target.write_text("sample", encoding="utf-8")
