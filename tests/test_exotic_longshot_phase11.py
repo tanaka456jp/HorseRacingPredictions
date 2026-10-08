@@ -103,7 +103,6 @@ def test_phase11_snapshot_guard_rejects_alias_and_missing_file(tmp_path):
     }), encoding="utf-8")
     with pytest.raises(FileNotFoundError, match="Missing isolated"):
         guard("data/research/development/free_history_through_2024.csv", project_root=tmp_path)
-    approved.parent.mkdir(parents=True)
     approved.write_text("race_date,race_id\\n2024-01-01,A\\n", encoding="utf-8")
     assert guard(approved, project_root=tmp_path) == approved
     with pytest.raises(ValueError, match="refuses general/full"):
