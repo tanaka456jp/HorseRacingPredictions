@@ -79,6 +79,14 @@ def inspect_exotic_prebet_quote(
             "finish_position", "final_odds",
         )):
             raise ValueError("result/final-payout fields are forbidden")
+        allowed_fields = {
+            "race_id", "bet_type", "horse_numbers", "decimal_odds",
+            "source_name", "source_reference", "quote_stage", "odds_kind",
+            "observed_at", "captured_at", "scheduled_post_time",
+        }
+        unknown_fields = set(quote) - allowed_fields
+        if unknown_fields:
+            raise ValueError("unrecognized quote fields are forbidden")
         try:
             odds = Decimal(str(quote["decimal_odds"]))
         except (KeyError, InvalidOperation, ValueError):
