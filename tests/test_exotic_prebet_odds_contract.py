@@ -103,3 +103,21 @@ def test_timezone_offsets_are_normalized_for_review_only():
     )
     result = inspect(quote, decision_at="2024-12-31T05:02:00Z")
     assert result["status"] == "human_review_required"
+
+
+@pytest.mark.parametrize("unknown_field", [
+    "winning_combination", "dividend", "final_return", "finish_order",
+    "metadata", "result_payload", "post_race_status", "settlement_amount",
+    "odds_after_post", "race_result", "payout_yen", "untrusted_extra",
+])
+def test_unknown_quote_fields_fail_closed(unknown_field):
+    result = inspect(synthetic_quote(**{unknown_field: {"untrusted": True}}))
+    assert result["status"] == "blocked"
+    assert result["canonical_combination_key"] is None
+
+
+def test_allowlisted_quote_remains_human_review_only():
+    result = inspect(synthetic_quote())
+    assert result["status"] == "human_review_required"
+    assert result["blockers"] == []
+    assert result["canonical_combination_key"] == "SYNTHETIC-RACE:trio:2-5-9"
