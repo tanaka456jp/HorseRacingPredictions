@@ -94,7 +94,7 @@ def evaluate_longshot_race_centered_phase11(
     if "race_date" not in history.columns:
         raise ValueError("Phase 11 history has no race_date")
     input_dates = pd.to_datetime(history["race_date"], errors="raise")
-    if input_dates.isna().any() or input_dates.gt(v24e).any():
+    if input_dates.isna().any() or input_dates.dt.normalize().gt(v24e).any():
         raise ValueError("Phase 11 refuses missing or post-2024 race dates")
     data = align_history_to_training_start(
         history, train_start=str(start.date())
@@ -105,7 +105,7 @@ def evaluate_longshot_race_centered_phase11(
     )
     data["win_odds"] = pd.to_numeric(data["win_odds"], errors="coerce")
     data = data.loc[
-        data["race_date"].le(v24e)
+        data["race_date"].dt.normalize().le(v24e)
         & data["finish_position"].notna()
         & data["win_odds"].gt(1.0)
     ].copy()
@@ -128,9 +128,15 @@ def evaluate_longshot_race_centered_phase11(
         + MARKET_CONTEXT_FEATURES + interactions
     )
     specialist_features = general_features + intrusion
+    # Phase 9 OOF cutoffs use midnight; normalize Phase 11-only copies.
+    # Preserve the original timestamps and avoid changes to Phase 9/10.
+    oof_general = general.copy()
+    oof_specialist = specialist.copy()
+    oof_general["race_date"] = pd.to_datetime(oof_general["race_date"], errors="raise").dt.normalize()
+    oof_specialist["race_date"] = pd.to_datetime(oof_specialist["race_date"], errors="raise").dt.normalize()
     oof_frame, oof_target, residual_features, folds = (
         _build_oof_residual_training(
-            general, specialist, general_features, specialist_features,
+            oof_general, oof_specialist, general_features, specialist_features,
             oof_years=ROLLING_RESIDUAL_OOF_YEARS,
         )
     )
@@ -143,10 +149,10 @@ def evaluate_longshot_race_centered_phase11(
     periods, training = {}, {}
     for year, lower, upper in ((2023, v23s, v23e), (2024, v24s, v24e)):
         cutoff = pd.Timestamp(f"{year - 1}-12-31")
-        train = general.loc[dates.le(cutoff)].copy()
-        oof_train = oof_frame.loc[oof_dates.le(cutoff)].copy()
+        train = general.loc[dates.dt.normalize().le(cutoff)].copy()
+        oof_train = oof_frame.loc[oof_dates.dt.normalize().le(cutoff)].copy()
         oof_y = oof_target.loc[oof_train.index].copy()
-        mask = dates.between(lower, upper, inclusive="both") & longshots
+        mask = dates.dt.normalize().between(lower, upper, inclusive="both") & longshots
         eval_general = general.loc[mask].copy()
         eval_specialist = specialist.loc[mask].copy()
         if train.empty or oof_train.empty or eval_general.empty:
