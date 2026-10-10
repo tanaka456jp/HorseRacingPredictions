@@ -1,0 +1,52 @@
+name: JRA-VAN Pre-2025 Pedigree Snapshot
+
+on:
+  push:
+    branches:
+      - research/exotic-longshot-race-centered-phase11
+    paths:
+      - "research/jravan_pedigree_snapshot_request.txt"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: jravan-pre2025-pedigree-snapshot
+  cancel-in-progress: false
+
+jobs:
+  snapshot:
+    name: Build local pedigree snapshot
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout without deleting local archives
+        uses: actions/checkout@v4
+        with:
+          clean: false
+          persist-credentials: false
+
+      - name: Build private snapshot and sanitized coverage
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          $python = Join-Path $PWD ".venv-jravan\Scripts\python.exe"
+          if (-not (Test-Path -LiteralPath $python -PathType Leaf)) {
+            throw ".venv-jravan is missing."
+          }
+          & $python "scripts\build_jravan_pedigree_snapshot.py" `
+            --report-output "artifacts\jravan_pedigree_snapshot_report.json"
+          if ($LASTEXITCODE -ne 0) {
+            throw "Pedigree snapshot build failed."
+          }
+
+      - name: Publish aggregate coverage only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jravan-pre2025-pedigree-sanitized-report
+          path: artifacts/jravan_pedigree_snapshot_report.json
+          if-no-files-found: warn
+          retention-days: 30
