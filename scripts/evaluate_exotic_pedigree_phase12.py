@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -13,6 +14,14 @@ from horse_racing_predictions.exotic_pedigree_phase12 import (
 from horse_racing_predictions.jravan_parser import (
     parse_raw_jsonl,
 )
+
+
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def default_archive_root() -> Path:
@@ -51,6 +60,13 @@ def main() -> None:
     root = args.archive_root or default_archive_root()
     race_raw = root / "race_raw.jsonl"
     pedigree_path = root / "pedigree_snapshot.csv"
+    receipt_path = root / "phase12_evaluation_receipt.json"
+
+    if receipt_path.exists():
+        raise RuntimeError(
+            "Phase 12 real-data evaluation already has a local receipt; "
+            "the preregistered one-shot evaluation must not be rerun."
+        )
 
     if not race_raw.is_file():
         raise FileNotFoundError(
@@ -60,6 +76,9 @@ def main() -> None:
         raise FileNotFoundError(
             f"local pedigree snapshot missing: {pedigree_path}"
         )
+
+    race_sha256 = _sha256(race_raw)
+    pedigree_sha256 = _sha256(pedigree_path)
 
     history, parse_report = parse_raw_jsonl(
         race_raw,
@@ -88,6 +107,8 @@ def main() -> None:
         "history_races": int(parse_report.output_races),
         "current_history_csv_used": False,
         "protected_holdout": "2025-2026 untouched",
+        "race_archive_sha256": race_sha256,
+        "pedigree_snapshot_sha256": pedigree_sha256,
     }
 
     args.output.parent.mkdir(
@@ -97,6 +118,28 @@ def main() -> None:
     args.output.write_text(
         json.dumps(
             result,
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    output_sha256 = _sha256(args.output)
+
+    receipt = {
+        "status": "phase12_real_evaluation_consumed",
+        "git_sha": os.environ.get("GITHUB_SHA", "local"),
+        "race_archive_sha256": race_sha256,
+        "pedigree_snapshot_sha256": pedigree_sha256,
+        "summary_sha256": output_sha256,
+        "development_pedigree_gate_passed": (
+            bool(result["development_pedigree_gate_passed"])
+        ),
+        "protected_holdout": "2025-2026 untouched",
+        "rerun_allowed": False,
+    }
+    receipt_path.write_text(
+        json.dumps(
+            receipt,
             ensure_ascii=False,
             indent=2,
         ),
@@ -126,6 +169,8 @@ def main() -> None:
             result["development_pedigree_gate_passed"]
         ),
         "protected_holdout": "2025-2026 untouched",
+        "one_shot_receipt": str(receipt_path),
+        "rerun_allowed": False,
     }, ensure_ascii=False, indent=2))
 
 
