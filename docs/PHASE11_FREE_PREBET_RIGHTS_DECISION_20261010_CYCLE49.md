@@ -63,3 +63,63 @@ The dedicated synthetic execution-gate regression is now registered at
 purchase-cutoff ordering, source identity, rights gates, forbidden result fields,
 and the rule that structurally valid self-attested evidence can never
 automatically authorize acquisition, EV, or staking.
+
+
+## Cycle 51 update: historical O5/O6 are not prebet execution evidence
+
+Official JVData specification reviewed on 2026-10-10:
+
+- JVData setup/RACE record O5 is **final trio odds (確定オッズ)** and O6 is
+  **final trifecta odds (確定オッズ)**:
+  https://jra-van.jp/dlb/sdv/sdk/JV-Data4901.pdf
+- Realtime exotic odds are separate dataspecs:
+  - `0B35`: trio速報 odds
+  - `0B36`: trifecta速報 odds
+  They are updated after betting opens and are provided for one week.
+- The official multi-time historical "time-series odds" dataspecs are
+  `0B41` for O1 (win/place/bracket) and `0B42` for O2 (quinella). The
+  specification does not list trio/trifecta as historical multi-time series.
+- JRA-VAN staff also confirmed that realtime速報 data are obtained with
+  JVRTOpen and are unavailable after the one-week provision period:
+  https://developer.jra-van.jp/t/topic/979
+
+Decision:
+
+1. **O5/O6 from bounded historical RACE/setup acquisition are forbidden as
+   strict prebet EV inputs.** They may describe the final market only.
+2. The bounded pre-2025 JV-Link path remains useful for independently rebuilding
+   Phase 11 RA/SE development history without touching 2025-2026.
+3. Genuine trio/trifecta prebet EV requires locally captured `0B35/0B36`
+   snapshots with immutable observed/captured timestamps and verified purchase
+   cutoff while the market is live.
+4. Current 2025-2026 realtime collection remains prohibited because those years
+   are the protected final independent holdout.
+5. No historical final odds, final payouts, or post-race information may be
+   relabeled as purchase-time evidence.
+
+The repository now enforces this distinction in
+`src/horse_racing_predictions/exotic_jvlink_odds_policy.py` and its regression
+tests. Classification of a realtime datasource still **never authorizes EV or
+staking** by itself.
+
+## Provider-bounded Phase 11 history route
+
+JVOpen accepts a bounded FromTime-ToTime range. The official validation tooling
+describes separate FromTime and ToTime parameters, and the JRA-VAN developer
+community contains working bounded setup examples. A documented JV-Link setup
+quirk means ordinary `YYYY1231235959` can omit late-year files whose provider
+timestamps use pseudo-hours/minutes. A reported working 2024 setup end is
+`20249999999999`.
+
+For Phase 11 the repository therefore accepts exactly the safe provider-year
+sentinel `20249999999999` while rejecting every 2025+ bound. This is defense
+in depth: no unbounded/current fallback is available in the Phase 11 acquisition
+module. See:
+
+- `src/horse_racing_predictions/phase11_jravan_bounded.py`
+- `scripts/phase11_jravan_bounded_export.py`
+- `.github/workflows/phase11-bounded-jravan-self-hosted.yml`
+
+The workflow is manual-only and defaults to plan-only. An actual provider read
+requires explicit execute, zero-cost-entitlement, and personal-research-rights
+confirmations; raw JV-Data is never uploaded as a GitHub artifact.
