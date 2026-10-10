@@ -1,0 +1,70 @@
+name: JRA-VAN Free Trial Pre-2025 Archive
+
+on:
+  push:
+    branches:
+      - research/exotic-longshot-race-centered-phase11
+    paths:
+      - "research/jravan_free_trial_archive_request.txt"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: jravan-free-trial-pre2025-archive
+  cancel-in-progress: false
+
+jobs:
+  archive:
+    name: Archive free-trial pre-2025 data locally
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 360
+
+    steps:
+      - name: Checkout without deleting local archives
+        uses: actions/checkout@v4
+        with:
+          clean: false
+          persist-credentials: false
+
+      - name: Archive provider-bounded setup data
+        id: archive
+        shell: powershell
+        continue-on-error: true
+        run: |
+          $ErrorActionPreference = "Stop"
+          $python = Join-Path $PWD ".venv-jravan\Scripts\python.exe"
+          if (-not (Test-Path -LiteralPath $python -PathType Leaf)) {
+            throw ".venv-jravan is missing; no provider access attempted."
+          }
+
+          & $python "scripts\archive_jravan_free_trial_pre2025.py" `
+            --range "20170101000000-20249999999999" `
+            --manifest-output "artifacts\jravan_free_trial_archive_manifest.json"
+
+          "exit_code=$LASTEXITCODE" >> $env:GITHUB_OUTPUT
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "Archive completed with missing dataspecs; successful local parts remain preserved."
+          }
+
+      - name: Publish sanitized manifest only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jravan-free-trial-pre2025-sanitized-manifest
+          path: artifacts/jravan_free_trial_archive_manifest.json
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Fail if archive was incomplete
+        if: always()
+        shell: powershell
+        run: |
+          $code = "${{ steps.archive.outputs.exit_code }}"
+          if ([string]::IsNullOrWhiteSpace($code)) {
+            throw "Archive did not produce an exit code."
+          }
+          if ([int]$code -ne 0) {
+            throw "One or more JRA-VAN archive dataspecs failed. Successful local parts were preserved; inspect the sanitized manifest."
+          }
