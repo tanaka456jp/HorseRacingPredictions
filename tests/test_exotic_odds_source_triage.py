@@ -14,7 +14,7 @@ def candidate(**changes):
         "race_id_mapping": "documented synthetic race key",
         "combination_mapping": "trio unordered, trifecta ordered",
         "capture_clock_evidence": "synthetic NTP clock description",
-        "purchase_cutoff_reference": "synthetic market cutoff reference",
+        "purchase_cutoff_reference": "https://example.invalid/cutoff",
         "retention_policy_reference": "https://example.invalid/retention",
         "free_access_confirmed": True,
         "automated_capture_permitted": True,
@@ -66,7 +66,8 @@ def test_required_source_evidence_cannot_be_empty(field):
 
 
 @pytest.mark.parametrize("field", [
-    "terms_reference", "source_reference", "retention_policy_reference",
+    "terms_reference", "source_reference", "purchase_cutoff_reference",
+    "retention_policy_reference",
 ])
 @pytest.mark.parametrize("url", [
     "http://example.invalid", "https://user:pass@example.invalid",
