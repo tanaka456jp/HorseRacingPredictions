@@ -82,12 +82,15 @@ def classify_jv_odds_evidence(
         )
 
     if code in REALTIME_EXOTIC_DATASPECS:
-        protected = bool(
-            race_date is not None
-            and PROTECTED_HOLDOUT_START
-            <= race_date
-            <= PROTECTED_HOLDOUT_END
+        # Missing or malformed dates cannot prove that the protected
+        # 2025-2026 holdout is excluded.  Never treat an undated realtime
+        # feed as candidate purchase-time evidence.
+        date_verified = type(race_date) is date
+        in_holdout = bool(
+            date_verified
+            and PROTECTED_HOLDOUT_START <= race_date <= PROTECTED_HOLDOUT_END
         )
+        protected = not date_verified or in_holdout
         return ExoticOddsEvidencePolicy(
             source_code=code,
             bet_type=REALTIME_EXOTIC_DATASPECS[code],
@@ -96,9 +99,12 @@ def classify_jv_odds_evidence(
             can_be_strict_ev_input=False,
             protected_holdout_blocked=protected,
             reason=(
-                "Protected 2025-2026 final holdout: realtime exotic market "
+                "Missing or invalid race date: cannot exclude the protected "
+                "2025-2026 final holdout; realtime data must not be read or collected."
+                if not date_verified
+                else "Protected 2025-2026 final holdout: realtime exotic market "
                 "data must not be read or collected."
-                if protected
+                if in_holdout
                 else (
                     "Realtime 0B35/0B36 can become prebet quote evidence only "
                     "after lawful local capture, immutable timestamps, purchase-"
