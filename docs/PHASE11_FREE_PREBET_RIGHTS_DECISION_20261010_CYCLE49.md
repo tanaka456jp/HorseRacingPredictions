@@ -28,3 +28,38 @@ Do not substitute final payouts, after-race odds, scraped snapshots without perm
 Continue existing Draft PR #141. The source implementation at `src/horse_racing_predictions/exotic_prebet_execution_triage.py` is present, but dedicated `tests/test_exotic_prebet_execution_triage.py` has not yet been registered. Proposed synthetic regression covers cutoff ordering, stale observations, invalid cadence, mismatched source, prohibited payout fields, and unverified rights. Register it only after re-reading PR head and confirming file absence, then verify CI. If writes remain blocked, preserve tests offline and perform read-only source-rights review.
 
 The source triage must **never** grant acquisition, EV, or paper-staking authorization on self-attested metadata alone. Phase 11 merge and historical evaluation remain blocked by missing independent approved pre-2025 development provenance. Forward Paper settings unchanged.
+
+
+## Cycle 50 update: official JRA-VAN free-trial route is a conditional candidate
+
+Official evidence reviewed on 2026-10-10:
+
+- JRA-VAN states that the Data Lab/JV-Link trial runs for one month from installation and that no charge occurs unless the user completes the purchase procedure:
+  https://support.jra-van.jp/jravan/detail?category=2&id=431&site=SVKNEGBV
+  https://jra-van.jp/dlb/dlrt_tar.html
+- In the official JRA-VAN developer community, JRA-VAN staff answered that individual research use through the official SDK is acceptable under the individual Data Lab terms, while warning against excessive/unexpected access:
+  https://developer.jra-van.jp/t/topic/964
+- JRA-VAN staff also states that 3連複/3連単速報系 data are available through JVRTOpen and that the relevant速報提供 period is one week:
+  https://developer.jra-van.jp/t/topic/979/2
+
+Decision:
+
+- **Do not classify Data Lab as categorically paid-only while a legitimate local free-trial entitlement is active.** A verified active trial can be a zero-cost candidate source under FREE-FIRST.
+- **Do not read current realtime odds in this project now.** The current calendar is inside the protected 2025–2026 final independent holdout. A current JVRTOpen/O5/O6 probe would touch protected market data and is therefore forbidden even if the trial is free and the API use is otherwise permitted.
+- **Do not use an unbounded historical acquisition call** if it can return any 2025–2026 records. Filtering protected rows after acquisition is not acceptable because the holdout would already have been read.
+- A real Phase 11 / exotic-EV data read may proceed only if one of the following is independently established:
+  1. a JV-Link request can be proven to have a hard provider-side end boundary no later than 2024-12-31 before any record is delivered; or
+  2. an already-existing, independently acquired pre-2025 local archive has immutable provenance showing that it never contained post-2024 records.
+- Trial expiry must fail closed. No workflow may initiate paid registration, paid renewal, or a paid Data Lab subscription automatically.
+
+This changes the JRA-VAN route from **EXCLUDE AS PAID** to **CONDITIONAL FREE-TRIAL CANDIDATE, DATA READ STILL BLOCKED BY HOLDOUT BOUNDARY**.
+
+## Immediate engineering consequence
+
+The repository may implement metadata-only trial/provenance checks and synthetic O5/O6 parsing/EV contracts without touching real racing data. It must not trigger a current JVRTOpen odds read, and must not run a historical request whose server-side end boundary is unknown.
+
+The dedicated synthetic execution-gate regression is now registered at
+`tests/test_exotic_prebet_execution_triage.py`. It locks quote freshness,
+purchase-cutoff ordering, source identity, rights gates, forbidden result fields,
+and the rule that structurally valid self-attested evidence can never
+automatically authorize acquisition, EV, or staking.
