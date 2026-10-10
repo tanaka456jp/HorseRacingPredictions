@@ -96,6 +96,7 @@ def _export_one(
     progress_callback: Callable[[str], None] | None = None,
 ) -> ArchivePart:
     output = archive_dir / f"{dataspec.lower()}_raw.jsonl"
+    staging = output.with_name(output.name + ".partial")
     output.parent.mkdir(parents=True, exist_ok=True)
     client = client_factory()
     counts: Counter[str] = Counter()
@@ -118,7 +119,7 @@ def _export_one(
             open_result,
             progress_callback=progress_callback,
         )
-        with output.open(
+        with staging.open(
             "w",
             encoding="utf-8",
             newline="",
@@ -141,12 +142,15 @@ def _export_one(
                         f"dataspec={dataspec} records={written}"
                     )
 
+        # Do not replace an existing successful archive until a retry is complete.
+        digest = _sha256(staging)
+        staging.replace(output)
         return ArchivePart(
             dataspec=dataspec,
             status="success",
             records_written=written,
             record_type_counts=dict(sorted(counts.items())),
-            output_sha256=_sha256(output),
+            output_sha256=digest,
             output_path=str(output),
             read_count=int(open_result.read_count),
             download_count=int(open_result.download_count),
@@ -156,9 +160,9 @@ def _export_one(
             error=None,
         )
     except Exception as exc:
-        # Preserve no partial file as an apparently valid archive.
-        if output.exists():
-            output.unlink()
+        # A failed retry must never delete a previously successful archive.
+        if staging.exists():
+            staging.unlink()
         return ArchivePart(
             dataspec=dataspec,
             status="failed",
