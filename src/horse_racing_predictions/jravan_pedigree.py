@@ -128,10 +128,9 @@ def select_latest_sk(
     return latest
 
 
-def load_sk_pedigree_jsonl(
+def _read_sk_records_jsonl(
     path: str | Path,
-) -> pd.DataFrame:
-    """Load only SK records from a local JV raw JSONL archive."""
+) -> list[SkPedigreeRecord]:
     parsed: list[SkPedigreeRecord] = []
     path = Path(path)
 
@@ -147,10 +146,14 @@ def load_sk_pedigree_jsonl(
                 parsed.append(parse_sk(str(payload["text"])))
             except Exception as exc:
                 raise ValueError(
-                    f"invalid SK JSONL line {line_number}: {exc}"
+                    f"invalid SK JSONL line {line_number} in {path}: {exc}"
                 ) from exc
+    return parsed
 
-    latest = select_latest_sk(parsed)
+
+def _latest_to_frame(
+    latest: dict[str, SkPedigreeRecord],
+) -> pd.DataFrame:
     rows = []
     for blood, record in sorted(latest.items()):
         rows.append({
@@ -177,3 +180,24 @@ def load_sk_pedigree_jsonl(
             "pedigree_created_date",
         ],
     )
+
+
+def load_sk_pedigree_jsonl_many(
+    paths: Iterable[str | Path],
+) -> pd.DataFrame:
+    """Replay SK records across ordered local archives and keep latest state."""
+    parsed: list[SkPedigreeRecord] = []
+    seen_path = False
+    for path in paths:
+        seen_path = True
+        parsed.extend(_read_sk_records_jsonl(path))
+    if not seen_path:
+        return _latest_to_frame({})
+    return _latest_to_frame(select_latest_sk(parsed))
+
+
+def load_sk_pedigree_jsonl(
+    path: str | Path,
+) -> pd.DataFrame:
+    """Load only SK records from a local JV raw JSONL archive."""
+    return load_sk_pedigree_jsonl_many([path])
