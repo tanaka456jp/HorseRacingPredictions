@@ -1,0 +1,82 @@
+Phase 12 preregistration: leakage-safe sire/damsire history augmentation
+
+Status: preregistered only. Do not run on real development history until:
+1. the JRA-VAN pre-2025 archive completes locally,
+2. pedigree_snapshot.csv is built from BLOD/BLDN,
+3. its sanitized coverage/hash report passes provenance review, and
+4. Phase 11 input remains isolated from the protected 2025-2026 final holdout.
+
+Hypothesis
+----------
+The Phase 2-style horse-level Top3 model leaves structural information in
+lineage performance. Adding strictly past-only sire and damsire outcome history
+should improve longshot Top3 calibration/ranking without using raw pedigree IDs
+as model features.
+
+Frozen feature set
+------------------
+Only these ten numeric features may be added in the first Phase 12 evaluation:
+
+sire_past_starts
+sire_past_win_rate
+sire_past_top3_rate
+sire_past_avg_finish_percentile
+sire_days_since_seen
+
+damsire_past_starts
+damsire_past_win_rate
+damsire_past_top3_rate
+damsire_past_avg_finish_percentile
+damsire_days_since_seen
+
+Raw blood registration numbers, breeding registration numbers, horse IDs,
+sire IDs, dam IDs, damsire IDs, names, embeddings of those identifiers, and
+target encodings computed from the evaluation period are forbidden as model
+inputs.
+
+Temporal contract
+-----------------
+- Lineage outcomes are aggregated by calendar race day.
+- Current-day outcomes are unavailable to all races on that same day.
+- Only earlier calendar days may contribute to lineage history.
+- 2025-2026 final independent holdout is never loaded, parsed, joined, or used
+  for feature construction.
+- No combined/current_history.csv filtering is allowed as a substitute for an
+  independently acquired pre-2025 development snapshot.
+
+Model/evaluation contract
+-------------------------
+- Baseline: the existing frozen Phase 2-style Top3 baseline.
+- Challenger: identical model/training settings plus exactly the ten frozen
+  pedigree numeric features above.
+- No CatBoost hyperparameter changes for Phase 12.
+- No odds-band retuning. The existing development-only longshot proxy
+  (historical final win odds >= 6) is retained solely for comparability.
+- Evaluate 2023 and 2024 separately after training on data through 2022 using
+  the same chronology rules as the existing exotic research track.
+- Metrics: horse-level Top3 logloss, Brier score, top-predicted-longshot Top3
+  hit rate, and longshot MRR.
+- Use paired race bootstrap with 1000 samples and seed 20261006.
+- Gate requires both 2023 and 2024 to improve directionally on logloss and
+  Brier and to show >= 0.80 bootstrap support for both calibration metrics.
+  Ranking metrics are reported but are not allowed to rescue failed
+  calibration in this first pedigree test.
+- One real evaluation only. If the gate fails, record the result and move to a
+  different structural hypothesis; do not tune lineage windows/thresholds on
+  2023/2024.
+
+EV boundary
+-----------
+This phase tests predictive structure only. It does not claim positive betting
+EV. Historical O5/O6 final exotic odds and final payouts are forbidden as
+purchase-time evidence. Strict exotic EV remains dependent on lawful
+timestamped prebet quotes.
+
+Implementation references
+-------------------------
+- src/horse_racing_predictions/jravan_pedigree.py
+- src/horse_racing_predictions/pedigree_snapshot.py
+- src/horse_racing_predictions/pedigree_features.py
+- scripts/build_jravan_pedigree_snapshot.py
+
+preregistered_at_jst=2026-10-10
