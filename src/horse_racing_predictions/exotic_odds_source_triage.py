@@ -53,7 +53,7 @@ def triage_exotic_odds_source(evidence: Mapping[str, Any]) -> dict[str, Any]:
     for key in _REQUIRED_TEXT:
         if not isinstance(evidence.get(key), str) or not evidence[key].strip():
             blockers.append(f"missing evidence: {key}")
-    for key in ("terms_reference", "source_reference", "retention_policy_reference"):
+    for key in ("terms_reference", "source_reference", "purchase_cutoff_reference", "retention_policy_reference"):
         value = evidence.get(key)
         if isinstance(value, str) and value.strip() and not _https_reference(value):
             blockers.append(f"invalid HTTPS reference: {key}")
