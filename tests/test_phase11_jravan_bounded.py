@@ -3,8 +3,9 @@ from pathlib import Path
 import pytest
 
 from horse_racing_predictions.phase11_jravan_bounded import (
-    PHASE11_MAX_END,
+    PHASE11_MAX_CALENDAR_END,
     PHASE11_MIN_START,
+    PHASE11_SAFE_SETUP_END,
     build_phase11_bounded_plan,
     export_phase11_bounded_history,
     validate_phase11_jvopen_range,
@@ -17,7 +18,8 @@ from horse_racing_predictions.phase11_jravan_bounded import (
         "20170101000000-20241231235959",
         "20180101000000-20181231235959",
         "20240101000000-20241231235959",
-        f"{PHASE11_MIN_START}-{PHASE11_MAX_END}",
+        f"{PHASE11_MIN_START}-{PHASE11_MAX_CALENDAR_END}",
+        f"{PHASE11_MIN_START}-{PHASE11_SAFE_SETUP_END}",
     ],
 )
 def test_bounded_range_accepts_only_pre2025_provider_windows(value):
@@ -30,6 +32,8 @@ def test_bounded_range_accepts_only_pre2025_provider_windows(value):
     [
         "20160101000000-20241231235959",
         "20170101000000-20250101000000",
+        "20170101000000-20259999999999",
+        "20170101000000-20249999999998",
         "20170101000000-20260101000000",
         "20241231235959-20170101000000",
         "20170101000000",
@@ -45,10 +49,30 @@ def test_bounded_range_rejects_unbounded_future_or_invalid_windows(value):
         validate_phase11_jvopen_range(value)
 
 
-def test_plan_locks_option_record_types_and_holdout_boundary():
+
+def test_calendar_end_plan_remains_supported_but_is_not_full_year_setup_sentinel():
     plan = build_phase11_bounded_plan(
         "20170101000000-20241231235959"
     )
+    assert plan.end == PHASE11_MAX_CALENDAR_END
+    assert plan.end_kind == "calendar_timestamp"
+
+
+def test_only_exact_2024_setup_sentinel_bypasses_real_timestamp_parser():
+    for value in (
+        "20170101000000-20249999999998",
+        "20170101000000-20249899999999",
+        "20170101000000-20239999999999",
+    ):
+        with pytest.raises(ValueError):
+            validate_phase11_jvopen_range(value)
+
+def test_plan_locks_option_record_types_and_holdout_boundary():
+    plan = build_phase11_bounded_plan(
+        "20170101000000-20249999999999"
+    )
+    assert plan.end == PHASE11_SAFE_SETUP_END
+    assert plan.end_kind == "provider_year_setup_sentinel"
     assert plan.option == 4
     assert plan.record_types == ("RA", "SE")
     assert plan.protected_holdout == "2025-2026 untouched"
@@ -66,7 +90,7 @@ def test_export_requires_explicit_zero_cost_entitlement_before_provider_call(tmp
 
     with pytest.raises(RuntimeError, match="zero-cost"):
         export_phase11_bounded_history(
-            jvopen_range="20170101000000-20241231235959",
+            jvopen_range="20170101000000-20249999999999",
             output_path=tmp_path / "raw.jsonl",
             summary_path=tmp_path / "summary.json",
             personal_research_rights_confirmed=True,
@@ -87,7 +111,7 @@ def test_export_requires_explicit_personal_research_rights_before_provider_call(
 
     with pytest.raises(RuntimeError, match="personal research rights"):
         export_phase11_bounded_history(
-            jvopen_range="20170101000000-20241231235959",
+            jvopen_range="20170101000000-20249999999999",
             output_path=tmp_path / "raw.jsonl",
             summary_path=tmp_path / "summary.json",
             zero_cost_entitlement_confirmed=True,
@@ -129,7 +153,7 @@ def test_bounded_export_passes_exact_server_range_without_fallback(tmp_path):
 
     messages = []
     summary = export_phase11_bounded_history(
-        jvopen_range="20170101000000-20241231235959",
+        jvopen_range="20170101000000-20249999999999",
         output_path=tmp_path / "raw.jsonl",
         summary_path=tmp_path / "summary.json",
         zero_cost_entitlement_confirmed=True,
@@ -141,7 +165,7 @@ def test_bounded_export_passes_exact_server_range_without_fallback(tmp_path):
     assert summary.records_written == 10
     assert len(calls) == 1
     call = calls[0]
-    assert call["from_time"] == "20170101000000-20241231235959"
+    assert call["from_time"] == "20170101000000-20249999999999"
     assert call["option"] == 4
     assert call["record_types"] == {"RA", "SE"}
     assert call["output_path"] == tmp_path / "raw.jsonl"
