@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 
 import pytest
 
@@ -81,3 +81,27 @@ def test_unknown_jv_odds_evidence_fails_closed():
     assert policy.evidence_kind == "unknown"
     assert policy.can_be_prebet_quote is False
     assert policy.can_be_strict_ev_input is False
+
+
+@pytest.mark.parametrize("code", ["0B35", "0B36"])
+@pytest.mark.parametrize(
+    "unverified_date",
+    [None, "2024-12-31", datetime(2024, 12, 31), object()],
+)
+def test_realtime_exotic_rejects_unknown_or_invalid_race_date(
+    code, unverified_date,
+):
+    # An undated realtime feed could be from the protected final holdout.
+    policy = classify_jv_odds_evidence(code, race_date=unverified_date)
+    assert policy.evidence_kind == "realtime_exotic_snapshot"
+    assert policy.can_be_prebet_quote is False
+    assert policy.can_be_strict_ev_input is False
+    assert policy.protected_holdout_blocked is True
+    assert "cannot exclude" in policy.reason
+
+
+def test_verified_pre_2025_realtime_metadata_still_requires_separate_approval():
+    policy = classify_jv_odds_evidence("0B35", race_date=date(2024, 12, 31))
+    assert policy.can_be_prebet_quote is True
+    assert policy.can_be_strict_ev_input is False
+    assert policy.protected_holdout_blocked is False
