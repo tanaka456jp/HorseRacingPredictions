@@ -1,0 +1,52 @@
+name: Exotic Pedigree Phase 12 (Self-hosted)
+
+on:
+  push:
+    branches:
+      - research/exotic-longshot-race-centered-phase11
+    paths:
+      - "research/exotic_pedigree_phase12_execute_request.txt"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: exotic-pedigree-phase12-self-hosted
+  cancel-in-progress: false
+
+jobs:
+  evaluate:
+    name: Evaluate preregistered pedigree Phase 12
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout without deleting local archives
+        uses: actions/checkout@v4
+        with:
+          clean: false
+          persist-credentials: false
+
+      - name: Run Phase 12 from local bounded archive only
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          $python = Join-Path $PWD ".venv-jravan\Scripts\python.exe"
+          if (-not (Test-Path -LiteralPath $python -PathType Leaf)) {
+            throw ".venv-jravan is missing."
+          }
+          & $python "scripts\evaluate_exotic_pedigree_phase12.py" `
+            --output "artifacts\exotic_pedigree_phase12\summary.json"
+          if ($LASTEXITCODE -ne 0) {
+            throw "Phase 12 evaluation failed."
+          }
+
+      - name: Publish metrics only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: exotic-pedigree-phase12-metrics
+          path: artifacts/exotic_pedigree_phase12/summary.json
+          if-no-files-found: warn
+          retention-days: 30
