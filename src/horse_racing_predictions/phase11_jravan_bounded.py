@@ -21,7 +21,12 @@ from .jravan import JvExportSummary, export_race_raw
 
 
 PHASE11_MIN_START = "20170101000000"
-PHASE11_MAX_END = "20241231235959"
+PHASE11_MAX_CALENDAR_END = "20241231235959"
+# JV-Link setup-data ranges may use 99-filled pseudo timestamps so that
+# late-year files whose provider timestamp is not a real wall-clock instant
+# are included.  This sentinel stays wholly inside provider year 2024 and
+# must never be replaced by a 2025 boundary in Phase 11.
+PHASE11_SAFE_SETUP_END = "20249999999999"
 PHASE11_RECORD_TYPES = frozenset({"RA", "SE"})
 _RANGE_RE = re.compile(r"^(\d{14})-(\d{14})$")
 
@@ -31,6 +36,7 @@ class Phase11BoundedAcquisitionPlan:
     jvopen_range: str
     start: str
     end: str
+    end_kind: str
     option: int
     record_types: tuple[str, ...]
     protected_holdout: str
@@ -60,18 +66,23 @@ def validate_phase11_jvopen_range(value: str) -> tuple[str, str]:
 
     start, end = match.groups()
     start_dt = _parse_stamp(start)
-    end_dt = _parse_stamp(end)
     minimum_dt = _parse_stamp(PHASE11_MIN_START)
-    maximum_dt = _parse_stamp(PHASE11_MAX_END)
+    maximum_calendar_dt = _parse_stamp(PHASE11_MAX_CALENDAR_END)
 
     if start_dt < minimum_dt:
         raise ValueError(
             f"Phase 11 start must be >= {PHASE11_MIN_START}"
         )
-    if end_dt > maximum_dt:
-        raise ValueError(
-            f"Phase 11 end must be <= {PHASE11_MAX_END}"
-        )
+    if end == PHASE11_SAFE_SETUP_END:
+        end_dt = maximum_calendar_dt
+    else:
+        end_dt = _parse_stamp(end)
+        if end_dt > maximum_calendar_dt:
+            raise ValueError(
+                "Phase 11 end must be <= "
+                f"{PHASE11_MAX_CALENDAR_END} or equal the approved "
+                f"2024 setup sentinel {PHASE11_SAFE_SETUP_END}"
+            )
     if start_dt > end_dt:
         raise ValueError("Phase 11 JVOpen start must not be after end")
 
@@ -86,6 +97,11 @@ def build_phase11_bounded_plan(
         jvopen_range=f"{start}-{end}",
         start=start,
         end=end,
+        end_kind=(
+            "provider_year_setup_sentinel"
+            if end == PHASE11_SAFE_SETUP_END
+            else "calendar_timestamp"
+        ),
         option=4,
         record_types=tuple(sorted(PHASE11_RECORD_TYPES)),
         protected_holdout="2025-2026 untouched",
