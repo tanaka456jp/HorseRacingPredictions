@@ -263,8 +263,7 @@ def migrate_archive_to_preferred_storage(
                     {
                         "status": "moved_after_sha256_verification",
                         "destination": (
-                            r"D:\HorseRacingPredictions\"
-                            r"JraVanFreeTrialArchive\pre2025"
+                            r"D:\HorseRacingPredictions\JraVanFreeTrialArchive\pre2025"
                         ),
                         "destination_manifest_sha256": manifest_hash,
                         "large_provider_files_removed_from_c_drive": True,
