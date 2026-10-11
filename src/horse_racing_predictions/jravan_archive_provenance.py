@@ -51,17 +51,23 @@ def validate_local_pre2025_archive(
     manifest_name: str = "latest_manifest.json",
 ) -> ValidatedArchiveProvenance:
     """Fail closed unless required local files match the bounded archive manifest."""
-    root = Path(archive_root).resolve(strict=True)
-    manifest_path = (root / manifest_name).resolve(strict=True)
+    root_input = Path(archive_root)
+    if root_input.is_symlink():
+        raise RuntimeError(
+            "JRA-VAN archive root must not be a symlink."
+        )
+    root = root_input.resolve(strict=True)
+
+    manifest_input = root / manifest_name
+    if manifest_input.is_symlink():
+        raise RuntimeError(
+            "JRA-VAN archive manifest must not be a symlink."
+        )
+    manifest_path = manifest_input.resolve(strict=True)
     if not _inside(root, manifest_path):
         raise RuntimeError(
             "JRA-VAN archive manifest resolves outside the local archive root."
         )
-    if manifest_path.is_symlink():
-        raise RuntimeError(
-            "JRA-VAN archive manifest must not be a symlink."
-        )
-
     payload = json.loads(
         manifest_path.read_text(encoding="utf-8")
     )
@@ -159,14 +165,14 @@ def validate_local_pre2025_archive(
         raw_path = Path(raw_path_text)
         if not raw_path.is_absolute():
             raw_path = root / raw_path
+        if raw_path.is_symlink():
+            raise RuntimeError(
+                f"archive file for {dataspec} must not be a symlink"
+            )
         raw_path = raw_path.resolve(strict=True)
         if not _inside(root, raw_path):
             raise RuntimeError(
                 f"archive file for {dataspec} resolves outside local archive root"
-            )
-        if raw_path.is_symlink():
-            raise RuntimeError(
-                f"archive file for {dataspec} must not be a symlink"
             )
         if not raw_path.is_file():
             raise RuntimeError(
