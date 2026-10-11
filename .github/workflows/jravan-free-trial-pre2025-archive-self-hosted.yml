@@ -28,6 +28,16 @@ jobs:
           clean: false
           persist-credentials: false
 
+      - name: Repair runner persistence for future reboots
+        shell: powershell
+        continue-on-error: true
+        run: |
+          $ErrorActionPreference = "Stop"
+          & ".\scripts\ensure_self_hosted_runner_persistence.ps1" -Repair
+          if ($LASTEXITCODE -ne 0) {
+            Write-Warning "Runner persistence repair was not completed; archive acquisition will still continue."
+          }
+
       - name: Archive provider-bounded setup data
         id: archive
         shell: powershell
