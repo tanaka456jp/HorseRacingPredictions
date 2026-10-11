@@ -45,7 +45,7 @@ def default_archive_root(
 
     # Keep this check deliberately simple and local. On non-Windows CI the
     # drive root does not exist, so tests naturally fall back to LOCALAPPDATA.
-    d_root = Path(r"D:\")
+    d_root = Path("D:\\")
     if d_root.exists():
         return D_DRIVE_ARCHIVE_ROOT
 
