@@ -23,7 +23,7 @@ class FakeGeneralModel:
                 0.82 if str(name).startswith("anchor")
                 else 0.74 if str(name).startswith("partner_a")
                 else 0.68 if str(name).startswith("partner_b")
-                else 0.60 if str(name).startswith("wrong")
+                else 0.70 if str(name).startswith("wrong")
                 else 0.50
             )
         )
