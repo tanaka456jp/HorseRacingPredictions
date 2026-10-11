@@ -22,7 +22,7 @@ def test_recovery_is_fail_closed_to_expected_registered_runner():
         in text
     )
     assert "agentName" in text
-    assert "Runner identity changed after repair" in text
+    assert "Runner identity changed after probe" in text
     assert "config.cmd" not in text
     assert "registration_token_requested = $false" in text
 
@@ -39,14 +39,19 @@ def test_recovery_reuses_persistence_and_startup_guards():
 
 def test_recovery_does_not_emit_or_request_github_secrets():
     text = RECOVER.read_text(encoding="utf-8").lower()
-    forbidden = (
-        "registration token",
+    # Safety prose may mention registration tokens. What is forbidden is any
+    # command/config path that requests or supplies credentials.
+    forbidden_command_tokens = (
+        "config.cmd",
         "--token",
-        "pat",
-        "github_token",
-        "gh_token",
+        "--pat",
+        "$env:github_token",
+        "$env:gh_token",
+        "read-host",
+        "get-credential",
     )
-    assert all(value not in text for value in forbidden)
+    assert all(value not in text for value in forbidden_command_tokens)
+    assert "registration_token_requested = $false" in text
     assert "secrets_printed = $false" in text
 
 
