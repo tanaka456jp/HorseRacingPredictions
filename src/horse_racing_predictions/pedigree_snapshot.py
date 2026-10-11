@@ -1,4 +1,4 @@
-"""Build a local pedigree snapshot from archived BLOD/BLDN JV-Data.
+"""Build a local pedigree snapshot from archived BLDN JV-Data.
 
 The snapshot stays on the Windows runner. The sanitized report contains only
 aggregate coverage and hashes, never blood/breeding registration identifiers.
@@ -48,8 +48,10 @@ def discover_pedigree_archives(
     archive_root: str | Path,
 ) -> tuple[Path, ...]:
     root = Path(archive_root)
+    # BLOD is the pre-2023 legacy format with shorter registration fields.
+    # BLDN is the current 10-byte registration format and is sufficient for
+    # the modern SK parser used by Phase 12.
     ordered = (
-        root / "blod_raw.jsonl",
         root / "bldn_raw.jsonl",
     )
     return tuple(path for path in ordered if path.is_file())
@@ -64,14 +66,14 @@ def build_pedigree_snapshot(
     inputs = discover_pedigree_archives(archive_root)
     if not inputs:
         raise FileNotFoundError(
-            "No local BLOD/BLDN archive exists; raw provider data must be "
+            "No local BLDN archive exists; raw provider data must be "
             "captured locally before building a pedigree snapshot."
         )
 
     frame = load_sk_pedigree_jsonl_many(inputs)
     if frame.empty:
         raise RuntimeError(
-            "BLOD/BLDN archives contained no active SK pedigree records."
+            "BLDN archive contained no active SK pedigree records."
         )
 
     created = frame["pedigree_created_date"].astype("string").fillna("")
