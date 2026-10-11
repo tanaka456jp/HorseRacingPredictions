@@ -58,12 +58,34 @@ jobs:
             Write-Host "Archive completed with missing dataspecs; successful local parts remain preserved."
           }
 
+      - name: Build private pedigree snapshot from archived BLOD/BLDN
+        id: pedigree_snapshot
+        if: always()
+        shell: powershell
+        continue-on-error: true
+        run: |
+          $ErrorActionPreference = "Stop"
+          $python = Join-Path $PWD ".venv-jravan\Scripts\python.exe"
+          if (-not (Test-Path -LiteralPath $python -PathType Leaf)) {
+            throw ".venv-jravan is missing; pedigree snapshot was not built."
+          }
+
+          & $python "scripts\build_jravan_pedigree_snapshot.py" `
+            --report-output "artifacts\jravan_pedigree_snapshot_report.json"
+
+          "exit_code=$LASTEXITCODE" >> $env:GITHUB_OUTPUT
+          if ($LASTEXITCODE -ne 0) {
+            Write-Warning "Pedigree snapshot post-processing failed; raw archive parts remain preserved locally."
+          }
+
       - name: Publish sanitized manifest only
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: jravan-free-trial-pre2025-sanitized-manifest
-          path: artifacts/jravan_free_trial_archive_manifest.json
+          path: |
+            artifacts/jravan_free_trial_archive_manifest.json
+            artifacts/jravan_pedigree_snapshot_report.json
           if-no-files-found: warn
           retention-days: 30
 
@@ -77,4 +99,12 @@ jobs:
           }
           if ([int]$code -ne 0) {
             throw "One or more JRA-VAN archive dataspecs failed. Successful local parts were preserved; inspect the sanitized manifest."
+          }
+
+          $snapshotCode = "${{ steps.pedigree_snapshot.outputs.exit_code }}"
+          if ([string]::IsNullOrWhiteSpace($snapshotCode)) {
+            throw "Pedigree snapshot did not produce an exit code."
+          }
+          if ([int]$snapshotCode -ne 0) {
+            throw "JRA-VAN raw archive completed, but pedigree snapshot post-processing failed."
           }
