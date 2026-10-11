@@ -59,18 +59,27 @@ def main() -> None:
         report_path=args.report_output,
     )
 
-    # Keep a local copy next to the private snapshot as well.
-    local_report = root / "pedigree_snapshot_report.json"
-    local_report.write_text(
-        json.dumps(asdict(report), ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
     output = asdict(report)
     output["archive_manifest"] = str(provenance.manifest_path)
     output["bldn_records_written"] = int(
         provenance.parts[0].records_written
     )
     output["bldn_sha256"] = provenance.parts[0].sha256
+
+    # Replace the first-pass aggregate report with the same sanitized report
+    # plus validated BLDN provenance. Raw pedigree identifiers remain local.
+    args.report_output.parent.mkdir(parents=True, exist_ok=True)
+    args.report_output.write_text(
+        json.dumps(output, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+    # Keep an identical local copy next to the private snapshot as well.
+    local_report = root / "pedigree_snapshot_report.json"
+    local_report.write_text(
+        json.dumps(output, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
     print(
         json.dumps(output, ensure_ascii=False, indent=2),
         flush=True,
