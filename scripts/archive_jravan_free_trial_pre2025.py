@@ -4,9 +4,11 @@ import argparse
 from dataclasses import asdict
 from datetime import datetime, timezone
 import json
-import os
 from pathlib import Path
 
+from horse_racing_predictions.jravan_archive_paths import (
+    default_archive_root,
+)
 from horse_racing_predictions.jravan_free_trial_archive import (
     DEFAULT_ARCHIVE_RANGE,
     FREE_TRIAL_ARCHIVE_DATASPECS,
