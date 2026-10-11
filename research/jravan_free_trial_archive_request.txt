@@ -1,0 +1,29 @@
+JRA-VAN free-trial archive request
+
+Authorized by user: 2026-10-10 JST
+Purpose: preserve useful JRA-VAN information while the zero-cost trial remains active.
+
+Execution rules:
+- Run only on the existing self-hosted Windows/JV-Link environment.
+- Provider-side range is fixed to 20170101000000-20249999999999.
+- Store raw data only under LOCALAPPDATA outside the Git working tree:
+  HorseRacingPredictions/JraVanFreeTrialArchive/pre2025
+- GitHub may receive only sanitized manifests (counts, hashes, local paths, errors).
+- Raw JV-Data redistribution is forbidden.
+- No paid registration, subscription, renewal or paid API may be initiated.
+- Exclude TOKU and YSCH because they can describe future race registrations/schedules.
+- Do not call JVRTOpen for 2025-2026 and do not collect current realtime exotic odds.
+- Preserve the 2025-2026 final independent holdout for later final evaluation.
+- Archive the safe setup-capable research dataspecs currently configured:
+  RACE, DIFF, DIFN, BLOD, BLDN, SNAP, SNPN, SLOP, WOOD,
+  HOSE, HOSN, HOYU, COMM, MING.
+- If an obsolete/unsupported dataspec fails, keep every successful local archive
+  and record the failure in the sanitized manifest. Do not delete successful parts.
+- After completion, verify SHA-256 and record counts. Retry only failed dataspecs
+  through the same bounded/no-paid path if the trial entitlement is still active.
+
+request=2026-10-11-jravan-free-trial-pre2025-archive-generation-4-final
+replaces_stale_queued_run=38099138441
+requires_latest_branch_safety_fixes=true
+chains_private_pedigree_snapshot=true
+runner_persistence_repair=true
