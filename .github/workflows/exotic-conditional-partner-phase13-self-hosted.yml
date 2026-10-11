@@ -1,1 +1,52 @@
-name: Exotic Conditional Partner Phase 13 (Self-hosted)\n\non:\n  push:\n    branches:\n      - research/exotic-longshot-race-centered-phase11\n    paths:\n      - "research/exotic_conditional_partner_phase13_execute_request.txt"\n  workflow_dispatch:\n\npermissions:\n  contents: read\n\nconcurrency:\n  group: exotic-conditional-partner-phase13-self-hosted\n  cancel-in-progress: false\n\njobs:\n  evaluate:\n    name: Evaluate one-shot conditional partner Phase 13\n    runs-on: [self-hosted, Windows]\n    timeout-minutes: 180\n\n    steps:\n      - name: Checkout without deleting local archive or receipt\n        uses: actions/checkout@v4\n        with:\n          clean: false\n          persist-credentials: false\n\n      - name: Run one-shot Phase 13 from bounded local archive\n        shell: powershell\n        run: |\n          $ErrorActionPreference = "Stop"\n          $python = Join-Path $PWD ".venv-jravan\Scripts\python.exe"\n          if (-not (Test-Path -LiteralPath $python -PathType Leaf)) {\n            throw ".venv-jravan is missing."\n          }\n          & $python "scripts\evaluate_exotic_conditional_partner_phase13.py" `\n            --output "artifacts\exotic_conditional_partner_phase13\summary.json"\n          if ($LASTEXITCODE -ne 0) {\n            throw "Phase 13 one-shot evaluation failed."\n          }\n\n      - name: Publish metrics only\n        if: always()\n        uses: actions/upload-artifact@v4\n        with:\n          name: exotic-conditional-partner-phase13-metrics\n          path: artifacts/exotic_conditional_partner_phase13/summary.json\n          if-no-files-found: warn\n          retention-days: 30
+name: Exotic Conditional Partner Phase 13 (Self-hosted)
+
+on:
+  push:
+    branches:
+      - research/exotic-longshot-race-centered-phase11
+    paths:
+      - "research/exotic_conditional_partner_phase13_execute_request.txt"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: exotic-conditional-partner-phase13-self-hosted
+  cancel-in-progress: false
+
+jobs:
+  evaluate:
+    name: Evaluate one-shot conditional partner Phase 13
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 180
+
+    steps:
+      - name: Checkout without deleting local archive or receipt
+        uses: actions/checkout@v4
+        with:
+          clean: false
+          persist-credentials: false
+
+      - name: Run one-shot Phase 13 from bounded local archive
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          $python = Join-Path $PWD ".venv-jravan\Scripts\python.exe"
+          if (-not (Test-Path -LiteralPath $python -PathType Leaf)) {
+            throw ".venv-jravan is missing."
+          }
+          & $python "scripts\evaluate_exotic_conditional_partner_phase13.py" `
+            --output "artifacts\exotic_conditional_partner_phase13\summary.json"
+          if ($LASTEXITCODE -ne 0) {
+            throw "Phase 13 one-shot evaluation failed."
+          }
+
+      - name: Publish metrics only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: exotic-conditional-partner-phase13-metrics
+          path: artifacts/exotic_conditional_partner_phase13/summary.json
+          if-no-files-found: warn
+          retention-days: 30
