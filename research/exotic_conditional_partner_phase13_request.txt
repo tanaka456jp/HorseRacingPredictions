@@ -1,0 +1,137 @@
+Phase 13 preregistration: conditional partner selection around a longshot anchor
+
+Status: preregistered only. Do not run on real 2023/2024 development history until
+the independently acquired provider-bounded pre-2025 JRA-VAN archive is complete,
+its provenance is verified, and the one-shot execution receipt path is ready.
+
+Structural hypothesis
+---------------------
+Earlier exotic phases failed when horse-level Top-3 marginals were mechanically
+converted into trio/trifecta joint probabilities. Phase 13 does not estimate a
+full three-horse ticket probability.
+
+Instead:
+1. Use the frozen Phase 2-style general Top-3 model to nominate one longshot
+   anchor per race from the development-only historical-final-win-odds >= 6.0
+   candidate set.
+2. Conditional on that nominated anchor actually finishing Top 3, rank every
+   other runner as a potential partner.
+3. Select exactly two partners.
+4. Compare the two selected partners with the two actual other Top-3 horses.
+
+This tests whether the system can learn "who runs with the longshot" rather than
+forcing independent marginal probabilities into a joint-distribution formula.
+
+Frozen anchor rule
+------------------
+- Longshot candidate proxy: historical final win odds >= 6.0.
+- Anchor: candidate with the highest frozen general Top-3 probability.
+- No target/outcome information may participate in anchor nomination.
+- Training anchors must use annual out-of-fold general-model probabilities for
+  2018-2022. Same-row in-sample general-model predictions are forbidden.
+- Evaluation anchors use the general model trained through 2022.
+- Races without a longshot candidate are excluded from this conditional study.
+- Partner-quality metrics are conditional on the nominated anchor actually
+  finishing Top 3. Anchor hit rate is reported separately and cannot be hidden.
+
+Frozen partner model
+--------------------
+- Objective: YetiRankPairwise.
+- iterations=300
+- depth=7
+- learning_rate=0.05
+- random_seed=42
+- l2_leaf_reg remains the repository default (5.0).
+- Candidate base features: exactly the frozen Phase 2-style general Top-3
+  feature set (v10 past-only features + market context + runner-vs-field
+  interactions).
+- Add only fixed anchor-relative numeric context:
+  partner_general_probability
+  anchor_general_probability
+  partner_vs_anchor_general_probability
+  partner_market_implied_probability
+  anchor_market_implied_probability
+  partner_vs_anchor_market_probability
+  partner_market_rank_minus_anchor
+  and candidate-minus-anchor deltas for:
+    horse_recent_top3_rate_5
+    horse_recent_finish_percentile_mean_5
+    horse_recent_early_ratio_mean_5
+    horse_recent_late_ratio_mean_5
+    jockey_past_win_rate
+    jockey_course_past_win_rate
+    horse_jockey_past_win_rate
+    trainer_past_win_rate
+- Raw horse IDs, blood-registration IDs, breeding-registration IDs, anchor IDs,
+  finish positions, final payouts, and post-race values are forbidden as model
+  features.
+
+Training protocol
+-----------------
+- Build general pre-race features chronologically from independently acquired
+  pre-2025 history.
+- Annual OOF anchor folds: 2018, 2019, 2020, 2021, 2022.
+- For each fold, train the general Top-3 model only on prior dates and nominate
+  anchors in that fold from OOF probabilities.
+- Partner-ranker training rows come only from races in which the OOF-nominated
+  anchor actually finished Top 3 and the race has exactly three Top-3 finishers.
+- For each such race, every non-anchor runner is one ranking candidate; the two
+  actual other Top-3 runners have target=1 and all others target=0.
+- No 2023/2024 information may enter partner-ranker training.
+
+Evaluation protocol
+-------------------
+Evaluate 2023 and 2024 separately with no retuning.
+
+Report for each year:
+- races_with_longshot_anchor_candidate
+- nominated_anchor_top3_hit_rate
+- conditional_partner_races
+- baseline_exact_partner_pair_hit_rate
+- challenger_exact_partner_pair_hit_rate
+- exact_partner_pair_hit_rate_delta
+- baseline_partner_recall_at_2
+- challenger_partner_recall_at_2
+- partner_recall_at_2_delta
+- paired race bootstrap support, 1000 samples, seed 20261006.
+
+Baseline partner selection:
+- among non-anchor runners, choose the two highest frozen general Top-3
+  probabilities.
+
+Challenger partner selection:
+- choose the two highest Phase 13 conditional partner-ranker scores.
+
+Phase 13 gate
+-------------
+Both 2023 and 2024 must satisfy:
+- exact partner-pair hit-rate delta > 0
+- partner Recall@2 delta > 0
+- bootstrap support >= 0.80 for both metrics.
+
+No ranking metric may rescue a failed year, and no threshold/hyperparameter
+retuning is allowed after seeing 2023/2024 results.
+
+Interpretation boundary
+-----------------------
+Passing Phase 13 would mean only that conditional partner selection improved.
+It does NOT establish:
+- positive betting expected value,
+- calibrated trio/trifecta ticket probability,
+- profitable stake sizing,
+- deployable live tickets.
+
+Strict EV still requires lawful timestamped purchase-time trio/trifecta odds.
+Historical O5/O6 final odds and final payouts remain forbidden as prebet price
+evidence.
+
+Safety
+------
+- 2025-2026 final independent holdout remains untouched.
+- Forward Paper settings remain unchanged.
+- Paid data/tools are not used.
+- Real-ticket generation remains disabled.
+- One real Phase 13 2023/2024 evaluation only; write an immutable local receipt
+  after first successful evaluation.
+
+preregistered_at_jst=2026-10-11
