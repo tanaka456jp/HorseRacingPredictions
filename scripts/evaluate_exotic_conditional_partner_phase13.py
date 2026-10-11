@@ -9,6 +9,9 @@ from pathlib import Path
 from horse_racing_predictions.exotic_conditional_partner_phase13 import (
     evaluate_conditional_partner_phase13,
 )
+from horse_racing_predictions.jravan_archive_provenance import (
+    validate_local_pre2025_archive,
+)
 from horse_racing_predictions.jravan_parser import (
     parse_raw_jsonl,
 )
@@ -57,7 +60,6 @@ def main() -> None:
     args = parser.parse_args()
 
     root = args.archive_root or default_archive_root()
-    race_raw = root / "race_raw.jsonl"
     receipt_path = root / "phase13_evaluation_receipt.json"
 
     if receipt_path.exists():
@@ -65,12 +67,13 @@ def main() -> None:
             "Phase 13 real-data evaluation already has a local receipt; "
             "the preregistered one-shot evaluation must not be rerun."
         )
-    if not race_raw.is_file():
-        raise FileNotFoundError(
-            f"local bounded RACE archive missing: {race_raw}"
-        )
-
-    race_sha256 = _sha256(race_raw)
+    provenance = validate_local_pre2025_archive(
+        root,
+        required_dataspecs=("RACE",),
+    )
+    race_part = provenance.parts[0]
+    race_raw = race_part.path
+    race_sha256 = race_part.sha256
     history, parse_report = parse_raw_jsonl(
         race_raw,
         jra_only=True,
@@ -92,6 +95,10 @@ def main() -> None:
         "history_races": int(parse_report.output_races),
         "current_history_csv_used": False,
         "protected_holdout": "2025-2026 untouched",
+        "archive_manifest": str(provenance.manifest_path),
+        "archive_manifest_status": provenance.manifest_status,
+        "archive_jvopen_range": provenance.jvopen_range,
+        "race_manifest_records_written": race_part.records_written,
     }
 
     args.output.parent.mkdir(
