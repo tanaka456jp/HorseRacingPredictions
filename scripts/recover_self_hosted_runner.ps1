@@ -3,7 +3,6 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$ProjectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $PersistScript = Join-Path $PSScriptRoot "ensure_self_hosted_runner_persistence.ps1"
 $StartScript = Join-Path $PSScriptRoot "start_self_hosted_runner_if_needed.ps1"
 
@@ -17,34 +16,63 @@ if (-not (Test-Path -LiteralPath $StartScript -PathType Leaf)) {
 Write-Host "=== HorseRacingPredictions self-hosted runner recovery ==="
 Write-Host "Expected runner: $ExpectedRunnerName"
 
-$json = & $PersistScript -Repair -ExpectedRunnerName $ExpectedRunnerName
+# First perform a read-only identity/root probe. If this fails, do not attempt
+# any persistence or listener change.
+$probeJson = & $PersistScript -ExpectedRunnerName $ExpectedRunnerName
 if ($LASTEXITCODE -ne 0) {
-    throw "Runner persistence repair failed."
+    throw "Runner identity/root probe failed."
 }
-
 try {
-    $state = ($json | Out-String) | ConvertFrom-Json
+    $probe = ($probeJson | Out-String) | ConvertFrom-Json
 }
 catch {
-    throw "Runner persistence repair did not return valid JSON."
+    throw "Runner identity/root probe did not return valid JSON."
 }
 
-$runnerRoot = [string]$state.runner_root
+$runnerRoot = [string]$probe.runner_root
 if ([string]::IsNullOrWhiteSpace($runnerRoot)) {
-    throw "Runner persistence repair did not report runner_root."
+    throw "Runner identity/root probe did not report runner_root."
 }
 
 $runnerConfig = Join-Path $runnerRoot ".runner"
 $config = Get-Content -LiteralPath $runnerConfig -Raw | ConvertFrom-Json
 if ([string]$config.agentName -ne $ExpectedRunnerName) {
-    throw "Runner identity changed after repair; refusing startup."
+    throw "Runner identity changed after probe; refusing startup."
 }
 
-if ([string]$state.persistence_mode -eq "hkcu_logon_wrapper") {
-    & $StartScript -RunnerRoot $runnerRoot
-    if ($LASTEXITCODE -ne 0) {
-        throw "Runner startup wrapper failed."
+$persistenceStatus = "not_repaired"
+$persistenceMode = [string]$probe.persistence_mode
+$persistenceError = $null
+
+# Persistence is desirable, but an Administrator-only Set-Service failure must
+# not prevent recovery of the current queued job.
+$repairJson = & $PersistScript -Repair -ExpectedRunnerName $ExpectedRunnerName
+$repairExit = $LASTEXITCODE
+if ($repairExit -eq 0) {
+    try {
+        $repair = ($repairJson | Out-String) | ConvertFrom-Json
+        $persistenceStatus = [string]$repair.repair_status
+        $persistenceMode = [string]$repair.persistence_mode
     }
+    catch {
+        $persistenceStatus = "repair_json_invalid"
+        $persistenceError = $_.Exception.Message
+    }
+}
+else {
+    $persistenceStatus = "repair_failed_current_start_fallback"
+    $persistenceError = ($repairJson | Out-String).Trim()
+    Write-Warning (
+        "Persistence repair failed; attempting guarded current listener " +
+        "startup for the already-validated runner."
+    )
+}
+
+# Always use the duplicate-safe starter after identity validation. If a Windows
+# service already started the listener, the starter exits 0 without duplication.
+& $StartScript -RunnerRoot $runnerRoot
+if ($LASTEXITCODE -ne 0) {
+    throw "Runner startup wrapper failed."
 }
 
 $deadline = (Get-Date).AddSeconds(15)
@@ -73,8 +101,9 @@ $result = [ordered]@{
     status = "runner_listener_running"
     runner_name = $ExpectedRunnerName
     runner_root = $runnerRoot
-    persistence_mode = [string]$state.persistence_mode
-    persistence_repair_status = [string]$state.repair_status
+    persistence_mode = $persistenceMode
+    persistence_repair_status = $persistenceStatus
+    persistence_error = $persistenceError
     listener_pid = [int]$listener.ProcessId
     github_registration_reused = $true
     registration_token_requested = $false
