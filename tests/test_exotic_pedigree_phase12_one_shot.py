@@ -86,6 +86,24 @@ def test_first_success_writes_hash_receipt_and_second_run_is_blocked(
 
     monkeypatch.setattr(
         MODULE,
+        "validate_local_pre2025_archive",
+        lambda *args, **kwargs: SimpleNamespace(
+            manifest_path=root / "latest_manifest.json",
+            manifest_status="complete",
+            jvopen_range="20170101000000-20249999999999",
+            parts=(
+                SimpleNamespace(
+                    path=race_raw,
+                    sha256=hashlib.sha256(
+                        race_raw.read_bytes()
+                    ).hexdigest(),
+                    records_written=1,
+                ),
+            ),
+        ),
+    )
+    monkeypatch.setattr(
+        MODULE,
         "parse_raw_jsonl",
         lambda *args, **kwargs: (history, parse_report),
     )
