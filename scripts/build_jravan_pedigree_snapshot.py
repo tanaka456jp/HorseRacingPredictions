@@ -6,6 +6,9 @@ import json
 import os
 from pathlib import Path
 
+from horse_racing_predictions.jravan_archive_provenance import (
+    validate_local_pre2025_archive,
+)
 from horse_racing_predictions.pedigree_snapshot import (
     build_pedigree_snapshot,
 )
@@ -45,6 +48,10 @@ def main() -> None:
     args = parser.parse_args()
 
     root = args.archive_root or default_archive_root()
+    provenance = validate_local_pre2025_archive(
+        root,
+        required_dataspecs=("BLDN",),
+    )
     snapshot = root / "pedigree_snapshot.csv"
     report = build_pedigree_snapshot(
         archive_root=root,
@@ -58,8 +65,14 @@ def main() -> None:
         json.dumps(asdict(report), ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
+    output = asdict(report)
+    output["archive_manifest"] = str(provenance.manifest_path)
+    output["bldn_records_written"] = int(
+        provenance.parts[0].records_written
+    )
+    output["bldn_sha256"] = provenance.parts[0].sha256
     print(
-        json.dumps(asdict(report), ensure_ascii=False, indent=2),
+        json.dumps(output, ensure_ascii=False, indent=2),
         flush=True,
     )
 
