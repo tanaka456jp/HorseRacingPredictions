@@ -20,6 +20,7 @@ function Get-RunnerRoot {
     }
 
     $candidateRoots = @(
+        "C:\actions-runner-HorseRacingPredictions\actions-runner",
         (Join-Path $env:USERPROFILE "actions-runner"),
         (Join-Path $env:USERPROFILE "github-actions-runner"),
         "C:\actions-runner",
