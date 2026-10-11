@@ -287,3 +287,57 @@ def test_quarantined_required_dataspec_is_rejected(tmp_path):
 
     with pytest.raises(RuntimeError, match="quarantined from research use"):
         validate_local_pre2025_archive(root)
+
+
+def test_validator_prefers_reassessed_v2_manifest_when_present(tmp_path):
+    root = tmp_path / "archive"
+    root.mkdir()
+    raw = root / "race_raw.jsonl"
+    raw.write_bytes(b"race\n")
+    digest = hashlib.sha256(raw.read_bytes()).hexdigest()
+
+    # Legacy manifest is intentionally unusable for research.
+    legacy = {
+        "status": "partial",
+        "jvopen_range": DEFAULT_ARCHIVE_RANGE,
+        "raw_redistribution_allowed": False,
+        "protected_holdout": "2025-2026 untouched",
+        "parts": [{
+            "dataspec": "RACE",
+            "status": "failed",
+            "records_written": 0,
+            "output_sha256": None,
+            "output_path": str(raw),
+            "research_use_allowed": False,
+        }],
+    }
+    (root / "latest_manifest.json").write_text(
+        json.dumps(legacy),
+        encoding="utf-8",
+    )
+
+    v2 = {
+        "manifest_version": 2,
+        "status": "partial",
+        "jvopen_range": DEFAULT_ARCHIVE_RANGE,
+        "raw_redistribution_allowed": False,
+        "protected_holdout": "2025-2026 untouched",
+        "parts": [{
+            "dataspec": "RACE",
+            "status": "success",
+            "records_written": 1,
+            "output_sha256": digest,
+            "output_path": str(raw),
+            "research_use_allowed": True,
+        }],
+    }
+    (root / "latest_manifest_v2.json").write_text(
+        json.dumps(v2),
+        encoding="utf-8",
+    )
+
+    result = validate_local_pre2025_archive(root)
+
+    assert result.manifest_path.name == "latest_manifest_v2.json"
+    assert result.parts[0].dataspec == "RACE"
+    assert result.parts[0].sha256 == digest
