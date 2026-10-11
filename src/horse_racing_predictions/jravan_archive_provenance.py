@@ -143,6 +143,11 @@ def validate_local_pre2025_archive(
             raise RuntimeError(
                 f"required JRA-VAN archive dataspec is not successful: {dataspec}"
             )
+        if part.get("research_use_allowed") is not True:
+            raise RuntimeError(
+                f"required JRA-VAN archive dataspec is quarantined from "
+                f"research use: {dataspec}"
+            )
 
         expected_hash = str(
             part.get("output_sha256", "")
