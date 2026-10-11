@@ -3,9 +3,11 @@ from __future__ import annotations
 import argparse
 from dataclasses import asdict
 import json
-import os
 from pathlib import Path
 
+from horse_racing_predictions.jravan_archive_paths import (
+    default_archive_root,
+)
 from horse_racing_predictions.jravan_archive_provenance import (
     validate_local_pre2025_archive,
 )
