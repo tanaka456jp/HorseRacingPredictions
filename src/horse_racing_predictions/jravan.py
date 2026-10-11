@@ -209,6 +209,12 @@ class JvLinkClient:
                 "",
             )
         )
+        if result.return_code == -1:
+            # JVOpen -1 means no applicable data for the requested parameters.
+            # It is not a transport/authentication failure. Mark the session as
+            # opened so JVClose is still issued before the next JVOpen.
+            self.opened = True
+            return result
         if result.return_code < 0:
             raise JraVanApiError(
                 "JVOpen failed with return code "
