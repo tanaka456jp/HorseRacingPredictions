@@ -48,7 +48,7 @@ def validate_local_pre2025_archive(
     archive_root: str | Path,
     *,
     required_dataspecs: Iterable[str] = ("RACE",),
-    manifest_name: str = "latest_manifest.json",
+    manifest_name: str | None = None,
 ) -> ValidatedArchiveProvenance:
     """Fail closed unless required local files match the bounded archive manifest."""
     root_input = Path(archive_root)
@@ -58,7 +58,12 @@ def validate_local_pre2025_archive(
         )
     root = root_input.resolve(strict=True)
 
-    manifest_input = root / manifest_name
+    if manifest_name is None:
+        preferred = root / "latest_manifest_v2.json"
+        fallback = root / "latest_manifest.json"
+        manifest_input = preferred if preferred.is_file() else fallback
+    else:
+        manifest_input = root / manifest_name
     if manifest_input.is_symlink():
         raise RuntimeError(
             "JRA-VAN archive manifest must not be a symlink."
