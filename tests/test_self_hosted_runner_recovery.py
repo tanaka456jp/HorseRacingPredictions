@@ -63,3 +63,29 @@ def test_existing_starter_remains_duplicate_listener_safe():
     assert "$alreadyRunning" in text
     assert "if ($alreadyRunning)" in text
     assert "exit 0" in text
+
+
+def test_recovery_probes_identity_before_attempting_repair():
+    text = RECOVER.read_text(encoding="utf-8")
+    probe_index = text.index(
+        '& $PersistScript -ExpectedRunnerName $ExpectedRunnerName'
+    )
+    repair_index = text.index(
+        '& $PersistScript -Repair -ExpectedRunnerName $ExpectedRunnerName'
+    )
+    assert probe_index < repair_index
+    assert "Runner identity/root probe failed." in text
+
+
+def test_persistence_failure_does_not_block_guarded_current_listener_start():
+    text = RECOVER.read_text(encoding="utf-8")
+    assert "repair_failed_current_start_fallback" in text
+    assert "Persistence repair failed; attempting guarded current listener" in text
+    assert "& $StartScript -RunnerRoot $runnerRoot" in text
+    repair_failure_index = text.index(
+        "repair_failed_current_start_fallback"
+    )
+    starter_index = text.index(
+        "& $StartScript -RunnerRoot $runnerRoot"
+    )
+    assert repair_failure_index < starter_index
