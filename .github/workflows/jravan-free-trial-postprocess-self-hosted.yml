@@ -1,0 +1,65 @@
+name: JRA-VAN Free Trial Local Postprocess
+
+on:
+  push:
+    branches:
+      - research/exotic-longshot-race-centered-phase11
+    paths:
+      - "research/jravan_free_trial_postprocess_request.txt"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: jravan-free-trial-local-postprocess
+  cancel-in-progress: true
+
+jobs:
+  postprocess:
+    name: Reassess local archive and build pedigree snapshot
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout without deleting local archive
+        uses: actions/checkout@v4
+        with:
+          clean: false
+          persist-credentials: false
+
+      - name: Reassess existing manifest without provider access
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          $python = Join-Path $PWD ".venv-jravan\Scripts\python.exe"
+          if (-not (Test-Path -LiteralPath $python -PathType Leaf)) {
+            throw ".venv-jravan is missing."
+          }
+          & $python "scripts\reassess_jravan_free_trial_archive.py" `
+            --report-output "artifacts\jravan_archive_reassessment_report.json"
+          if ($LASTEXITCODE -ne 0) {
+            throw "JRA-VAN local archive reassessment failed."
+          }
+
+      - name: Build BLDN-only private pedigree snapshot
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          $python = Join-Path $PWD ".venv-jravan\Scripts\python.exe"
+          & $python "scripts\build_jravan_pedigree_snapshot.py" `
+            --report-output "artifacts\jravan_pedigree_snapshot_report.json"
+          if ($LASTEXITCODE -ne 0) {
+            throw "BLDN-only pedigree snapshot failed."
+          }
+
+      - name: Publish sanitized reports only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jravan-free-trial-postprocess-sanitized
+          path: |
+            artifacts/jravan_archive_reassessment_report.json
+            artifacts/jravan_pedigree_snapshot_report.json
+          if-no-files-found: warn
+          retention-days: 30
