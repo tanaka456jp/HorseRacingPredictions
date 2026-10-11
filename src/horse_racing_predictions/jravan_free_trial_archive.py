@@ -63,6 +63,8 @@ class ArchivePart:
     download_count: int | None
     last_file_timestamp: str | None
     error: str | None
+    research_use_allowed: bool = True
+    quarantine_reason: str | None = None
 
 
 @dataclass(frozen=True)
@@ -110,6 +112,22 @@ def _export_one(
             from_time=jvopen_range,
             option=4,
         )
+        if open_result.return_code == -1:
+            return ArchivePart(
+                dataspec=dataspec,
+                status="no_data",
+                records_written=0,
+                record_type_counts={},
+                output_sha256=None,
+                output_path=str(output),
+                read_count=int(open_result.read_count),
+                download_count=int(open_result.download_count),
+                last_file_timestamp=str(open_result.last_file_timestamp),
+                error=None,
+                research_use_allowed=False,
+                quarantine_reason="JVOpen returned no applicable data (-1)",
+            )
+
         if progress_callback is not None:
             progress_callback(
                 f"dataspec={dataspec} open read_count={open_result.read_count} "
@@ -145,6 +163,25 @@ def _export_one(
         # Do not replace an existing successful archive until a retry is complete.
         digest = _sha256(staging)
         staging.replace(output)
+        last_file_timestamp = str(open_result.last_file_timestamp)
+        provider_file_year = (
+            int(last_file_timestamp[:4])
+            if len(last_file_timestamp) >= 4
+            and last_file_timestamp[:4].isdigit()
+            else None
+        )
+        research_use_allowed = bool(
+            provider_file_year is not None
+            and provider_file_year <= 2024
+        )
+        quarantine_reason = (
+            None
+            if research_use_allowed
+            else (
+                "provider last_file_timestamp is not certifiably pre-2025; "
+                "archive is preserved but excluded from research use"
+            )
+        )
         return ArchivePart(
             dataspec=dataspec,
             status="success",
@@ -154,10 +191,10 @@ def _export_one(
             output_path=str(output),
             read_count=int(open_result.read_count),
             download_count=int(open_result.download_count),
-            last_file_timestamp=str(
-                open_result.last_file_timestamp
-            ),
+            last_file_timestamp=last_file_timestamp,
             error=None,
+            research_use_allowed=research_use_allowed,
+            quarantine_reason=quarantine_reason,
         )
     except Exception as exc:
         # A failed retry must never delete a previously successful archive.
@@ -186,6 +223,8 @@ def _export_one(
                 else None
             ),
             error=f"{type(exc).__name__}: {exc}",
+            research_use_allowed=False,
+            quarantine_reason="provider acquisition failed",
         )
     finally:
         client.close()
@@ -261,10 +300,14 @@ def archive_free_trial_pre2025(
         part for part in parts
         if part.status == "success"
     ]
+    acceptable = [
+        part for part in parts
+        if part.status in {"success", "no_data"}
+    ]
     manifest = FreeTrialArchiveManifest(
         status=(
             "complete"
-            if len(successes) == len(parts)
+            if len(acceptable) == len(parts)
             else (
                 "partial"
                 if successes
