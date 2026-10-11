@@ -104,6 +104,8 @@ def test_archive_writes_hash_manifest_and_keeps_raw_local(tmp_path):
     part = manifest.parts[0]
     assert part.record_type_counts == {"HN": 1, "SK": 1}
     assert len(part.output_sha256) == 64
+    assert part.research_use_allowed is True
+    assert part.quarantine_reason is None
     assert created[0].open_args[1] == "20170101000000-20249999999999"
     assert created[0].closed == 1
     raw = (tmp_path / "raw" / "bldn_raw.jsonl").read_text(encoding="utf-8")
@@ -120,3 +122,62 @@ def test_archive_rejects_schedule_or_registration_dataspec(tmp_path):
                 zero_cost_entitlement_confirmed=True,
                 personal_research_rights_confirmed=True,
             )
+
+
+def test_archive_treats_jvopen_minus_one_as_no_data_not_failure(tmp_path):
+    class NoDataJv(FakeJv):
+        def JVOpen(self, dataspec, from_time, option, read_count, download_count, timestamp):
+            self.open_args = (dataspec, from_time, option)
+            return (-1, 0, 0, "")
+
+    created = []
+
+    def factory():
+        fake = NoDataJv()
+        created.append(fake)
+        return JvLinkClient(jvlink=fake)
+
+    manifest = archive_free_trial_pre2025(
+        archive_dir=tmp_path / "raw",
+        manifest_path=tmp_path / "manifest.json",
+        dataspecs=("HOSN",),
+        zero_cost_entitlement_confirmed=True,
+        personal_research_rights_confirmed=True,
+        client_factory=factory,
+    )
+
+    assert manifest.status == "complete"
+    assert manifest.total_records_written == 0
+    part = manifest.parts[0]
+    assert part.status == "no_data"
+    assert part.records_written == 0
+    assert part.output_sha256 is None
+    assert part.research_use_allowed is False
+    assert "no applicable data" in part.quarantine_reason
+    assert created[0].closed == 1
+
+
+def test_archive_preserves_but_quarantines_provider_file_timestamped_2025(tmp_path):
+    class FutureFileJv(FakeJv):
+        def JVOpen(self, dataspec, from_time, option, read_count, download_count, timestamp):
+            self.open_args = (dataspec, from_time, option)
+            return (0, 2, 0, "20250103203141")
+
+    def factory():
+        return JvLinkClient(jvlink=FutureFileJv())
+
+    manifest = archive_free_trial_pre2025(
+        archive_dir=tmp_path / "raw",
+        manifest_path=tmp_path / "manifest.json",
+        dataspecs=("SLOP",),
+        zero_cost_entitlement_confirmed=True,
+        personal_research_rights_confirmed=True,
+        client_factory=factory,
+    )
+
+    part = manifest.parts[0]
+    assert part.status == "success"
+    assert part.records_written == 2
+    assert part.research_use_allowed is False
+    assert "not certifiably pre-2025" in part.quarantine_reason
+    assert (tmp_path / "raw" / "slop_raw.jsonl").is_file()
