@@ -32,6 +32,8 @@ def _write_manifest(root, *, raw_path, raw_hash, status="complete", range_value=
                 "download_count": 0,
                 "last_file_timestamp": "20241299999999",
                 "error": None,
+                "research_use_allowed": True,
+                "quarantine_reason": None,
             }
         ],
         "total_records_written": records,
@@ -227,6 +229,7 @@ def test_symlinked_manifest_is_rejected(tmp_path):
             "records_written": 1,
             "output_sha256": digest,
             "output_path": str(raw),
+            "research_use_allowed": True,
         }],
     }
     real_manifest.write_text(json.dumps(payload), encoding="utf-8")
@@ -260,4 +263,27 @@ def test_symlinked_raw_file_is_rejected(tmp_path):
     )
 
     with pytest.raises(RuntimeError, match="must not be a symlink"):
+        validate_local_pre2025_archive(root)
+
+
+def test_quarantined_required_dataspec_is_rejected(tmp_path):
+    root = tmp_path / "archive"
+    root.mkdir()
+    raw = root / "race_raw.jsonl"
+    raw.write_bytes(b"race\n")
+    digest = hashlib.sha256(raw.read_bytes()).hexdigest()
+    _write_manifest(
+        root,
+        raw_path=raw,
+        raw_hash=digest,
+        records=1,
+    )
+
+    manifest_path = root / "latest_manifest.json"
+    payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    payload["parts"][0]["research_use_allowed"] = False
+    payload["parts"][0]["quarantine_reason"] = "provider file timestamp crosses holdout"
+    manifest_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(RuntimeError, match="quarantined from research use"):
         validate_local_pre2025_archive(root)
