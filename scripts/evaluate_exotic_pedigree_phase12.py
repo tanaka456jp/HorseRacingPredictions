@@ -11,6 +11,9 @@ import pandas as pd
 from horse_racing_predictions.exotic_pedigree_phase12 import (
     evaluate_pedigree_phase12,
 )
+from horse_racing_predictions.jravan_archive_provenance import (
+    validate_local_pre2025_archive,
+)
 from horse_racing_predictions.jravan_parser import (
     parse_raw_jsonl,
 )
@@ -58,7 +61,6 @@ def main() -> None:
     args = parser.parse_args()
 
     root = args.archive_root or default_archive_root()
-    race_raw = root / "race_raw.jsonl"
     pedigree_path = root / "pedigree_snapshot.csv"
     receipt_path = root / "phase12_evaluation_receipt.json"
 
@@ -68,16 +70,19 @@ def main() -> None:
             "the preregistered one-shot evaluation must not be rerun."
         )
 
-    if not race_raw.is_file():
-        raise FileNotFoundError(
-            f"local bounded RACE archive missing: {race_raw}"
-        )
+    provenance = validate_local_pre2025_archive(
+        root,
+        required_dataspecs=("RACE",),
+    )
+    race_part = provenance.parts[0]
+    race_raw = race_part.path
+
     if not pedigree_path.is_file():
         raise FileNotFoundError(
             f"local pedigree snapshot missing: {pedigree_path}"
         )
 
-    race_sha256 = _sha256(race_raw)
+    race_sha256 = race_part.sha256
     pedigree_sha256 = _sha256(pedigree_path)
 
     history, parse_report = parse_raw_jsonl(
@@ -107,6 +112,10 @@ def main() -> None:
         "history_races": int(parse_report.output_races),
         "current_history_csv_used": False,
         "protected_holdout": "2025-2026 untouched",
+        "archive_manifest": str(provenance.manifest_path),
+        "archive_manifest_status": provenance.manifest_status,
+        "archive_jvopen_range": provenance.jvopen_range,
+        "race_manifest_records_written": race_part.records_written,
         "race_archive_sha256": race_sha256,
         "pedigree_snapshot_sha256": pedigree_sha256,
     }
