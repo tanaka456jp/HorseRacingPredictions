@@ -2,6 +2,39 @@
 
 The easiest local validation path is now a double-click launcher.
 
+## Self-hosted runner recovery
+
+If the JRA-VAN archive workflow is waiting with no assigned Windows runner,
+recover the already-registered HorseRacingPredictions runner before starting
+another archive run.
+
+From the repository root, double-click:
+
+    RUN_HORSERACING_RUNNER_RECOVERY.cmd
+
+or run:
+
+    powershell -NoProfile -ExecutionPolicy Bypass -File scripts/recover_self_hosted_runner.ps1
+
+The recovery command does **not** register a new runner and does not request a
+GitHub registration token. It first verifies that the local `.runner`
+configuration still reports exactly:
+
+    Office-PC-01-HorseRacingPredictions
+
+It then repairs persistence for that existing registration, starts the listener
+when needed, and fails unless `Runner.Listener.exe` is observed under the same
+runner root.
+
+The known repository runner root is checked first during manual recovery:
+
+    C:\actions-runner-HorseRacingPredictions\actions-runner
+
+If that path does not contain the expected registration, the script falls back
+to the generic candidate paths and still requires the exact runner-name match.
+Do not create another GitHub Actions runner merely to clear a queued archive
+job.
+
 ## Before running
 
 Install the current JRA-VAN JV-Link on the Windows PC.
