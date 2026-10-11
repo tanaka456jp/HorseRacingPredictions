@@ -3,13 +3,15 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import os
 from pathlib import Path
 
 import pandas as pd
 
 from horse_racing_predictions.exotic_pedigree_phase12 import (
     evaluate_pedigree_phase12,
+)
+from horse_racing_predictions.jravan_archive_paths import (
+    default_archive_root,
 )
 from horse_racing_predictions.jravan_archive_provenance import (
     validate_local_pre2025_archive,
@@ -105,8 +107,8 @@ def main() -> None:
         pedigree,
     )
     result["input_provenance"] = {
-        "race_archive": "LOCALAPPDATA pre2025/race_raw.jsonl",
-        "pedigree_snapshot": "LOCALAPPDATA pre2025/pedigree_snapshot.csv",
+        "race_archive": "private local pre2025/race_raw.jsonl",
+        "pedigree_snapshot": "private local pre2025/pedigree_snapshot.csv",
         "parse_spec_version": parse_report.spec_version,
         "history_rows": int(parse_report.output_rows),
         "history_races": int(parse_report.output_races),
