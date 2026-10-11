@@ -3,11 +3,13 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import os
 from pathlib import Path
 
 from horse_racing_predictions.exotic_conditional_partner_phase13 import (
     evaluate_conditional_partner_phase13,
+)
+from horse_racing_predictions.jravan_archive_paths import (
+    default_archive_root,
 )
 from horse_racing_predictions.jravan_archive_provenance import (
     validate_local_pre2025_archive,
@@ -88,7 +90,7 @@ def main() -> None:
         history
     )
     result["input_provenance"] = {
-        "race_archive": "LOCALAPPDATA pre2025/race_raw.jsonl",
+        "race_archive": "private local pre2025/race_raw.jsonl",
         "race_archive_sha256": race_sha256,
         "parse_spec_version": parse_report.spec_version,
         "history_rows": int(parse_report.output_rows),
