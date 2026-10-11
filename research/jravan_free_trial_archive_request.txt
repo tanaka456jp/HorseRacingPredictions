@@ -22,6 +22,8 @@ Execution rules:
 - After completion, verify SHA-256 and record counts. Retry only failed dataspecs
   through the same bounded/no-paid path if the trial entitlement is still active.
 
-request=2026-10-11-jravan-free-trial-pre2025-archive-generation-3
-replaces_stale_queued_run=38098991329
+request=2026-10-11-jravan-free-trial-pre2025-archive-generation-4-final
+replaces_stale_queued_run=38099138441
 requires_latest_branch_safety_fixes=true
+chains_private_pedigree_snapshot=true
+runner_persistence_repair=true
