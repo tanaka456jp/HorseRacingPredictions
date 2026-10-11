@@ -173,6 +173,23 @@ def test_jvlink_iter_records_handles_file_boundary_and_wait():
     assert sleeps == [0.2]
 
 
+def test_jvopen_minus_one_is_no_data_and_still_closes_cleanly():
+    fake = FakeJvLink(open_result=(-1, 0, 0, ""))
+    client = JvLinkClient(jvlink=fake)
+    client.initialize()
+
+    result = client.open_data(
+        dataspec="HOSN",
+        from_time="20170101000000-20249999999999",
+        option=4,
+    )
+
+    assert result.return_code == -1
+    assert client.opened is True
+    client.close()
+    assert fake.closed == 1
+
+
 def test_jvlink_init_and_open_fail_closed():
     with pytest.raises(JraVanApiError, match="JVInit failed"):
         JvLinkClient(
