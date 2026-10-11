@@ -1,0 +1,10 @@
+request=2026-10-11-jravan-archive-migrate-to-d-drive
+source=legacy-localappdata-private-archive
+destination=D:\HorseRacingPredictions\JraVanFreeTrialArchive\pre2025
+copy_before_delete=true
+verify_all_file_sha256=true
+verify_bldn_provenance=true
+delete_source_only_after_verify=true
+leave_c_drive_tombstone=true
+raw_upload=false
+protected_holdout=2025-2026-untouched
