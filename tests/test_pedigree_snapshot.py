@@ -66,23 +66,14 @@ def _write(path, records):
     )
 
 
-def test_snapshot_replays_old_and_new_archives_and_reports_only_aggregates(tmp_path):
+def test_snapshot_uses_new_format_bldn_only_and_reports_only_aggregates(tmp_path):
     root = tmp_path / "archive"
     root.mkdir()
-    _write(
-        root / "blod_raw.jsonl",
-        [
-            _sk(
-                created="20200101",
-                blood="2020A00001",
-                sire="SIRE000001",
-            ),
-            _sk(
-                created="20200101",
-                blood="2020A00002",
-                sire="SIRE000002",
-            ),
-        ],
+    # Legacy BLOD is intentionally malformed for the modern 10-byte SK parser.
+    # Snapshot construction must ignore it entirely.
+    (root / "blod_raw.jsonl").write_text(
+        '{"record_type":"SK","text":"SKlegacy"}\n',
+        encoding="utf-8",
     )
     _write(
         root / "bldn_raw.jsonl",
@@ -92,12 +83,6 @@ def test_snapshot_replays_old_and_new_archives_and_reports_only_aggregates(tmp_p
                 created="20240101",
                 blood="2020A00001",
                 sire="SIRE000003",
-            ),
-            _sk(
-                division="0",
-                created="20240201",
-                blood="2020A00002",
-                sire="SIRE000002",
             ),
         ],
     )
@@ -114,10 +99,7 @@ def test_snapshot_replays_old_and_new_archives_and_reports_only_aggregates(tmp_p
     assert report.rows == 1
     assert report.sire_rows == 1
     assert report.damsire_rows == 1
-    assert report.input_files == (
-        "blod_raw.jsonl",
-        "bldn_raw.jsonl",
-    )
+    assert report.input_files == ("bldn_raw.jsonl",)
     assert len(report.snapshot_sha256) == 64
     assert report.raw_identifiers_uploaded is False
     assert report.protected_holdout == "2025-2026 untouched"
@@ -128,7 +110,7 @@ def test_snapshot_replays_old_and_new_archives_and_reports_only_aggregates(tmp_p
 
     local_snapshot = snapshot.read_text(encoding="utf-8-sig")
     assert "SIRE000003" in local_snapshot
-    assert "2020A00002" not in local_snapshot
+    assert "SKlegacy" not in local_snapshot
 
 
 def test_snapshot_rejects_any_post2024_sk_record(tmp_path):
@@ -153,7 +135,7 @@ def test_snapshot_rejects_any_post2024_sk_record(tmp_path):
 
 
 def test_snapshot_requires_local_blood_archive(tmp_path):
-    with pytest.raises(FileNotFoundError, match="BLOD/BLDN"):
+    with pytest.raises(FileNotFoundError, match="BLDN"):
         build_pedigree_snapshot(
             archive_root=tmp_path / "empty",
             snapshot_path=tmp_path / "snapshot.csv",
