@@ -206,3 +206,58 @@ def test_duplicate_or_missing_required_dataspec_is_rejected(tmp_path):
     manifest_path.write_text(json.dumps(payload), encoding="utf-8")
     with pytest.raises(RuntimeError, match="missing"):
         validate_local_pre2025_archive(root)
+
+
+def test_symlinked_manifest_is_rejected(tmp_path):
+    root = tmp_path / "archive"
+    root.mkdir()
+    raw = root / "race_raw.jsonl"
+    raw.write_bytes(b"race\n")
+    digest = hashlib.sha256(raw.read_bytes()).hexdigest()
+
+    real_manifest = root / "real_manifest.json"
+    payload = {
+        "status": "complete",
+        "jvopen_range": DEFAULT_ARCHIVE_RANGE,
+        "raw_redistribution_allowed": False,
+        "protected_holdout": "2025-2026 untouched",
+        "parts": [{
+            "dataspec": "RACE",
+            "status": "success",
+            "records_written": 1,
+            "output_sha256": digest,
+            "output_path": str(raw),
+        }],
+    }
+    real_manifest.write_text(json.dumps(payload), encoding="utf-8")
+    link = root / "latest_manifest.json"
+    try:
+        link.symlink_to(real_manifest)
+    except (OSError, NotImplementedError):
+        pytest.skip("symlink creation unavailable")
+
+    with pytest.raises(RuntimeError, match="manifest must not be a symlink"):
+        validate_local_pre2025_archive(root)
+
+
+def test_symlinked_raw_file_is_rejected(tmp_path):
+    root = tmp_path / "archive"
+    root.mkdir()
+    real_raw = root / "real_race_raw.jsonl"
+    real_raw.write_bytes(b"race\n")
+    digest = hashlib.sha256(real_raw.read_bytes()).hexdigest()
+    link = root / "race_raw.jsonl"
+    try:
+        link.symlink_to(real_raw)
+    except (OSError, NotImplementedError):
+        pytest.skip("symlink creation unavailable")
+
+    _write_manifest(
+        root,
+        raw_path=link,
+        raw_hash=digest,
+        records=1,
+    )
+
+    with pytest.raises(RuntimeError, match="must not be a symlink"):
+        validate_local_pre2025_archive(root)
