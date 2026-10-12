@@ -112,6 +112,10 @@ $dMeta = Get-DirectoryMetadata -Path $dRoot
 
 $cDrive = Get-PSDrive -Name C
 $dDrive = Get-PSDrive -Name D -ErrorAction SilentlyContinue
+$dFreeGiB = $null
+if ($null -ne $dDrive) {
+    $dFreeGiB = [Math]::Round([double]$dDrive.Free / 1GB, 2)
+}
 
 $guidance = @()
 if ($dual) {
@@ -153,14 +157,7 @@ $result = [ordered]@{
     provider_cache = $providerCacheMeta
     d_archive = $dMeta
     c_free_gib = [Math]::Round([double]$cDrive.Free / 1GB, 2)
-    d_free_gib = (
-        if ($null -ne $dDrive) {
-            [Math]::Round([double]$dDrive.Free / 1GB, 2)
-        }
-        else {
-            $null
-        }
-    )
+    d_free_gib = $dFreeGiB
     provider_access_attempted = $false
     registry_secrets_read = $false
     usage_key_read = $false
