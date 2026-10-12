@@ -9,6 +9,9 @@ from pathlib import Path
 from horse_racing_predictions.jravan_archive_paths import (
     default_archive_root,
 )
+from horse_racing_predictions.jravan_storage_health import (
+    assert_jravan_archive_storage_ready,
+)
 from horse_racing_predictions.jravan_free_trial_archive import (
     DEFAULT_ARCHIVE_RANGE,
     FREE_TRIAL_ARCHIVE_DATASPECS,
@@ -43,11 +46,16 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    archive_root = (
-        args.archive_root
-        if args.archive_root is not None
-        else default_archive_root()
-    )
+    if args.archive_root is None:
+        assert_jravan_archive_storage_ready()
+        archive_root = default_archive_root()
+    else:
+        archive_root = args.archive_root
+        if Path("D:\\").exists() and archive_root.drive.upper() != "D:":
+            raise RuntimeError(
+                "D drive is available; refusing large JRA-VAN archive "
+                "acquisition outside D drive."
+            )
     archive_root.mkdir(parents=True, exist_ok=True)
 
     specs = tuple(
