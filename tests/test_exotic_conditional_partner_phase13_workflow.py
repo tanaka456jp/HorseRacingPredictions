@@ -165,7 +165,9 @@ def test_phase13_runner_never_references_current_or_combined_history():
     assert "current_history.csv" not in text
     assert "combined" not in text
     assert "race_raw.jsonl" in text
-    assert "LOCALAPPDATA" in text
+    assert "jravan_archive_paths import" in text
+    assert "default_archive_root" in text
+    assert "LOCALAPPDATA" not in text
     assert "2025-2026 untouched" in text
 
 
