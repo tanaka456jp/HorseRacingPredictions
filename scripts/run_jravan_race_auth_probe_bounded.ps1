@@ -23,7 +23,7 @@ if ($TimeoutSeconds -lt 10 -or $TimeoutSeconds -gt 300) {
 }
 
 $outputPath = [System.IO.Path]::GetFullPath($ReportPath)
-$outputDir = Split-Path -LiteralPath $outputPath -Parent
+$outputDir = [System.IO.Path]::GetDirectoryName($outputPath)
 New-Item -ItemType Directory -Path $outputDir -Force | Out-Null
 
 $stdout = Join-Path $env:RUNNER_TEMP "jravan-race-auth-probe.stdout.txt"
@@ -34,7 +34,7 @@ $process = Start-Process -FilePath $PythonPath -ArgumentList @(
     $script,
     "--output",
     $outputPath
-) -WorkingDirectory (Split-Path -LiteralPath $PSScriptRoot -Parent) -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru -WindowStyle Hidden
+) -WorkingDirectory ([System.IO.Path]::GetDirectoryName($PSScriptRoot)) -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru -WindowStyle Hidden
 
 if (-not $process.WaitForExit($TimeoutSeconds * 1000)) {
     Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
