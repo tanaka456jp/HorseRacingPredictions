@@ -1,5 +1,5 @@
 param(
-    [string]$PythonPathPath,
+    [string]$PythonPath,
     [string]$ReportPath,
     [int]$TimeoutSeconds = 90
 )
