@@ -36,7 +36,8 @@ def test_archive_script_requires_storage_guard_before_default_root_use():
         text.index("assert_jravan_archive_storage_ready()")
         < text.index("archive_root = default_archive_root()")
     )
-    assert "refusing large JRA-VAN archive acquisition outside D drive" in text
+    assert "D drive is available; refusing large JRA-VAN archive " in text
+    assert "acquisition outside D drive." in text
 
 
 def test_storage_health_workflow_does_not_open_provider():
