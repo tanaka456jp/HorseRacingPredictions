@@ -22,3 +22,7 @@ records_archived=5159201
 race_status=failed_-301
 legacy_blood_format=BLOD
 modern_blood_format=BLDN
+
+request_generation=2-d-drive
+expected_archive_root=D:\\HorseRacingPredictions\\JraVanFreeTrialArchive\\pre2025
+provider_access=false
