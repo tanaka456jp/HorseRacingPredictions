@@ -27,7 +27,9 @@ def test_race_auth_probe_uses_unknown_and_provider_bounded_window():
 def test_race_auth_probe_workflow_is_self_hosted_and_sanitized():
     text = WORKFLOW.read_text(encoding="utf-8")
     assert "runs-on: [self-hosted, Windows]" in text
-    assert "probe_jravan_free_trial_race_auth.py" in text
+    assert "run_jravan_race_auth_probe_bounded.ps1" in text
+    assert "-TimeoutSeconds 90" in text
+    assert "-ReportPath" in text
     upload = text.split(
         "- name: Publish sanitized probe only",
         maxsplit=1,
