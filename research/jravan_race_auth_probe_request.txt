@@ -1,0 +1,15 @@
+JRA-VAN free-trial RACE authentication probe request
+
+Purpose:
+- Diagnose the remaining RACE JVOpen=-301 blocker on PC2.
+- Use the existing free-trial environment and JVInit("UNKNOWN").
+- Do not read or store raw JV-Data records.
+- Do not request, print, rotate, purchase, renew, or change any usage key.
+- Do not start paid service or a paid API.
+- Use only the approved provider-bound range:
+  20170101000000-20249999999999
+- Probe HOSN as a no-data control, then RACE.
+- Publish only sanitized return codes/runtime metadata.
+- Preserve 2025-2026 final holdout untouched.
+
+request=2026-10-12-free-trial-race-auth-probe
