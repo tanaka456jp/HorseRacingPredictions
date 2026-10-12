@@ -12,4 +12,6 @@ Purpose:
 - Publish only sanitized return codes/runtime metadata.
 - Preserve 2025-2026 final holdout untouched.
 
-request=2026-10-12-free-trial-race-auth-probe
+request=2026-10-12-free-trial-race-auth-probe-generation-2-bounded
+max_runtime_seconds=90
+raw_records_read=false
