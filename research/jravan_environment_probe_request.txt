@@ -13,7 +13,9 @@ Purpose:
 - Do not inspect 2025-2026 race/provider record contents or filenames.
 - Publish only sanitized aggregate environment metadata.
 
-request=2026-10-13-jravan-sanitized-environment-probe
+request=2026-10-13-jravan-sanitized-environment-probe-generation-2
 provider_access=false
 raw_records_read=false
 usage_key_read=false
+previous_run=38318631058
+previous_failure=PowerShell parser error before provider access
