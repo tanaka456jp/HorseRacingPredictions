@@ -1,14 +1,18 @@
 param(
-    [Parameter(Mandatory = $true)]
-    [string]$Python,
-    [Parameter(Mandatory = $true)]
-    [string]$Output,
+    [string]$PythonPathPath,
+    [string]$ReportPath,
     [int]$TimeoutSeconds = 90
 )
 
 $ErrorActionPreference = "Stop"
+if ([string]::IsNullOrWhiteSpace($PythonPath)) {
+    throw "PythonPath is required."
+}
+if ([string]::IsNullOrWhiteSpace($ReportPath)) {
+    throw "ReportPath is required."
+}
 $script = Join-Path $PSScriptRoot "probe_jravan_free_trial_race_auth.py"
-if (-not (Test-Path -LiteralPath $Python -PathType Leaf)) {
+if (-not (Test-Path -LiteralPath $PythonPath -PathType Leaf)) {
     throw "Python executable is missing."
 }
 if (-not (Test-Path -LiteralPath $script -PathType Leaf)) {
@@ -18,7 +22,7 @@ if ($TimeoutSeconds -lt 10 -or $TimeoutSeconds -gt 300) {
     throw "TimeoutSeconds must be between 10 and 300."
 }
 
-$outputPath = [System.IO.Path]::GetFullPath($Output)
+$outputPath = [System.IO.Path]::GetFullPath($ReportPath)
 $outputDir = Split-Path -LiteralPath $outputPath -Parent
 New-Item -ItemType Directory -Path $outputDir -Force | Out-Null
 
@@ -26,7 +30,7 @@ $stdout = Join-Path $env:RUNNER_TEMP "jravan-race-auth-probe.stdout.txt"
 $stderr = Join-Path $env:RUNNER_TEMP "jravan-race-auth-probe.stderr.txt"
 Remove-Item -LiteralPath $stdout,$stderr -ErrorAction SilentlyContinue
 
-$process = Start-Process -FilePath $Python -ArgumentList @(
+$process = Start-Process -FilePath $PythonPath -ArgumentList @(
     $script,
     "--output",
     $outputPath
