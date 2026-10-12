@@ -1,0 +1,45 @@
+name: JRA-VAN Validation Storage Prepare
+
+on:
+  push:
+    branches:
+      - research/exotic-longshot-race-centered-phase11
+    paths:
+      - "research/jravan_validation_storage_request.txt"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: jravan-validation-storage-prepare
+  cancel-in-progress: true
+
+jobs:
+  prepare:
+    name: Prepare D drive for official JRA-VAN validation
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout without deleting local archives
+        uses: actions/checkout@v4
+        with:
+          clean: false
+          persist-credentials: false
+
+      - name: Prepare D-drive parent only
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          New-Item -ItemType Directory -Path "artifacts" -Force | Out-Null
+          & ".\scripts\prepare_jravan_validation_storage.ps1" |
+            Set-Content -LiteralPath "artifacts\jravan_validation_storage.json" -Encoding UTF8
+
+      - name: Publish sanitized storage preparation report
+        uses: actions/upload-artifact@v4
+        with:
+          name: jravan-validation-storage
+          path: artifacts/jravan_validation_storage.json
+          if-no-files-found: error
+          retention-days: 14
