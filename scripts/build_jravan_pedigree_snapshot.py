@@ -16,17 +16,6 @@ from horse_racing_predictions.pedigree_snapshot import (
 )
 
 
-def default_archive_root() -> Path:
-    local = os.environ.get("LOCALAPPDATA")
-    if not local:
-        raise RuntimeError("LOCALAPPDATA is required.")
-    return (
-        Path(local)
-        / "HorseRacingPredictions"
-        / "JraVanFreeTrialArchive"
-        / "pre2025"
-    )
-
 
 def main() -> None:
     parser = argparse.ArgumentParser(
