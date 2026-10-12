@@ -13,7 +13,9 @@ def test_phase12_runner_never_references_combined_or_current_history():
     assert "combined" not in text
     assert "race_raw.jsonl" in text
     assert "pedigree_snapshot.csv" in text
-    assert "LOCALAPPDATA" in text
+    assert "jravan_archive_paths import" in text
+    assert "default_archive_root" in text
+    assert "LOCALAPPDATA" not in text
 
 
 def test_phase12_runner_declares_holdout_untouched():
