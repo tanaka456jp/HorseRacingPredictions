@@ -40,7 +40,7 @@ jobs:
           }
           & ".\scripts\run_jravan_race_auth_probe_bounded.ps1" `
             -PythonPath $python `
-            -Output "artifacts\jravan_race_auth_probe.json" `
+            -ReportPath "artifacts\jravan_race_auth_probe.json" `
             -TimeoutSeconds 90
           "exit_code=$LASTEXITCODE" >> $env:GITHUB_OUTPUT
 
