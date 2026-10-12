@@ -1,0 +1,19 @@
+JRA-VAN sanitized environment probe request
+
+Purpose:
+- Diagnose the remaining RACE-only authentication/COM blocker without calling
+  JVInit, JVOpen, JVRTOpen, JVGets or reading provider records.
+- Measure whether the official JV-Link cache on C: is consuming meaningful
+  space after the project archive was moved to D:.
+- Detect 32-bit/64-bit JVDTLab.JVLink COM registrations and the bitness of the
+  existing .venv-jravan Python runtime.
+- Do not read, print, rotate, request or modify any usage key.
+- Do not modify JV-Link settings, registry, cache, SDK installation or service
+  entitlement.
+- Do not inspect 2025-2026 race/provider record contents or filenames.
+- Publish only sanitized aggregate environment metadata.
+
+request=2026-10-13-jravan-sanitized-environment-probe
+provider_access=false
+raw_records_read=false
+usage_key_read=false
