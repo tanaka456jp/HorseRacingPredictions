@@ -1,1 +1,52 @@
-name: JRA-VAN Free Trial RACE Auth Probe\n\non:\n  push:\n    branches:\n      - research/exotic-longshot-race-centered-phase11\n    paths:\n      - "research/jravan_race_auth_probe_request.txt"\n  workflow_dispatch:\n\npermissions:\n  contents: read\n\nconcurrency:\n  group: jravan-free-trial-race-auth-probe\n  cancel-in-progress: true\n\njobs:\n  probe:\n    name: Probe RACE auth without reading raw records\n    runs-on: [self-hosted, Windows]\n    timeout-minutes: 10\n\n    steps:\n      - name: Checkout without deleting local archives\n        uses: actions/checkout@v4\n        with:\n          clean: false\n          persist-credentials: false\n\n      - name: Run sanitized RACE auth probe\n        shell: powershell\n        run: |\n          $ErrorActionPreference = "Stop"\n          $python = Join-Path $PWD ".venv-jravan\Scripts\python.exe"\n          if (-not (Test-Path -LiteralPath $python -PathType Leaf)) {\n            throw ".venv-jravan is missing."\n          }\n          & $python "scripts\probe_jravan_free_trial_race_auth.py" `\n            --output "artifacts\jravan_race_auth_probe.json"\n          if ($LASTEXITCODE -ne 0) {\n            throw "JRA-VAN RACE auth probe failed unexpectedly."\n          }\n\n      - name: Publish sanitized probe only\n        if: always()\n        uses: actions/upload-artifact@v4\n        with:\n          name: jravan-race-auth-probe\n          path: artifacts/jravan_race_auth_probe.json\n          if-no-files-found: error\n          retention-days: 14
+name: JRA-VAN Free Trial RACE Auth Probe
+
+on:
+  push:
+    branches:
+      - research/exotic-longshot-race-centered-phase11
+    paths:
+      - "research/jravan_race_auth_probe_request.txt"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: jravan-free-trial-race-auth-probe
+  cancel-in-progress: true
+
+jobs:
+  probe:
+    name: Probe RACE auth without reading raw records
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout without deleting local archives
+        uses: actions/checkout@v4
+        with:
+          clean: false
+          persist-credentials: false
+
+      - name: Run sanitized RACE auth probe
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          $python = Join-Path $PWD ".venv-jravan\Scripts\python.exe"
+          if (-not (Test-Path -LiteralPath $python -PathType Leaf)) {
+            throw ".venv-jravan is missing."
+          }
+          & $python "scripts\probe_jravan_free_trial_race_auth.py" `
+            --output "artifacts\jravan_race_auth_probe.json"
+          if ($LASTEXITCODE -ne 0) {
+            throw "JRA-VAN RACE auth probe failed unexpectedly."
+          }
+
+      - name: Publish sanitized probe only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jravan-race-auth-probe
+          path: artifacts/jravan_race_auth_probe.json
+          if-no-files-found: error
+          retention-days: 14
