@@ -28,17 +28,6 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def default_archive_root() -> Path:
-    local = os.environ.get("LOCALAPPDATA")
-    if not local:
-        raise RuntimeError("LOCALAPPDATA is required.")
-    return (
-        Path(local)
-        / "HorseRacingPredictions"
-        / "JraVanFreeTrialArchive"
-        / "pre2025"
-    )
-
 
 def main() -> None:
     parser = argparse.ArgumentParser(
