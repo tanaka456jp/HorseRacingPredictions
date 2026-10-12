@@ -39,7 +39,7 @@ jobs:
             throw ".venv-jravan is missing."
           }
           & ".\scripts\run_jravan_race_auth_probe_bounded.ps1" `
-            -Python $python `
+            -PythonPath $python `
             -Output "artifacts\jravan_race_auth_probe.json" `
             -TimeoutSeconds 90
           "exit_code=$LASTEXITCODE" >> $env:GITHUB_OUTPUT
