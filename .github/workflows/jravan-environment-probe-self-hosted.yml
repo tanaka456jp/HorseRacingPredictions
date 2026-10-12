@@ -1,0 +1,46 @@
+name: JRA-VAN Sanitized Environment Probe
+
+on:
+  push:
+    branches:
+      - research/exotic-longshot-race-centered-phase11
+    paths:
+      - "research/jravan_environment_probe_request.txt"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: jravan-sanitized-environment-probe
+  cancel-in-progress: true
+
+jobs:
+  probe:
+    name: Inspect JV-Link architecture and storage metadata only
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout without deleting local archives
+        uses: actions/checkout@v4
+        with:
+          clean: false
+          persist-credentials: false
+
+      - name: Collect sanitized environment metadata
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          $python = Join-Path $PWD ".venv-jravan\Scripts\python.exe"
+          New-Item -ItemType Directory -Path "artifacts" -Force | Out-Null
+          & ".\scripts\probe_jravan_environment.ps1" -PythonPath $python |
+            Set-Content -LiteralPath "artifacts\jravan_environment_probe.json" -Encoding UTF8
+
+      - name: Publish sanitized environment report only
+        uses: actions/upload-artifact@v4
+        with:
+          name: jravan-sanitized-environment-probe
+          path: artifacts/jravan_environment_probe.json
+          if-no-files-found: error
+          retention-days: 14
