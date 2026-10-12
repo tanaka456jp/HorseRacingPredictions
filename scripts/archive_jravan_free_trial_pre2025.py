@@ -16,19 +16,6 @@ from horse_racing_predictions.jravan_free_trial_archive import (
 )
 
 
-def default_archive_root() -> Path:
-    local = os.environ.get("LOCALAPPDATA")
-    if not local:
-        raise RuntimeError(
-            "LOCALAPPDATA is required so raw JRA-VAN data stays outside the repo."
-        )
-    return (
-        Path(local)
-        / "HorseRacingPredictions"
-        / "JraVanFreeTrialArchive"
-        / "pre2025"
-    )
-
 
 def main() -> None:
     parser = argparse.ArgumentParser(
