@@ -20,6 +20,33 @@ from horse_racing_predictions.jravan_free_trial_archive import (
 
 
 
+def assert_fresh_archive_destination(root: Path) -> None:
+    """Do not overwrite a previously verified, partial or migrated archive."""
+    if root.is_symlink():
+        raise RuntimeError("Refusing symlinked JRA-VAN archive destination")
+    if not root.exists():
+        return
+    if not root.is_dir():
+        raise RuntimeError("JRA-VAN destination exists but is not a directory")
+    evidence = (
+        "latest_manifest.json",
+        "latest_manifest_v2.json",
+        "relocated_manifest_v2.json",
+        "migration_receipt.json",
+        "migration_file_hashes.json",
+        "MOVED_TO_D.json",
+    )
+    if any((root / name).exists() for name in evidence):
+        raise RuntimeError(
+            "Existing private archive provenance must remain immutable; "
+            "refuse a provider archive retry into the same destination"
+        )
+    if any(root.glob("*_raw.jsonl")) or any(root.glob("*.partial")):
+        raise RuntimeError(
+            "Existing raw or partial JV-Data detected; refuse to replace it"
+        )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description=(
@@ -56,6 +83,8 @@ def main() -> None:
                 "D drive is available; refusing large JRA-VAN archive "
                 "acquisition outside D drive."
             )
+    # Critical: validate before any provider connection or file write.
+    assert_fresh_archive_destination(archive_root)
     archive_root.mkdir(parents=True, exist_ok=True)
 
     specs = tuple(
