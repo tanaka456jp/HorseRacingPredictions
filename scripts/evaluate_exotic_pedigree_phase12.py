@@ -3,7 +3,6 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import os
 from pathlib import Path
 
 import pandas as pd
@@ -19,6 +18,10 @@ from horse_racing_predictions.jravan_archive_provenance import (
 )
 from horse_racing_predictions.jravan_parser import (
     parse_raw_jsonl,
+)
+from horse_racing_predictions.one_shot_evaluation_receipt import (
+    claim_one_shot,
+    finalize_one_shot,
 )
 
 
@@ -77,6 +80,14 @@ def main() -> None:
     race_sha256 = race_part.sha256
     pedigree_sha256 = _sha256(pedigree_path)
 
+    # The atomic claim must predate all raw parsing and model evaluation.
+    # Interrupted or failed evaluations still consume the one-shot.
+    one_shot_claim = claim_one_shot(
+        receipt_path, phase=12,
+        race_archive_sha256=race_sha256,
+        pedigree_snapshot_sha256=pedigree_sha256,
+    )
+
     history, parse_report = parse_raw_jsonl(
         race_raw,
         jra_only=True,
@@ -126,25 +137,10 @@ def main() -> None:
     )
     output_sha256 = _sha256(args.output)
 
-    receipt = {
-        "status": "phase12_real_evaluation_consumed",
-        "git_sha": os.environ.get("GITHUB_SHA", "local"),
-        "race_archive_sha256": race_sha256,
-        "pedigree_snapshot_sha256": pedigree_sha256,
-        "summary_sha256": output_sha256,
-        "development_pedigree_gate_passed": (
-            bool(result["development_pedigree_gate_passed"])
-        ),
-        "protected_holdout": "2025-2026 untouched",
-        "rerun_allowed": False,
-    }
-    receipt_path.write_text(
-        json.dumps(
-            receipt,
-            ensure_ascii=False,
-            indent=2,
-        ),
-        encoding="utf-8",
+    finalize_one_shot(
+        receipt_path, claim=one_shot_claim,
+        summary_sha256=output_sha256,
+        passed=bool(result["development_pedigree_gate_passed"]),
     )
 
     print(json.dumps({
