@@ -9,3 +9,6 @@ holdout_evaluation=false
 c_drive_delete=false
 
 retry=2026-10-13-after-safe-missing-manifest-diagnostic
+
+follow_verified_moved_to_d_tombstone=true
+retry=2026-10-13-previous-D-archive-hash-audit
