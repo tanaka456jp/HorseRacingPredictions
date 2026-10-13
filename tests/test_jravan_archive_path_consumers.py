@@ -33,9 +33,10 @@ def test_shared_resolver_declares_d_drive_archive_as_primary_windows_location():
         "src/horse_racing_predictions/jravan_archive_paths.py"
     ).read_text(encoding="utf-8")
     assert (
-        'r"D:\\HorseRacingPredictions\\JraVanFreeTrialArchive\\pre2025"'
+        'r"D:\\JRA-VAN\\Data Lab\\archive\\pre2025"'
         in text
     )
     assert 'd_root = Path("D:\\\\")' in text
     assert "if d_root.exists()" in text
+    assert "migration_receipt.json" in text
     assert "return D_DRIVE_ARCHIVE_ROOT" in text
