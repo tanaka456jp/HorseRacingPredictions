@@ -33,6 +33,7 @@ def main() -> None:
     args = parser.parse_args()
 
     report = migrate_archive_to_preferred_storage(
+        destination_root=Path(r"D:\JRA-VAN\Data Lab\archive\pre2025"),
         delete_source_after_verify=args.delete_source_after_verify,
     )
 
