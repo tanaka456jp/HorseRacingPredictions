@@ -32,6 +32,13 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference = "Stop"
+          if ($env:COMPUTERNAME -ne "DESKTOP-MVV1FD4") {
+            throw "Migration may only execute on the confirmed physical PC2."
+          }
+          if ($env:HORSE_RACING_JRAVAN_ARCHIVE_ROOT -and
+              $env:HORSE_RACING_JRAVAN_ARCHIVE_ROOT -ne "D:\JRA-VAN\Data Lab\archive\pre2025") {
+            throw "Unexpected JRA-VAN archive override; refusing to change storage routing."
+          }
           $python = Join-Path $PWD ".venv-jravan\Scripts\python.exe"
           if (-not (Test-Path -LiteralPath $python -PathType Leaf)) {
             throw ".venv-jravan is missing."
