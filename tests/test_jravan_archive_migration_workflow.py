@@ -16,11 +16,12 @@ def test_migration_workflow_requires_d_drive_before_moving():
     )
 
 
-def test_migration_workflow_deletes_source_only_after_verified_runner():
+def test_migration_workflow_keeps_source_after_verified_copy():
     text = WORKFLOW.read_text(encoding="utf-8")
     assert "migrate_jravan_archive_to_d.py" in text
-    assert "--delete-source-after-verify" in text
-    assert "SHA-256 verification" in text
+    assert "--delete-source-after-verify" not in text
+    assert "SHA-256" in text
+    assert "without deleting C source" in text
 
 
 def test_migration_workflow_uploads_only_sanitized_report():
