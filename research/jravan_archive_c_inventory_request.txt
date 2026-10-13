@@ -1,0 +1,9 @@
+request=2026-10-13-pc2-c-archive-pre-migration-sha-audit
+physical_pc=DESKTOP-MVV1FD4
+mode=read-only
+sha256_all_files=true
+compare_success_parts_to_manifest=true
+provider_access=false
+raw_data_upload=false
+holdout_evaluation=false
+c_drive_delete=false
