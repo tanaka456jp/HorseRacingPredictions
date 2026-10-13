@@ -107,8 +107,10 @@ def inspect_jravan_storage_health(
         violations.append("archive_root_not_on_d")
     if d_available and not d_ready:
         violations.append("d_free_space_below_minimum")
-    if raw_on_c:
-        violations.append("legacy_c_raw_provider_files_present")
+    # Verified cutover is safe while the original C-drive evidence remains.
+    # C cleanup requires separate, explicit authorization.
+    if raw_on_c and not archive_on_d:
+        violations.append("legacy_c_raw_provider_files_present_before_cutover")
 
     return JraVanStorageHealth(
         status="ready" if not violations else "blocked",
@@ -155,9 +157,9 @@ def assert_jravan_archive_storage_ready(
             f"archive acquisition: free={health.d_free_bytes}, "
             f"required={health.d_min_free_bytes}"
         )
-    if health.raw_provider_files_on_legacy_c:
+    if health.raw_provider_files_on_legacy_c and not health.archive_on_d_drive:
         raise RuntimeError(
-            "Legacy C-drive raw JRA-VAN files are present; refuse acquisition "
-            "until storage routing is reconciled."
+            "Legacy C-drive raw JRA-VAN files are present before verified D "
+            "cutover; refuse acquisition until storage routing is reconciled."
         )
     return health
