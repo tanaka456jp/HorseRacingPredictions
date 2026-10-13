@@ -28,6 +28,7 @@ def test_phase12_runner_declares_holdout_untouched():
 def test_phase12_workflow_uses_self_hosted_windows_and_uploads_metrics_only():
     text = WORKFLOW.read_text(encoding="utf-8")
     assert "runs-on: [self-hosted, Windows]" in text
+    assert '$env:COMPUTERNAME -ne "DESKTOP-MVV1FD4"' in text
 
     upload = text.split(
         "- name: Publish metrics only",
