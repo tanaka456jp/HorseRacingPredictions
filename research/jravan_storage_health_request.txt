@@ -1,13 +1,11 @@
-JRA-VAN storage health request
-
-Purpose:
-- Verify PC2 C/D free-space after the SHA-verified D-drive migration.
-- Confirm the authoritative private archive resolves to:
-  D:\HorseRacingPredictions\JraVanFreeTrialArchive\pre2025
-- Confirm no large raw provider files reappeared in the legacy C-drive archive.
-- Report only sanitized drive totals/free space, routing state and tombstone state.
-- Do not open JV-Link or read raw provider records.
-- Do not run Phase 12/13 real evaluation.
-- Keep 2025-2026 final holdout untouched.
-
-request=2026-10-12-storage-health-after-d-migration
+JRA-VAN private archive storage verification after official D cutover
+request=2026-10-13-approved-D-storage-health
+source_verification=38384048506
+copy_verification=38384279230
+expected_root=D:\JRA-VAN\Data Lab\archive\pre2025
+legacy_C_tombstone_preserved=true
+previous_D_source_preserved=true
+provider_cache_changed=false
+jvlink_settings_changed=false
+holdout_2025_2026_evaluation=false
+report_sanitized_only=true
