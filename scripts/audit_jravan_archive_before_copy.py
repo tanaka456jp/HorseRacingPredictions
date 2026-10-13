@@ -16,7 +16,7 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def audit(source: Path) -> dict:
+def audit(source: Path, *, storage_label: str = "legacy LOCALAPPDATA private archive") -> dict:
     if source.is_symlink():
         raise RuntimeError("Symlink archive root is prohibited")
     root = source.resolve(strict=True)
@@ -45,7 +45,7 @@ def audit(source: Path) -> dict:
         }
         return {
             "status": "needs_primary_manifest_recovery",
-            "source_storage": "legacy LOCALAPPDATA private archive",
+            "source_storage": storage_label,
             "file_count": len(paths),
             "total_bytes": total,
             "inventory_sha256": inventory_hash.hexdigest(),
@@ -106,7 +106,18 @@ def audit(source: Path) -> dict:
 
 
 def main() -> None:
-    report = audit(legacy_localappdata_archive_root())
+    legacy = legacy_localappdata_archive_root()
+    previous_d = Path(r"D:\HorseRacingPredictions\JraVanFreeTrialArchive\pre2025")
+    if (legacy / "latest_manifest.json").is_file():
+        report = audit(legacy)
+    else:
+        prior_receipt = previous_d / "migration_receipt.json"
+        if not (legacy / "MOVED_TO_D.json").is_file() or not prior_receipt.is_file():
+            raise RuntimeError("Primary manifest and verified prior D archive both missing.")
+        status = json.loads(prior_receipt.read_text(encoding="utf-8"))
+        if status.get("status") != "verified":
+            raise RuntimeError("Old D archive is not accompanied by verified receipt.")
+        report = audit(previous_d, storage_label="previously verified D private archive")
     path = Path("artifacts/jravan_archive_c_inventory_report.json")
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
