@@ -7,3 +7,5 @@ provider_access=false
 raw_data_upload=false
 holdout_evaluation=false
 c_drive_delete=false
+
+retry=2026-10-13-after-safe-missing-manifest-diagnostic
