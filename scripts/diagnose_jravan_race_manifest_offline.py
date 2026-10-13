@@ -27,13 +27,12 @@ def _sha256(path: Path) -> str:
 
 def _safe_code(error: object) -> str:
     message = str(error or "")
-    result = re.search(r"(?:return code|\\()\\s*(-?\\d+)\\b", message)
+    result = re.search(r"return code\s+(-?\d+)", message, re.IGNORECASE)
     if result:
         return str(int(result.group(1)))
-    if re.search(r"-301\\b", message):
-        return "-301"
-    if re.search(r"-1\\b", message):
-        return "-1"
+    for code in (-301, -1):
+        if re.search(rf"(?<!\d){code}(?!\d)", message):
+            return str(code)
     return "not_recorded"
 
 def diagnose(root: Path) -> dict:
