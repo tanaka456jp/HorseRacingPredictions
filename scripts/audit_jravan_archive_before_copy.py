@@ -89,7 +89,7 @@ def audit(source: Path, *, storage_label: str = "legacy LOCALAPPDATA private arc
             quarantined += 1
     return {
         "status": "verified_inventory",
-        "source_storage": "legacy LOCALAPPDATA private archive",
+        "source_storage": storage_label,
         "file_count": len(paths),
         "total_bytes": total,
         "inventory_sha256": inventory_hash.hexdigest(),
