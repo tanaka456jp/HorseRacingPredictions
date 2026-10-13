@@ -1,0 +1,50 @@
+name: JRA-VAN Phase 12-13 Metadata Preflight
+
+on:
+  push:
+    branches:
+      - research/exotic-longshot-race-centered-phase11
+    paths:
+      - "research/jravan_phase12_phase13_preflight_request.txt"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: jravan-phase12-phase13-metadata-preflight
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 15
+    steps:
+      - name: Checkout without deleting private archives
+        uses: actions/checkout@v4
+        with:
+          clean: false
+          persist-credentials: false
+      - name: Verify pre2025 manifest, BLDN and RACE eligibility without evaluation
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          if ($env:COMPUTERNAME -ne "DESKTOP-MVV1FD4") {
+            throw "Read-only preflight must execute on physical PC2."
+          }
+          $python = Join-Path $PWD ".venv-jravan\Scripts\python.exe"
+          if (-not (Test-Path -LiteralPath $python -PathType Leaf)) {
+            throw ".venv-jravan missing"
+          }
+          & $python "scripts\preflight_jravan_phase12_phase13.py"
+          if ($LASTEXITCODE -ne 0) {
+            throw "Read-only Phase 12/13 preflight failed"
+          }
+      - name: Upload sanitized readiness report only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jravan-phase12-phase13-readiness
+          path: artifacts/jravan_phase12_phase13_preflight.json
+          if-no-files-found: warn
+          retention-days: 14
