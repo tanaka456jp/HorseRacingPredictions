@@ -24,6 +24,10 @@ This is not a manifest path, migration, or parquet/parser issue. The official
 validation tool may behave differently from an external Python COM client; that
 difference has **not** been verified on this session.
 
+Use the **64-bit Data Lab validation tool** on PC2. **Do not switch to a paid service.**
+**Do not request 2025 or 2026 data.** These constraints are mandatory for the
+manual setup validation, not just for the project's Python interface.
+
 On physical PC2, when independently confirmed that the existing entitlement is
 still free and personal research use is permitted, a human can use the official
 64-bit JRA-VAN Data Lab validation/sample tool to check the bounded RACE setup
