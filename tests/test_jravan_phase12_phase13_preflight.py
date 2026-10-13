@@ -5,7 +5,14 @@ from pathlib import Path
 import pytest
 
 from horse_racing_predictions.jravan_free_trial_archive import DEFAULT_ARCHIVE_RANGE
-from scripts.preflight_jravan_phase12_phase13 import preflight
+import importlib.util
+
+SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "preflight_jravan_phase12_phase13.py"
+SPEC = importlib.util.spec_from_file_location("jravan_phase12_phase13_preflight", SCRIPT)
+assert SPEC is not None and SPEC.loader is not None
+MODULE = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(MODULE)
+preflight = MODULE.preflight
 
 
 def test_one_shot_preflight_blocks_missing_race_without_consuming_receipts(tmp_path):
