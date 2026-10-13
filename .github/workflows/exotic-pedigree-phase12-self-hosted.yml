@@ -32,6 +32,9 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference = "Stop"
+          if ($env:COMPUTERNAME -ne "DESKTOP-MVV1FD4") {
+            throw "The private provider-bounded research archive resides on PC2; fail closed on any other machine."
+          }
           $python = Join-Path $PWD ".venv-jravan\Scripts\python.exe"
           if (-not (Test-Path -LiteralPath $python -PathType Leaf)) {
             throw ".venv-jravan is missing."
