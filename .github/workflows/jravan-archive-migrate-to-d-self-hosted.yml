@@ -17,7 +17,7 @@ concurrency:
 
 jobs:
   migrate:
-    name: Verify and move private JRA-VAN archive to D drive
+    name: Copy and SHA-verify private JRA-VAN archive to D drive
     runs-on: [self-hosted, Windows]
     timeout-minutes: 120
 
@@ -28,7 +28,7 @@ jobs:
           clean: false
           persist-credentials: false
 
-      - name: Migrate archive after SHA-256 verification
+      - name: Copy archive and verify SHA-256 without deleting C source
         shell: powershell
         run: |
           $ErrorActionPreference = "Stop"
@@ -40,7 +40,6 @@ jobs:
             throw "D drive is unavailable; C-drive archive will remain untouched."
           }
           & $python "scripts\migrate_jravan_archive_to_d.py" `
-            --delete-source-after-verify `
             --report-output "artifacts\jravan_archive_d_drive_migration_report.json"
           if ($LASTEXITCODE -ne 0) {
             throw "JRA-VAN D-drive migration failed; source archive remains on C drive."
