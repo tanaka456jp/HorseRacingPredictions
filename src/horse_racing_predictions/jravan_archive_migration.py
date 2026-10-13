@@ -86,7 +86,10 @@ def _rewrite_manifest_paths(
         "raw_redistribution_allowed": False,
     })
     payload["migration"] = migration
-    manifest_path.write_text(
+    # Preserve both original manifests byte-for-byte as primary evidence.
+    # Only a clearly named derived manifest may contain relocated paths.
+    derived = manifest_path.parent / "relocated_manifest_v2.json"
+    derived.write_text(
         json.dumps(payload, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
@@ -118,6 +121,12 @@ def migrate_archive_to_preferred_storage(
     delete_source_after_verify: bool = False,
     min_free_margin_bytes: int = 1024 * 1024 * 1024,
 ) -> ArchiveMigrationReport:
+    if delete_source_after_verify:
+        raise RuntimeError(
+            "Source deletion is disabled; separately approve C-drive cleanup "
+            "after inspecting the verified migration and space-savings report."
+        )
+
     source = Path(
         source_root
         if source_root is not None
@@ -144,6 +153,8 @@ def migrate_archive_to_preferred_storage(
             "destination archive root already exists; refusing to merge archives"
         )
 
+    if any(path.is_symlink() for path in source.rglob("*")):
+        raise RuntimeError("symlink found inside source archive; refusing migration")
     source_files = _files(source)
     if not source_files:
         raise RuntimeError("source JRA-VAN archive contains no files")
@@ -207,12 +218,7 @@ def migrate_archive_to_preferred_storage(
                     destination_root=destination,
                 )
 
-        pedigree_report = staging / "pedigree_snapshot_report.json"
-        if pedigree_report.is_file():
-            _rewrite_pedigree_report_path(
-                pedigree_report,
-                destination_root=destination,
-            )
+        # Keep the copied pedigree report immutable, just like source manifests.
 
         staging.rename(destination)
 
@@ -253,38 +259,6 @@ def migrate_archive_to_preferred_storage(
             json.dumps(asdict(report), ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
-
-        if delete_source_after_verify:
-            shutil.rmtree(source)
-            source.mkdir(parents=True, exist_ok=True)
-            tombstone = source / "MOVED_TO_D.json"
-            tombstone.write_text(
-                json.dumps(
-                    {
-                        "status": "moved_after_sha256_verification",
-                        "destination": (
-                            r"D:\HorseRacingPredictions\JraVanFreeTrialArchive\pre2025"
-                        ),
-                        "destination_manifest_sha256": manifest_hash,
-                        "large_provider_files_removed_from_c_drive": True,
-                        "protected_holdout": "2025-2026 untouched",
-                    },
-                    ensure_ascii=False,
-                    indent=2,
-                ),
-                encoding="utf-8",
-            )
-            report = ArchiveMigrationReport(
-                **{
-                    **asdict(report),
-                    "source_deleted_after_verify": True,
-                    "source_tombstone_written": True,
-                }
-            )
-            receipt_path.write_text(
-                json.dumps(asdict(report), ensure_ascii=False, indent=2),
-                encoding="utf-8",
-            )
 
         return report
     except Exception:
