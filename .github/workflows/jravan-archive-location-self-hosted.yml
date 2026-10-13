@@ -29,7 +29,7 @@ jobs:
         shell: powershell
         run: |
           & ".\scripts\inspect_jravan_archive_locations.ps1"
-          if ($LASTEXITCODE -ne 0) { throw "Storage location probe failed" }
+          if (-not $?) { throw "Storage location probe failed" }
       - name: Publish sanitized inventory
         if: always()
         uses: actions/upload-artifact@v4
