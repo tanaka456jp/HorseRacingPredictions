@@ -77,6 +77,8 @@ def test_verified_migration_rewrites_manifest_to_destination_and_keeps_source_by
     source = tmp_path / "c-archive"
     destination = tmp_path / "d-archive"
     _, digest = _make_source(source)
+    original_manifest = (source / "latest_manifest.json").read_bytes()
+    original_v2 = (source / "latest_manifest_v2.json").read_bytes()
 
     report = migrate_archive_to_preferred_storage(
         source_root=source,
@@ -89,6 +91,9 @@ def test_verified_migration_rewrites_manifest_to_destination_and_keeps_source_by
     assert report.source_deleted_after_verify is False
     assert source.is_dir()
     assert destination.is_dir()
+    assert (destination / "latest_manifest.json").read_bytes() == original_manifest
+    assert (destination / "latest_manifest_v2.json").read_bytes() == original_v2
+    assert (destination / "relocated_manifest_v2.json").is_file()
 
     provenance = validate_local_pre2025_archive(
         destination,
@@ -100,7 +105,7 @@ def test_verified_migration_rewrites_manifest_to_destination_and_keeps_source_by
     ).resolve()
 
     migrated_v2 = json.loads(
-        (destination / "latest_manifest_v2.json").read_text(
+        (destination / "relocated_manifest_v2.json").read_text(
             encoding="utf-8"
         )
     )
@@ -113,31 +118,20 @@ def test_verified_migration_rewrites_manifest_to_destination_and_keeps_source_by
     )
 
 
-def test_delete_source_occurs_only_after_verified_destination(tmp_path):
+def test_source_delete_is_explicitly_rejected_before_copy(tmp_path):
+    import pytest
+
     source = tmp_path / "c-archive"
     destination = tmp_path / "d-archive"
-    _, digest = _make_source(source)
+    _make_source(source)
 
-    report = migrate_archive_to_preferred_storage(
-        source_root=source,
-        destination_root=destination,
-        delete_source_after_verify=True,
-        min_free_margin_bytes=0,
-    )
-
-    assert report.source_deleted_after_verify is True
-    assert report.source_tombstone_written is True
-    assert not (source / "bldn_raw.jsonl").exists()
-    assert (source / "MOVED_TO_D.json").is_file()
-    assert (destination / "bldn_raw.jsonl").is_file()
-    assert hashlib.sha256(
-        (destination / "bldn_raw.jsonl").read_bytes()
-    ).hexdigest() == digest
-
-    receipt = json.loads(
-        (destination / "migration_receipt.json").read_text(
-            encoding="utf-8"
+    with pytest.raises(RuntimeError, match="Source deletion is disabled"):
+        migrate_archive_to_preferred_storage(
+            source_root=source,
+            destination_root=destination,
+            delete_source_after_verify=True,
+            min_free_margin_bytes=0,
         )
-    )
-    assert receipt["source_deleted_after_verify"] is True
-    assert receipt["protected_holdout"] == "2025-2026 untouched"
+
+    assert (source / "bldn_raw.jsonl").is_file()
+    assert not destination.exists()
