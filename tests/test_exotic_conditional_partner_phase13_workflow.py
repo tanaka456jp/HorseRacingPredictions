@@ -174,6 +174,7 @@ def test_phase13_runner_never_references_current_or_combined_history():
 def test_phase13_workflow_uploads_metrics_only():
     text = WORKFLOW.read_text(encoding="utf-8")
     assert "runs-on: [self-hosted, Windows]" in text
+    assert '$env:COMPUTERNAME -ne "DESKTOP-MVV1FD4"' in text
     assert (
         "research/exotic_conditional_partner_phase13_execute_request.txt"
         in text
