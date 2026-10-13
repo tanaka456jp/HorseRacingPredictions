@@ -193,6 +193,7 @@ def migrate_archive_to_preferred_storage(
             )
 
         verified_bytes = 0
+        file_checksums: list[dict[str, str | int]] = []
         for relative in sorted(source_files, key=lambda value: str(value)):
             left = source_files[relative]
             right = staged_files[relative]
@@ -200,11 +201,23 @@ def migrate_archive_to_preferred_storage(
                 raise RuntimeError(
                     f"file size mismatch during migration: {relative}"
                 )
-            if _sha256(left) != _sha256(right):
+            source_hash = _sha256(left)
+            if source_hash != _sha256(right):
                 raise RuntimeError(
                     f"SHA-256 mismatch during migration: {relative}"
                 )
             verified_bytes += left.stat().st_size
+            file_checksums.append({
+                "relative_path": relative.as_posix(),
+                "size_bytes": int(left.stat().st_size),
+                "sha256": source_hash,
+            })
+
+        # Local private verification inventory, never included in GitHub Artifacts.
+        (staging / "migration_file_hashes.json").write_text(
+            json.dumps(file_checksums, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
 
         for manifest_name in (
             "latest_manifest.json",
