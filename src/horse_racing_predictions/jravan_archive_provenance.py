@@ -59,9 +59,14 @@ def validate_local_pre2025_archive(
     root = root_input.resolve(strict=True)
 
     if manifest_name is None:
+        relocated = root / "relocated_manifest_v2.json"
         preferred = root / "latest_manifest_v2.json"
         fallback = root / "latest_manifest.json"
-        manifest_input = preferred if preferred.is_file() else fallback
+        manifest_input = (
+            relocated if relocated.is_file()
+            else preferred if preferred.is_file()
+            else fallback
+        )
     else:
         manifest_input = root / manifest_name
     if manifest_input.is_symlink():
