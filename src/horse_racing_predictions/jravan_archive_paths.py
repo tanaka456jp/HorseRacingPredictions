@@ -13,7 +13,7 @@ from typing import Mapping
 
 ARCHIVE_ROOT_ENV = "HORSE_RACING_JRAVAN_ARCHIVE_ROOT"
 D_DRIVE_ARCHIVE_ROOT = Path(
-    r"D:\HorseRacingPredictions\JraVanFreeTrialArchive\pre2025"
+    r"D:\JRA-VAN\Data Lab\archive\pre2025"
 )
 
 
@@ -46,7 +46,18 @@ def default_archive_root(
     # Keep this check deliberately simple and local. On non-Windows CI the
     # drive root does not exist, so tests naturally fall back to LOCALAPPDATA.
     d_root = Path("D:\\")
+    # Never switch readers to a merely prepared or partially copied directory.
+    # The verified migration receipt is written last, after all hashes match.
     if d_root.exists():
-        return D_DRIVE_ARCHIVE_ROOT
+        receipt = D_DRIVE_ARCHIVE_ROOT / "migration_receipt.json"
+        relocated = D_DRIVE_ARCHIVE_ROOT / "relocated_manifest_v2.json"
+        if receipt.is_file() and relocated.is_file():
+            try:
+                import json
+                status = json.loads(receipt.read_text(encoding="utf-8"))
+                if status.get("status") == "verified":
+                    return D_DRIVE_ARCHIVE_ROOT
+            except (OSError, ValueError):
+                pass
 
     return legacy_localappdata_archive_root(values)
