@@ -37,8 +37,27 @@ def audit(source: Path) -> dict:
     source_manifest = root / "latest_manifest.json"
     v2_manifest = root / "latest_manifest_v2.json"
     if not source_manifest.is_file():
-        raise RuntimeError("Primary source manifest is missing")
-    source_payload = json.loads(source_manifest.read_text(encoding="utf-8"))
+        candidates = {
+            "archive_parent": root.parent / "latest_manifest.json",
+            "app_archive_parent": root.parent.parent / "latest_manifest.json",
+            "runner_sanitized_artifact": Path.cwd() / "artifacts" / "jravan_free_trial_archive_manifest.json",
+            "runner_primary_manifest": Path.cwd() / "artifacts" / "latest_manifest.json",
+        }
+        return {
+            "status": "needs_primary_manifest_recovery",
+            "source_storage": "legacy LOCALAPPDATA private archive",
+            "file_count": len(paths),
+            "total_bytes": total,
+            "inventory_sha256": inventory_hash.hexdigest(),
+            "primary_manifest_present": False,
+            "reassessed_manifest_exists": v2_manifest.is_file(),
+            "candidate_manifest_locations": {
+                label: target.is_file() for label, target in candidates.items()
+            },
+            "c_drive_data_modified": False,
+            "provider_access_attempted": False,
+            "protected_holdout": "2025-2026 untouched",
+        }
     preferred = v2_manifest if v2_manifest.is_file() else source_manifest
     payload = json.loads(preferred.read_text(encoding="utf-8"))
     if payload.get("raw_redistribution_allowed") is not False:
@@ -92,6 +111,8 @@ def main() -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps(report, ensure_ascii=False, indent=2))
+    if report["status"] != "verified_inventory":
+        raise SystemExit(2)
 
 
 if __name__ == "__main__":
