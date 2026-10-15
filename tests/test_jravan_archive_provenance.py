@@ -329,6 +329,7 @@ def test_validator_prefers_reassessed_v2_manifest_when_present(tmp_path):
             "output_sha256": digest,
             "output_path": str(raw),
             "research_use_allowed": True,
+            "last_file_timestamp": "20241299999999",
         }],
     }
     (root / "latest_manifest_v2.json").write_text(
