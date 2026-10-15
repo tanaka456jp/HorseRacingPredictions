@@ -159,6 +159,25 @@ def validate_local_pre2025_archive(
                 f"research use: {dataspec}"
             )
 
+        # The provider-side requested range is necessary but not sufficient:
+        # a successful part may still have a 2025+ file timestamp. Never
+        # trust a self-attested research_use_allowed=True without this
+        # independent, metadata-only holdout check. Provider setup sentinels
+        # can use 99-filled month/day fields; validate the 14-digit year
+        # envelope, not calendar dates.
+        provider_stamp = part.get("last_file_timestamp")
+        if (
+            not isinstance(provider_stamp, str)
+            or len(provider_stamp) != 14
+            or not provider_stamp.isascii()
+            or not provider_stamp.isdecimal()
+            or not (2017 <= int(provider_stamp[:4]) <= 2024)
+        ):
+            raise RuntimeError(
+                f"required JRA-VAN dataspec has no verified pre-2025 "
+                f"provider file timestamp: {dataspec}"
+            )
+
         expected_hash = str(
             part.get("output_sha256", "")
         ).strip().lower()
