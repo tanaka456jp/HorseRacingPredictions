@@ -14,6 +14,9 @@ from .exotic_top3_research import (
     add_top3_race_interaction_features,
     top3_outcomes,
 )
+from .exotic_phase13_unconditional_diagnostic import (
+    summarize_unconditional_trio_diagnostic,
+)
 from .feature_window import align_history_to_training_start
 from .features import build_pre_race_features
 from .market_aware_ranker_v11 import (
@@ -609,7 +612,24 @@ def _evaluate_period(
     bootstrap = paired_race_bootstrap_partner_selection(
         evidence,
     )
+    # Supplementary historical diagnostic only: denominator includes all
+    # shortlisted races, including failed anchors (which cannot win a trio).
+    # This does not change the frozen Phase 13 conditional model or gate.
+    unconditional = summarize_unconditional_trio_diagnostic(
+        evidence,
+        evaluated_races=int(frame["race_id"].nunique()),
+        nominated_candidate_races=int(
+            metadata["races_with_longshot_anchor_candidate"]
+        ),
+        anchor_top3_races=int(
+            metadata["nominated_anchor_top3_count"]
+        ),
+        conditional_partner_races=int(
+            metadata["conditional_partner_races"]
+        ),
+    )
     return {
+        "unconditional_trio_diagnostic": unconditional,
         "period_start": str(
             frame["race_date"].min().date()
         ),
