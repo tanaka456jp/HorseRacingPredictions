@@ -156,6 +156,15 @@ def test_phase13_full_synthetic_e2e_respects_chronology_and_improves_partner_sel
         assert evaluation["conditional_partner_races"] > 0
         assert evaluation["exact_partner_pair_hit_rate_delta"] > 0
         assert evaluation["partner_recall_at_2_delta"] > 0
+        diagnostic = evaluation["unconditional_trio_diagnostic"]
+        assert diagnostic["evaluated_races"] == evaluation["conditional_partner_races"]
+        assert diagnostic["nominated_candidate_races"] == evaluation["races_with_longshot_anchor_candidate"]
+        assert diagnostic["challenger_exact_trio_hit_rate_per_evaluated_race"] == (
+            evaluation["challenger_exact_partner_pair_hit_rate"]
+        )
+        assert diagnostic["historical_final_win_odds_proxy_only"] is True
+        assert diagnostic["pre_purchase_exotic_odds_verified"] is False
+        assert diagnostic["expected_value_calculated"] is False
         bootstrap = evaluation["paired_bootstrap_vs_baseline"]
         assert bootstrap["exact_pair_hit_improvement_support"] >= 0.80
         assert bootstrap["recall_at_2_improvement_support"] >= 0.80
