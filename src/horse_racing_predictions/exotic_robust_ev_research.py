@@ -54,6 +54,8 @@ def _digest(value: Any, name: str) -> str:
 def _prediction_check(
     quote: Mapping[str, Any], prediction: Mapping[str, Any], decision_at: str
 ) -> tuple[Decimal, Decimal]:
+    if not isinstance(quote, Mapping):
+        raise ValueError("quote must be a mapping")
     if not isinstance(prediction, Mapping) or set(prediction) != _PREDICTION_FIELDS:
         raise ValueError("prediction evidence fields are missing or unexpected")
     if prediction["race_id"] != quote.get("race_id"):
