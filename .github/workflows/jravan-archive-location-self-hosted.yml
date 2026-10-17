@@ -1,0 +1,40 @@
+name: JRA-VAN Archive Location Discovery
+
+on:
+  push:
+    branches:
+      - research/exotic-longshot-race-centered-phase11
+    paths:
+      - "research/jravan_archive_location_request.txt"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: jravan-archive-location-discovery
+  cancel-in-progress: false
+
+jobs:
+  locate:
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 20
+    steps:
+      - name: Checkout without cleaning archives
+        uses: actions/checkout@v4
+        with:
+          clean: false
+          persist-credentials: false
+      - name: Probe only predetermined C and D paths
+        shell: powershell
+        run: |
+          & ".\scripts\inspect_jravan_archive_locations.ps1"
+          if (-not $?) { throw "Storage location probe failed" }
+      - name: Publish sanitized inventory
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jravan-storage-locations
+          path: artifacts/jravan_storage_locations.json
+          if-no-files-found: warn
+          retention-days: 14

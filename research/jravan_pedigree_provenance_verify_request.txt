@@ -1,0 +1,13 @@
+request=2026-10-13-pc2-bldn-pedigree-snapshot-provenance-only
+machine=DESKTOP-MVV1FD4
+verified_migration_run=38384279230
+storage_health_run=38384932029
+archive_root=D:\JRA-VAN\Data Lab\archive\pre2025
+read_only=true
+verify_bldn_sha256=true
+verify_snapshot_sha256=true
+verify_pre2025_created_date_boundary=true
+new_snapshot_generation=false
+phase12_phase13_one_shot=false
+holdout_2025_2026=false
+raw_upload=false

@@ -1,0 +1,95 @@
+name: Phase 11 bounded JRA-VAN plan (Self-hosted)
+
+on:
+  workflow_dispatch:
+    inputs:
+      jvopen_range:
+        description: "Provider-bounded START-END range; must stay entirely pre-2025"
+        required: true
+        type: string
+        default: "20170101000000-20249999999999"
+      execute:
+        description: "Open JV-Link and export local RA/SE data (default false)"
+        required: true
+        type: boolean
+        default: false
+      zero_cost_entitlement_confirmed:
+        description: "Confirm current local JV-Link entitlement is zero-cost"
+        required: true
+        type: boolean
+        default: false
+      personal_research_rights_confirmed:
+        description: "Confirm official terms reviewed for local personal research"
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: phase11-bounded-jravan-self-hosted
+  cancel-in-progress: false
+
+jobs:
+  bounded-plan:
+    name: Plan or explicitly run bounded pre-2025 acquisition
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout without deleting local ignored data
+        uses: actions/checkout@v4
+        with:
+          clean: false
+          persist-credentials: false
+
+      - name: Validate plan and explicit execution gates
+        shell: powershell
+        env:
+          INPUT_RANGE: ${{ inputs.jvopen_range }}
+          INPUT_EXECUTE: ${{ inputs.execute }}
+          INPUT_ZERO_COST: ${{ inputs.zero_cost_entitlement_confirmed }}
+          INPUT_RESEARCH_RIGHTS: ${{ inputs.personal_research_rights_confirmed }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $python = Join-Path $PWD ".venv-jravan\Scripts\python.exe"
+          if (-not (Test-Path -LiteralPath $python -PathType Leaf)) {
+            throw ".venv-jravan is missing; do not substitute another provider/runtime."
+          }
+
+          $args = @(
+            "scripts\phase11_jravan_bounded_export.py",
+            "--range", $env:INPUT_RANGE,
+            "--plan-output", "artifacts\phase11_jravan_bounded_plan.json",
+            "--output", "data\jravan\phase11_bounded\race_raw.jsonl",
+            "--summary", "artifacts\phase11_jravan_bounded_summary.json"
+          )
+
+          if ($env:INPUT_EXECUTE -eq "true") {
+            if ($env:INPUT_ZERO_COST -ne "true") {
+              throw "Execution blocked: zero-cost entitlement was not explicitly confirmed."
+            }
+            if ($env:INPUT_RESEARCH_RIGHTS -ne "true") {
+              throw "Execution blocked: personal research rights were not explicitly confirmed."
+            }
+            $args += "--execute"
+            $args += "--zero-cost-entitlement-confirmed"
+            $args += "--personal-research-rights-confirmed"
+          }
+
+          & $python @args
+          if ($LASTEXITCODE -ne 0) {
+            throw "Phase 11 bounded plan/export failed."
+          }
+
+      - name: Publish sanitized plan/evidence only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase11-bounded-jravan-sanitized-evidence
+          path: |
+            artifacts/phase11_jravan_bounded_plan.json
+            artifacts/phase11_jravan_bounded_summary.json
+          if-no-files-found: warn
+          retention-days: 14

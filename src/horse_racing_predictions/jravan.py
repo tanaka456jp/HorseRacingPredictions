@@ -168,38 +168,72 @@ class JvLinkClient:
             return None
         return int(method())
 
-    def open_race(
+    def open_data(
         self,
         *,
+        dataspec: str,
         from_time: str,
         option: int = 4,
     ) -> JvOpenResult:
         if not self.initialized:
             self.initialize()
-        if len(from_time) != 14 or not from_time.isdigit():
+        if not isinstance(dataspec, str) or not dataspec.strip():
+            raise ValueError("dataspec must be a nonempty string")
+        normalized_spec = dataspec.strip().upper()
+        if not normalized_spec.isalnum():
+            raise ValueError("dataspec must be alphanumeric")
+
+        value = str(from_time).strip()
+        single = len(value) == 14 and value.isdigit()
+        bounded = (
+            len(value) == 29
+            and value[14] == "-"
+            and value[:14].isdigit()
+            and value[15:].isdigit()
+        )
+        if not (single or bounded):
             raise ValueError(
-                "from_time must be YYYYMMDDhhmmss (14 digits)"
+                "from_time must be YYYYMMDDhhmmss or "
+                "YYYYMMDDhhmmss-YYYYMMDDhhmmss"
             )
         if option not in (1, 2, 3, 4):
             raise ValueError("option must be 1, 2, 3 or 4")
 
         result = _normalize_open_result(
             self.jvlink.JVOpen(
-                "RACE",
-                from_time,
+                normalized_spec,
+                value,
                 int(option),
                 0,
                 0,
                 "",
             )
         )
+        if result.return_code == -1:
+            # JVOpen -1 means no applicable data for the requested parameters.
+            # It is not a transport/authentication failure. Mark the session as
+            # opened so JVClose is still issued before the next JVOpen.
+            self.opened = True
+            return result
         if result.return_code < 0:
             raise JraVanApiError(
                 "JVOpen failed with return code "
-                f"{result.return_code}"
+                f"{result.return_code} for dataspec={normalized_spec}"
             )
         self.opened = True
         return result
+
+    def open_race(
+        self,
+        *,
+        from_time: str,
+        option: int = 4,
+    ) -> JvOpenResult:
+        return self.open_data(
+            dataspec="RACE",
+            from_time=from_time,
+            option=option,
+        )
 
     def open_realtime(
         self,

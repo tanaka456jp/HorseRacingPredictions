@@ -1,0 +1,51 @@
+name: JRA-VAN BLDN Pedigree Provenance Verify
+
+on:
+  push:
+    branches:
+      - research/exotic-longshot-race-centered-phase11
+    paths:
+      - "research/jravan_pedigree_provenance_verify_request.txt"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: jravan-bldn-pedigree-provenance-verification
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Verify immutable BLDN pedigree and snapshot SHA-256
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 45
+    steps:
+      - name: Checkout without deleting private archives
+        uses: actions/checkout@v4
+        with:
+          clean: false
+          persist-credentials: false
+      - name: Verify existing pedigree snapshot and BLDN provenance only
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          if ($env:COMPUTERNAME -ne "DESKTOP-MVV1FD4") {
+            throw "Pedigree provenance verification restricted to physical PC2"
+          }
+          $python = Join-Path $PWD ".venv-jravan\Scripts\python.exe"
+          if (-not (Test-Path -LiteralPath $python -PathType Leaf)) {
+            throw ".venv-jravan missing"
+          }
+          & $python "scripts\verify_jravan_pedigree_provenance.py"
+          if ($LASTEXITCODE -ne 0) {
+            throw "Existing BLDN/snapshot provenance could not be proven"
+          }
+      - name: Publish sanitized SHA and counts only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jravan-pedigree-provenance-sanitized
+          path: artifacts/jravan_pedigree_provenance_verification.json
+          if-no-files-found: warn
+          retention-days: 30

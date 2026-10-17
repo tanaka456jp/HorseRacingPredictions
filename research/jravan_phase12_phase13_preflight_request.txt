@@ -1,0 +1,11 @@
+request=2026-10-13-phase12-phase13-preregistered-metadata-readiness
+requires_migration_run=38384279230
+approved_root=D:\JRA-VAN\Data Lab\archive\pre2025
+mode=metadata-only
+do_not_evaluate_2023_2024=true
+do_not_read_2025_2026_holdout=true
+check_manifest_range=true
+check_research_use_allowed=true
+check_receipts=true
+provider_access=false
+raw_data_upload=false

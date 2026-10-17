@@ -1,0 +1,21 @@
+JRA-VAN official validation D-drive storage preparation request
+
+Purpose:
+- Create the D-drive parent directory used for the one manual official 64-bit
+  Data Lab validation-tool RACE check.
+- Avoid adding a large RACE setup download to the C drive if the official tool
+  succeeds.
+
+Allowed action:
+- Create D:\JRA-VAN\Data Lab if it does not already exist.
+- Verify D free space is at least 20 GiB.
+
+Forbidden:
+- Do not change JV-Link settings or registry.
+- Do not move/delete the existing C:\ProgramData\JRA-VAN\Data Lab cache.
+- Do not call JVInit/JVOpen/JVRTOpen.
+- Do not read provider records or usage keys.
+- Do not purchase/renew any service.
+- Do not touch 2025-2026 holdout data.
+
+request=2026-10-13-jravan-validation-d-storage-prepare

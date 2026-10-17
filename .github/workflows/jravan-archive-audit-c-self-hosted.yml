@@ -1,0 +1,52 @@
+name: JRA-VAN C Archive Inventory Audit
+
+on:
+  push:
+    branches:
+      - research/exotic-longshot-race-centered-phase11
+    paths:
+      - "research/jravan_archive_c_inventory_request.txt"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: jravan-c-archive-inventory
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 90
+    steps:
+      - name: Checkout without cleaning local data
+        uses: actions/checkout@v4
+        with:
+          clean: false
+          persist-credentials: false
+
+      - name: Read-only hash and manifest audit on physical PC2
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          if ($env:COMPUTERNAME -ne "DESKTOP-MVV1FD4") {
+            throw "Inventory audit requires physical PC2."
+          }
+          $python = Join-Path $PWD ".venv-jravan\Scripts\python.exe"
+          if (-not (Test-Path -LiteralPath $python -PathType Leaf)) {
+            throw ".venv-jravan is missing"
+          }
+          & $python "scripts\audit_jravan_archive_before_copy.py"
+          if ($LASTEXITCODE -ne 0) {
+            throw "C-drive archive verification failed; no files were copied."
+          }
+
+      - name: Upload sanitized hashes and counts only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jravan-c-archive-inventory-sanitized
+          path: artifacts/jravan_archive_c_inventory_report.json
+          if-no-files-found: warn
+          retention-days: 14
