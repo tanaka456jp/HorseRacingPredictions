@@ -6,8 +6,12 @@ A structurally valid quote is NOT a verified, lawful, executable price.
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
+import re
 from typing import Any, Mapping
+
+
+_ODDS_DECIMAL = re.compile(r"(?:0|[1-9][0-9]{0,11})(?:\.[0-9]{1,8})?\Z")
 
 
 def _instant(value: Any) -> datetime:
@@ -87,12 +91,12 @@ def inspect_exotic_prebet_quote(
         unknown_fields = set(quote) - allowed_fields
         if unknown_fields:
             raise ValueError("unrecognized quote fields are forbidden")
-        try:
-            odds = Decimal(str(quote["decimal_odds"]))
-        except (KeyError, InvalidOperation, ValueError):
-            raise ValueError("invalid decimal_odds") from None
-        if not odds.is_finite() or odds <= 1:
-            raise ValueError("decimal_odds must be finite and greater than 1")
+        odds_text = quote.get("decimal_odds")
+        if type(odds_text) is not str or not _ODDS_DECIMAL.fullmatch(odds_text):
+            raise ValueError("decimal_odds must be bounded canonical decimal text")
+        odds = Decimal(odds_text)
+        if not Decimal(1) < odds <= Decimal(1_000_000):
+            raise ValueError("decimal_odds outside synthetic quote bounds")
         observed = _instant(quote.get("observed_at"))
         captured = _instant(quote.get("captured_at"))
         decision = _instant(decision_at)
