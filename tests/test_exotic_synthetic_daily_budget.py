@@ -24,7 +24,10 @@ def attempt(id="T1", race="S1", **changes):
     return result
 
 
-def day(attempts=None, **changes):
+_DEFAULT_ATTEMPTS = object()
+
+
+def day(attempts=_DEFAULT_ATTEMPTS, **changes):
     result = {
         "synthetic_only": True,
         "max_race_stake_yen": 200,
@@ -32,7 +35,7 @@ def day(attempts=None, **changes):
         "attempts": (
             [attempt("T1", "S1"), attempt("T2", "S1"),
              attempt("T3", "S2")]
-            if attempts is None else attempts
+            if attempts is _DEFAULT_ATTEMPTS else attempts
         ),
     }
     result.update(changes)
