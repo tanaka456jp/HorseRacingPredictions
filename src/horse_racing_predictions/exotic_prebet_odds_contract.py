@@ -26,7 +26,10 @@ def _instant(value: Any) -> datetime:
         raise ValueError("invalid ISO-8601 timestamp") from exc
     if parsed.tzinfo is None or parsed.utcoffset() is None:
         raise ValueError("timestamp must be timezone-aware")
-    return parsed.astimezone(timezone.utc)
+    try:
+        return parsed.astimezone(timezone.utc)
+    except OverflowError as exc:
+        raise ValueError("timestamp outside UTC representable range") from exc
 
 
 def _combination(value: Any, bet_type: str) -> tuple[int, int, int]:
