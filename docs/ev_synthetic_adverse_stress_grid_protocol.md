@@ -30,6 +30,10 @@ Phase12/13 one-shot evaluation are part of this note. An independent official
 free-rights review and timestamped purchase-available quote evidence remain
 prerequisites for any real-world EV claim.
 
-The separately produced local synthetic candidate and tests are **not**
-integrated by this documentation-only commit. CI success for this document
-cannot validate those uncommitted files.
+The previously rejected candidate has now been recovered as
+`src/horse_racing_predictions/exotic_synthetic_stress_grid.py` with dedicated
+synthetic regression tests in `tests/test_exotic_synthetic_stress_grid.py`
+on Draft PR #141. Only a CI run for the corresponding code/test commit
+is evidence that the implementation passes; a document-only run is not.
+The output never approves EV or staking, even when stressed fictional profit
+remains positive.
