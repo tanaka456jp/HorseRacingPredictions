@@ -62,13 +62,27 @@ def audit_synthetic_fill_price_bounds(case: Mapping[str, Any]) -> dict[str, Any]
     adjusted_odds = odds * (1 - haircut)
     net_per_fill = Decimal(stake) * (p * adjusted_odds - 1) - per_fill
     net_per_attempt = fill * net_per_fill - per_attempt
+    # Undefined when no hypothetical attempts fill or adjusted payout is zero.
+    break_even = (
+        (1 + per_fill / Decimal(stake) + per_attempt / (fill * Decimal(stake)))
+        / adjusted_odds
+        if fill > 0 and adjusted_odds > 0 else None
+    )
     return {
         "status": "synthetic_sensitivity_only",
         "net_ev_yen_per_filled_ticket": str(net_per_fill),
         "net_ev_yen_per_attempt": str(net_per_attempt),
+        "break_even_conditional_probability_under_assumptions": (
+            str(break_even) if break_even is not None else None
+        ),
+        "break_even_attainable_under_assumptions": (
+            break_even is not None and break_even <= 1
+        ),
         "assumed_adjusted_payout_multiple": str(adjusted_odds),
         "conditional_on_fill_probability_assumed": True,
         "fill_fraction_empirically_verified": False,
+        "daily_aggregate_cap_verified": False,
+        "eligible_opportunity_coverage_verified": False,
         "quote_rights_verified": False,
         "purchase_price_verified": False,
         "calibration_verified": False,
@@ -79,6 +93,8 @@ def audit_synthetic_fill_price_bounds(case: Mapping[str, Any]) -> dict[str, Any]
         "limitations": (
             "Synthetic scenario only. Fill probability and conditional win "
             "probability are unverified; pari-mutuel payout haircuts are not "
-            "executable odds or a price guarantee. No positive-EV claim."
+            "executable odds or a price guarantee. Single-ticket cap checks "
+            "do not establish aggregate daily capital limits or opportunity "
+            "coverage. No positive-EV claim."
         ),
     }
