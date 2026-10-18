@@ -121,3 +121,52 @@ def test_allowlisted_quote_remains_human_review_only():
     assert result["status"] == "human_review_required"
     assert result["blockers"] == []
     assert result["canonical_combination_key"] == "SYNTHETIC-RACE:trio:2-5-9"
+
+
+# Canonical timestamp regressions: synthetic metadata only, never EV approval.
+@pytest.mark.parametrize("bad_timestamp", [
+    "2024-12-31T14:01:00+09:99",
+    "2024-12-31T14:01:00+09:60",
+    "2024-12-31T14:01:00+24:00",
+    "2024-12-31T14:01:00+09:00:30",
+    "2024-12-31T14:01:00+0900",
+    "2024-12-31 14:01:00+09:00",
+    "2024-12-31T14:01:00+09:00junk",
+    "2024-12-31T14:01:00.1234567+09:00",
+])
+def test_noncanonical_observation_timestamp_fails_closed(bad_timestamp):
+    result = inspect(synthetic_quote(observed_at=bad_timestamp))
+    assert result["status"] == "blocked"
+    assert result["canonical_combination_key"] is None
+
+
+@pytest.mark.parametrize("good_timestamp", [
+    "2024-12-31T14:01:00+09:00",
+    "2024-12-31T05:01:00Z",
+    "2024-12-31T05:01:00.123456+00:00",
+])
+def test_canonical_observation_timestamp_remains_review_only(good_timestamp):
+    result = inspect(synthetic_quote(observed_at=good_timestamp))
+    assert result["status"] == "human_review_required"
+
+
+@pytest.mark.parametrize("field", [
+    "observed_at", "captured_at", "scheduled_post_time", "decision_at",
+])
+@pytest.mark.parametrize("bad_time", [
+    "2024-12-31T14:01:00+09:99",
+    "2024-12-31T14:01:00+24:00",
+    "2024-12-31T14:01:00+0900",
+    "2024-12-31T14:01:00.1234567+09:00",
+    "2024-12-31T14:01:00+09:00junk",
+])
+def test_noncanonical_timestamp_in_any_evidence_field_fails_closed(field, bad_time):
+    quote = synthetic_quote()
+    decision_at = DECISION
+    if field == "decision_at":
+        decision_at = bad_time
+    else:
+        quote[field] = bad_time
+    result = inspect(quote, decision_at=decision_at)
+    assert result["status"] == "blocked"
+    assert result["canonical_combination_key"] is None
