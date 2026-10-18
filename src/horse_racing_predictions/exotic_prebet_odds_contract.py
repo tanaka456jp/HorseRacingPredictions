@@ -12,12 +12,18 @@ from typing import Any, Mapping
 
 
 _ODDS_DECIMAL = re.compile(r"(?:0|[1-9][0-9]{0,11})(?:\.[0-9]{1,8})?\Z")
+_TIMESTAMP = re.compile(
+    r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}"
+    r"(?:\.[0-9]{1,6})?(?:Z|[+-](?:[01][0-9]|2[0-3]):[0-5][0-9])\Z"
+)
 
 
 def _instant(value: Any) -> datetime:
     if not isinstance(value, str) or not value.strip():
         raise ValueError("timestamp must be a nonempty ISO-8601 string")
     text = value.strip()
+    if not _TIMESTAMP.fullmatch(text):
+        raise ValueError("timestamp must use canonical ISO-8601 timezone offset")
     if text.endswith("Z"):
         text = text[:-1] + "+00:00"
     try:
