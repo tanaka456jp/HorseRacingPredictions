@@ -41,7 +41,7 @@ def _stake(value: Any, *, allow_zero: bool) -> int:
 
 
 def _synthetic_id(value: Any) -> str:
-    if type(value) is not str or not _IDENT.fullmatch(value):
+    if type(value) is not str or not _IDENTIFIER.fullmatch(value):
         raise ValueError("synthetic S-number race ID required")
     return value
 
@@ -83,7 +83,7 @@ def audit_synthetic_coverage_gate(case: Mapping[str, Any]) -> dict[str, Any]:
         if not date(2023, 1, 1) <= race_day <= date(2024, 12, 31):
             raise ValueError("protected holdout or unsupported race date")
         status = item["quote_status"]
-        if status not in _STATUSES:
+        if type(status) is not str or status not in _STATUSES:
             raise ValueError("unknown quote evidence status")
 
         decision = _instant(item["decision_at"])
@@ -139,7 +139,7 @@ def audit_synthetic_coverage_gate(case: Mapping[str, Any]) -> dict[str, Any]:
         encountered.add(rid)
         for prefix in ("strategy", "market"):
             action = row[f"{prefix}_status"]
-            if action not in _EXECUTION:
+            if type(action) is not str or action not in _EXECUTION:
                 raise ValueError("unknown synthetic execution status")
             stake = _stake(
                 row[f"{prefix}_attempted_stake_yen"],
