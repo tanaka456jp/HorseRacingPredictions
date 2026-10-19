@@ -113,3 +113,42 @@ historical research ROI of -1.90% is not an SNS effectiveness estimate.
 At the existing one-week economic Go/No-Go deadline, a project without
 verified no-cost rights and genuine forward executable-EV evidence remains
 a **NO-GO recommendation candidate**; preserve artifacts for human review.
+
+## Independent JMA XML weather-feed scope review (2026-10-19 JST)
+
+**Source status: CONDITIONAL PUBLIC-WEATHER CANDIDATE, not an approved
+racing/odds feed and not evidence of incremental betting EV.** This is
+a read-only official-policy review; no Atom feed or racing data was collected.
+
+- JMA expressly offers public PULL-type disaster-weather XML Atom feeds for
+  automated processing, without registration. Its ordinary website content
+  is subject to Public Data Terms v1.0 absent special rights notices;
+  attribution and identification of processing are required. Check each
+  product's specific notes and meteorological-law limits before any feature
+  collection. Sources:
+  https://xml.kishou.go.jp/xmlpull.html
+  https://www.jma.go.jp/jma/kishou/info/coment.html
+- The high-frequency feed is **updated each minute**, but only guarantees
+  listing of at least the latest **10 minutes of incoming messages**.
+  The long-term feed updates **hourly** and lists several days. Publication
+  time, actual first-seen time and decision time must remain distinct.
+  Outages/delays are expressly possible. JMA says it blocks IPs causing
+  **10 GB or more downloads per day**; no repeated/bulk downloads.
+- The published message list (as of 2026-08-06) contains prefectural
+  weather forecasts, regional time-series forecasts, warnings, and heavy
+  rain alerts, among other *disaster-weather bulletins*. It does **not**
+  establish a live, racecourse-specific precipitation/going observation or
+  direct race/horse ID linkage. No claim of such granularity is allowed.
+  Source: https://xml.kishou.go.jp/xmllist.pdf
+- Operational value remains speculative: regional weather alerts can be
+  stale, geographically coarse, already reflected in market prices, or
+  uninformative for actual track going. Any future prospective test must
+  record source-product identity, rights/version, original bulletin time,
+  immutable local first-seen time, affected area mapping, decision cutoff,
+  missingness and market-matched economic delta. No retrospective first-seen
+  reconstruction is permissible.
+- **Economic priority unchanged:** the legal no-cost real race/outcome path
+  and independently timestamped purchase-available odds remain blocked.
+  A lawful weather feature alone cannot pass the five executable-EV gates.
+  Do not activate collection, amend frozen OOS/Paper thresholds, access
+  protected holdout or extend the one-week economic deadline.
