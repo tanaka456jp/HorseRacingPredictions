@@ -80,7 +80,7 @@ def test_abstained_comparator_is_retained_as_zero_stake():
 
 @pytest.mark.parametrize("override", [
     {"race_id": "202310070101"},
-    {"race_id": "SYN-9999"},
+    {"race_id": "SYN-0002"},
     {"race_date": "2025-01-01"},
     {"race_date": "2026-01-01"},
     {"race_date": "2023-02-30"},
