@@ -167,3 +167,10 @@ files, final holdout, and automation until the user directs otherwise.
 **At preparation:** `MEASUREMENT_BLOCKED` — no established
 purchase-executable positive EV and no approved free path with complete
 evidence. Recommendations are reversible upon new independent proof.
+
+## 2026-10-19 cycle 68: official final-odds caveat and executable ROI audit
+
+- JRA's own odds glossary states that *even the odds displayed after betting closes* can change after a subsequent scratch, and actual payouts can differ from announced final odds in cases such as dead heats. Therefore **neither an early displayed quote nor the announced final odds is a guaranteed executable/settled price**. Source: https://www.jra.go.jp/kouza/yougo/w406.html (official JRA glossary; independently reviewed 2026-10-19).
+- Source-code read-only audit at PR #141 head `5c9837be32995df09b75f5a408b89b499b62c065`: `residual_shadow_paper.py` computes settled Paper ROI from payout and settled stake, and checks `observed_at <= decision_time < scheduled_post_time`. `ledger.py` records `observed_at` but the inspected snapshot schema does not separately prove first collection time or purchase-channel cutoff. These are *limits of the inspected Paper path*, not a claim that no other modules perform stress or synthetic checks.
+- This means **a positive Paper ROI, if observed later, is not by itself executable net ROI**: independent evidence is still needed for lawful source rights, actual first-seen time, purchase cutoff, quote slippage, fees, refused/nonfilled opportunities and all abstentions. Do not weaken existing 500-race/200-settlement gate or retroactively fill timestamps.
+- This cycle's actual approved pre-purchase quotes, prospective races, attempted/nonfilled bets, settled economic net ROI, independent market comparison, day-cluster lower bound and SNS-on/off incremental net return are **UNVERIFIED, not zero**. No new live data was collected. Classification remains `MEASUREMENT_BLOCKED / NO_GO_CANDIDATE`; a technically public JRA odds webpage is not authorization for automated ingestion or machine-learning retention.
