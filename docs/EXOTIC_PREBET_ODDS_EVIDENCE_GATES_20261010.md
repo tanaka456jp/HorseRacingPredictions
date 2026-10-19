@@ -37,3 +37,21 @@ On 2026-10-10 the existing-file update was attempted twice on PR #141 with a fre
 4. No final payouts as purchase-time odds; no changes to Forward Paper parameters; no live wagering.
 
 Next cycle: re-read PR head and quote-contract blob SHA; safely retry the same minimal allowlist change and add its synthetic regression tests **only if** the guarded write path permits. Keep Phase 11 Draft and unmerged pending independent source provenance.
+
+
+## 2026-10-20 read-only reconciliation: historical schema gap already fixed
+
+The 2026-10-10 section above is a **historical snapshot**, not a current open defect.
+Direct inspection of PR #141 at `6a031c69ac7f0ee376cf83153c82b32e0bee0cdb`
+confirmed the explicit 11-field allowlist is **already implemented** in
+`src/horse_racing_predictions/exotic_prebet_odds_contract.py` by commit
+`8b72bf30b3bf02accb0e6a7b91bb45f94800db29` (2026-10-09 UTC).
+`tests/test_exotic_prebet_odds_contract.py` already contains the twelve
+unknown-field rejections and a valid quote remaining human-review-only.
+The latest CI at this audit was SUCCESS:
+https://github.com/tanaka456jp/HorseRacingPredictions/actions/runs/39269907605
+
+**Do not implement the same allowlist or duplicate its synthetic tests again.**
+The code still does **not** prove independently authorized free quote rights,
+actual first-seen timestamps, purchase-channel cutoff, fills, costs or positive
+net EV. No new acquisition or OOS evaluation is authorized by this correction.
