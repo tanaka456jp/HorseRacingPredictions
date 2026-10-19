@@ -105,6 +105,48 @@ A new future prospective cohort would require a separately established
 and reviewed data/split policy; the task may not silently redefine
 the protected final holdout.
 
+
+## 2026-10-19 independent provider check: no approved no-cost acquisition path
+
+- **Official JRA-VAN terms** (Article 7) restrict use of obtained data to
+  personal/private purposes absent provider authorization. Article 9 requires
+  the official JV-Link path for Data Lab server access. Neither a visible
+  webpage nor a free software client independently grants automated collection,
+  external AI transfer, retention or bulk-archive permission:
+  https://jra-van.jp/info/rule.html
+- **2026-10-18 developer-staff clarification:** a public support response
+  explicitly identifies *bulk acquisition and accumulation during the free
+  trial* among prohibited-use examples, and does not provide a blanket
+  authorization for external-cloud/AI training workflows. This materially
+  strengthens the no-go evidence for using a free trial to rebuild a bulk
+  archive. Do **not** launch trial bulk acquisition, even with a bounded
+  historical date range, without separate affirmative provider approval:
+  https://developer.jra-van.jp/t/topic/964
+- **Official 2026-08-25 staff response:** realtime odds supplied through
+  JVRTOpen are available for only one week. Historical final odds cannot
+  reconstruct an executable pre-purchase trio/trifecta quote:
+  https://developer.jra-van.jp/t/topic/979
+- **Cost:** standard Data Lab subscription is JPY 2,090/month, not a free
+  continuing feed. Current PC2 trial entitlement has **not** been independently
+  verified. Do not inspect keys or perform authentication probes:
+  https://jra-van.jp/dlb/
+- **Single-win alternative:** existing Paper infrastructure and historical
+  win-odds fields make it simpler technically, but do not establish an
+  authorized, timestamped, pre-cutoff executable price source or a profitable
+  settled OOS cohort. Treat the win market as **MEASUREMENT_BLOCKED** too.
+
+**Evidence snapshot at this check:** authorized decision-time quote count,
+prospective eligible race count, nonfills, actual net ROI/EV, independent
+market delta, day-cluster uncertainty and settled Paper sample are all
+**UNVERIFIED**, not zero. The historical -1.90% research ROI is a separate
+retrospective baseline and is not a current executable ROI estimate.
+
+**Decision:** `MEASUREMENT_BLOCKED` / `NO_GO_CANDIDATE`. Unless a new,
+independently verified no-cost rights/provenance path and sufficient genuine
+forward evidence become available by the existing one-week deadline, recommend
+freezing further model/software development. Preserve repo, Draft PR, raw local
+files, final holdout, and automation until the user directs otherwise.
+
 ## Independent source references
 
 - Official JRA-VAN Data Lab current standard subscription:
