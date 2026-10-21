@@ -45,10 +45,17 @@ def sample():
 def test_handoff_always_requires_an_independent_publication_approval(tmp_path):
     input_file = tmp_path / "input.json"
     input_file.write_text(json.dumps(sample(), ensure_ascii=False), encoding="utf-8")
-    article, receipt_path = _module.render_handoff(input_file, tmp_path)
+    article, receipt_path = _module.render_handoff(input_file, tmp_path, "1111111111111111111111111111111111111111")
     receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    assert receipt["schemaVersion"] == 2
+    assert receipt["producerRepo"] == "tanaka456jp/HorseRacingPredictions"
+    assert receipt["producerCommit"] == "1111111111111111111111111111111111111111"
+    assert receipt["rendererContract"] == "odds-free-friday-article-v1"
     assert receipt["articleSha256"] == sha256(article.read_bytes()).hexdigest()
     assert receipt["sourceManifestSha256"] == sha256(input_file.read_bytes()).hexdigest()
+    expected_manifest = json.dumps(sample()["expected_race_ids"], ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    assert receipt["raceManifestSha256"] == sha256(expected_manifest).hexdigest()
+    assert receipt["modelFrozenAt"] == sample()["model_frozen_at"]
     assert receipt["episodeId"] == "20261023"
     assert receipt["raceCount"] == 1
     assert "穴馬1頭（非市場型の伏兵候補）：4番 架空馬4" in article.read_text(encoding="utf-8")
@@ -62,7 +69,7 @@ def test_handoff_always_requires_an_independent_publication_approval(tmp_path):
         assert receipt[key] is False
     assert receipt["syntheticOnly"] is True
     with pytest.raises(ValueError, match="already exists"):
-        _module.render_handoff(input_file, tmp_path)
+        _module.render_handoff(input_file, tmp_path, "1111111111111111111111111111111111111111")
 
 
 def test_rejects_market_input_without_writing_episode(tmp_path):
@@ -79,4 +86,14 @@ def test_rejects_missing_output_directory(tmp_path):
     input_file = tmp_path / "input.json"
     input_file.write_text(json.dumps(sample()), encoding="utf-8")
     with pytest.raises(ValueError, match="existing local"):
-        _module.render_handoff(input_file, tmp_path / "absent")
+        _module.render_handoff(input_file, tmp_path / "absent", "1111111111111111111111111111111111111111")
+
+
+def test_rejects_missing_or_invalid_producer_commit(tmp_path):
+    input_file = tmp_path / "input.json"
+    input_file.write_text(json.dumps(sample()), encoding="utf-8")
+    with pytest.raises(ValueError, match="producer commit"):
+        _module.render_handoff(input_file, tmp_path, "")
+    with pytest.raises(ValueError, match="producer commit"):
+        _module.render_handoff(input_file, tmp_path, "abc")
+    assert not list(tmp_path.glob("*.md"))
