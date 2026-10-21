@@ -23,7 +23,7 @@ _ALLOWED_FACTORS = frozenset({
     "騎手", "枠順", "脚質・展開", "馬場・天候", "休養・ローテ",
 })
 _ID = re.compile(r"JRA-[0-9]{8}-[0-9A-Za-z-]{1,24}\Z")
-_HORSE = frozenset({"name", "number", "strength", "factors"})
+_HORSE = frozenset({"name", "number", "strength", "upside_score", "upside_signals", "factors"})
 _FACTOR = frozenset({"category", "finding", "source_url", "observed_at"})
 _RACE = frozenset({
     "race_id", "title", "course", "post_at", "status", "horses",
@@ -85,7 +85,12 @@ def _source_url(value: Any) -> str:
 
 
 def render_friday_jra_article(doc: Mapping[str, Any]) -> str:
-    """Generate reviewable Markdown, or fail closed on any unverified race."""
+    """Generate reviewable Markdown with 3 distinct picks and 1 non-market outsider.
+
+    The outsider is *not* an inferred low-popularity runner: it is the
+    highest independently frozen condition-upside signal among horses
+    outside the top-three strength picks. All evidence must predate issue.
+    """
     if not isinstance(doc, Mapping) or set(doc) != _DOC:
         _fail("article envelope mismatch")
     _no_market_data(doc)
@@ -125,7 +130,7 @@ def render_friday_jra_article(doc: Mapping[str, Any]) -> str:
         _fail("observed races do not exactly match frozen manifest")
 
     header = [
-        f"# {issue}発行｜JRA週末レース・オッズ非依存の上位3着予想",
+        f"# {issue}発行｜JRA週末レース・オッズ非依存の上位3着予想＋穴馬1頭",
         "",
         f"予想基準日：{issue}（金曜日）　モデル識別子：{model}",
         "",
@@ -135,6 +140,10 @@ def render_friday_jra_article(doc: Mapping[str, Any]) -> str:
         "",
         "日曜日の枠順が金曜時点で未確定の場合は**暫定予想**です。"
         "枠順の確定を装った表示は行いません。",
+        "",
+        "穴馬は市場人気の低さを示す意味ではなく、上位3着候補の外から、"
+        "条件がかみ合う場合の上振れ余地を別軸で評価した**伏兵候補**です。"
+        "人気・オッズの低さを確認した馬ではありません。",
         "",
     ]
     for race in sorted(races, key=lambda r: (r["post_at"], r["race_id"])):
@@ -178,6 +187,17 @@ def render_friday_jra_article(doc: Mapping[str, Any]) -> str:
             strength = h["strength"]
             if type(strength) not in (float, int) or not isfinite(strength) or strength <= 0:
                 _fail("strictly positive finite precomputed strength required")
+            upside_score = h["upside_score"]
+            if (type(upside_score) not in (float, int)
+                    or not isfinite(upside_score) or upside_score <= 0):
+                _fail("strictly positive finite frozen condition-upside score required")
+            upside_signals = h["upside_signals"]
+            if (not isinstance(upside_signals, list)
+                    or not 2 <= len(upside_signals) <= 5
+                    or any(type(tag) is not str or tag not in _ALLOWED_FACTORS
+                           for tag in upside_signals)
+                    or len(set(upside_signals)) != len(upside_signals)):
+                _fail("two to five distinct approved upside factor categories required")
             factors = h["factors"]
             if not isinstance(factors, list) or not 3 <= len(factors) <= 10:
                 _fail("each runner needs three or more independent factor categories")
@@ -194,16 +214,40 @@ def render_friday_jra_article(doc: Mapping[str, Any]) -> str:
                     _fail("post-publication/post-race evidence cannot enter forecast")
                 finding = _limit_text(f["finding"], "factor finding", 220)
                 evidence.append((category, finding, _source_url(f["source_url"])))
-            scored.append((float(strength), name, number, evidence))
+            if not set(upside_signals).issubset(categories):
+                _fail("upside signals require the same horse's verified factor evidence")
+            scored.append((float(strength), name, number, evidence,
+                           float(upside_score), frozenset(upside_signals)))
         scored.sort(key=lambda v: (-v[0], v[1]))
         label = "土曜・確定馬番" if status == "confirmed" else "日曜・枠番未確定の暫定予想"
         header.extend([f"## {title}（{course}／{label}）", "", f"レースID：{rid}", ""])
-        for rank, (strength, name, number, factors) in enumerate(scored[:3], start=1):
+        for rank, (strength, name, number, factors, _upside, _signals) in enumerate(scored[:3], start=1):
             horse_label = f"{number}番 {name}" if number is not None else name
             header.extend([f"### {rank}着予想：{horse_label}", ""])
             for category, finding, url in factors:
                 header.append(f"- **{category}**：{finding}（[情報源]({url})）")
             header.append("")
+        # The separate pick must never overlap the three ordered predictions.
+        # Every entrant has an upside assessment made without market features.
+        outsider = sorted(scored[3:], key=lambda v: (-v[4], -v[0], v[1]))[0]
+        _, outsider_name, outsider_number, outsider_factors, _, outsider_signals = outsider
+        outsider_label = (f"{outsider_number}番 {outsider_name}"
+                          if outsider_number is not None else outsider_name)
+        header.extend([f"### 穴馬1頭（非市場型の伏兵候補）：{outsider_label}", ""])
+        header.append("モデルの通常評価では上位3頭の外ですが、以下の条件がかみ合う際の"
+                      "上振れ要因を別軸で評価しました。")
+        header.append("")
+        for category, finding, url in outsider_factors:
+            if category in outsider_signals:
+                header.append(f"- **{category}・上振れ根拠**：{finding}（[情報源]({url})）")
+            else:
+                header.append(f"- **{category}**：{finding}（[情報源]({url})）")
+        header.append("")
+        header.append(
+            "※ 伏兵とは条件変化により好走し得る候補の意味です。"
+            "人気薄・高配当・プラス期待値という意味ではありません。"
+        )
+        header.append("")
         header.append(
             "※ 相対強度は既定モデルの事前出力です。上の1～3着は強度順の仮説であり、"
             "厳密な着順別確率や3連単的中確率を表したものではありません。"
@@ -214,7 +258,9 @@ def render_friday_jra_article(doc: Mapping[str, Any]) -> str:
         "- 採点根拠：市場・人気・オッズを除いた事前に凍結済みモデルの相対強度。",
         "- 表示対象：当週開催予定として事前に確認できた全JRAレース。欠損時は本稿を公開しません。",
         "- 日曜は金曜時点の暫定順位です。出走取消・枠番確定・天候変更等で前提が変わります。",
-        "- 予想の独立評価：実際のレース結果と照合し、着順一致率・上位3頭一致率を検証します。",
+        "- 予想の独立評価：実際のレース結果と照合し、着順一致率・上位3頭一致率に加え、"
+        "別枠の穴馬候補の3着以内率も記録します。",
+        "- 穴馬候補は上位3着予想と重複させず、全出走馬の非市場由来の条件上振れ評価から選びます。",
         "- 投票行動やオッズを利用した予想ではなく、購入を勧めるものでもありません。",
         "",
     ])
