@@ -298,12 +298,19 @@ def run_residual_v12_forward_paper(
             counters["eligible_rows"] += 1
             race_id = str(row.race_id)
             horse_id = str(row.horse_id)
-            source = str(
-                getattr(row, "source", "") or "JRA-VAN 0B31"
-            )
-            source_reference = str(
-                getattr(row, "source_reference", "") or ""
-            )
+            raw_source = getattr(row, "source", None)
+            raw_reference = getattr(row, "source_reference", None)
+            if any(
+                not isinstance(value, str)
+                or not value.strip()
+                or value.strip().lower() in {"nan", "none", "null"}
+                for value in (raw_source, raw_reference)
+            ):
+                raise ValueError(
+                    "Paper odds require explicit source and source_reference"
+                )
+            source = raw_source.strip()
+            source_reference = raw_reference.strip()
             probability = float(row.residual_v12_probability)
             decimal_odds = float(row.decimal_odds)
 
