@@ -20,7 +20,8 @@ def race(id, name, when, status):
         "post_at": when, "status": status,
         "horses": [
             {"name": f"架空馬{i}", "number": i if status == "confirmed" else None,
-             "strength": float(10 - i), "factors": deepcopy(factors)}
+             "strength": float(10 - i), "upside_score": float(i),
+             "upside_signals": ["距離適性", "脚質・展開"], "factors": deepcopy(factors)}
             for i in range(1, 5)
         ],
     }
@@ -51,6 +52,11 @@ def test_fictional_article_is_ordered_and_sunday_is_provisional():
     assert "3着予想：3番 架空馬3" in text
     assert "日曜・枠番未確定の暫定予想" in text
     assert "1着予想：架空馬1" in text
+    assert text.count("### 穴馬1頭（非市場型の伏兵候補）：") == 2
+    assert "穴馬1頭（非市場型の伏兵候補）：4番 架空馬4" in text
+    assert "穴馬1頭（非市場型の伏兵候補）：架空馬4" in text
+    assert "上振れ根拠" in text
+    assert "人気薄・高配当・プラス期待値という意味ではありません" in text
     assert "人気順位・投票数・オッズ" in text
 
 
@@ -66,6 +72,7 @@ def test_fictional_article_is_ordered_and_sunday_is_provisional():
     {"popularity": 1},
     {"market_rank": 1},
     {"final_payout": "1000"},
+    {"market_upside_score": 0.9},
 ])
 def test_invalid_envelope_or_market_data_blocks(patch):
     doc = fixture()
@@ -96,6 +103,13 @@ def test_any_odds_popularity_feature_is_rejected():
     lambda doc: doc["races"][0]["horses"][1].update(name="架空馬1"),
     lambda doc: doc["races"][0]["horses"][1].update(number=1),
     lambda doc: doc["races"][0]["horses"][1].update(strength=float("nan")),
+    lambda doc: doc["races"][0]["horses"][3].update(upside_score=float("inf")),
+    lambda doc: doc["races"][0]["horses"][3].update(upside_score=0),
+    lambda doc: doc["races"][0]["horses"][3].update(upside_score=True),
+    lambda doc: doc["races"][0]["horses"][3].update(upside_signals=["距離適性"]),
+    lambda doc: doc["races"][0]["horses"][3].update(upside_signals=["距離適性", "距離適性"]),
+    lambda doc: doc["races"][0]["horses"][3].update(upside_signals=["距離適性", "天候"]),
+    lambda doc: doc["races"][0]["horses"][3].update(upside_signals=["距離適性", "オッズ"]),
     lambda doc: doc["races"][0]["horses"][0]["factors"][0].update(observed_at="2026-10-24T11:00:00+09:00"),
     lambda doc: doc["races"][0]["horses"][0]["factors"][0].update(category="オッズ"),
     lambda doc: doc["races"][0]["horses"][0]["factors"][1].update(category="近走内容"),
@@ -121,3 +135,51 @@ def test_no_publish_permission_or_external_data_acquisition():
     text = render_friday_jra_article(doc)
     assert "自動投稿承認" not in text
     assert "source_url" not in text
+
+
+def test_outsider_selected_by_independent_condition_upside_not_fourth_strength():
+    doc = fixture()
+    race = doc["races"][0]
+    additional = deepcopy(race["horses"][-1])
+    additional.update(name="架空馬5", number=5, strength=1.0,
+                      upside_score=99.0)
+    race["horses"].append(additional)
+    text = render_friday_jra_article(doc)
+    assert "### 穴馬1頭（非市場型の伏兵候補）：5番 架空馬5" in text
+    assert "### 穴馬1頭（非市場型の伏兵候補）：4番 架空馬4" not in text
+    assert "### 3着予想：3番 架空馬3" in text
+    assert text.count("### 穴馬1頭（非市場型の伏兵候補）：") == 2
+
+
+def test_outsider_never_duplicates_top_three_even_if_upside_highest():
+    doc = fixture()
+    doc["races"][0]["horses"][0]["upside_score"] = 10000.0
+    text = render_friday_jra_article(doc)
+    assert "### 穴馬1頭（非市場型の伏兵候補）：4番 架空馬4" in text
+    assert "### 穴馬1頭（非市場型の伏兵候補）：1番 架空馬1" not in text
+
+
+def test_outsider_requires_uncontaminated_evidence_for_every_runner():
+    doc = fixture()
+    del doc["races"][1]["horses"][3]["upside_score"]
+    with pytest.raises(ForecastInputError):
+        render_friday_jra_article(doc)
+
+
+def test_outsider_tie_determinism_and_no_market_based_tie_break():
+    doc = fixture()
+    race = doc["races"][0]
+    another = deepcopy(race["horses"][-1])
+    another.update(name="架空馬5", number=5, strength=1.0,
+                   upside_score=race["horses"][-1]["upside_score"])
+    race["horses"].append(another)
+    text = render_friday_jra_article(doc)
+    assert "### 穴馬1頭（非市場型の伏兵候補）：4番 架空馬4" in text
+    assert text == render_friday_jra_article(deepcopy(doc))
+
+
+def test_outsider_market_input_is_rejected_even_when_only_hidden_in_factors():
+    doc = fixture()
+    doc["races"][0]["horses"][3]["factors"][0]["payout_bonus"] = 2
+    with pytest.raises(ForecastInputError):
+        render_friday_jra_article(doc)
