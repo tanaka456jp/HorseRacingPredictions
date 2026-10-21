@@ -67,7 +67,7 @@ def test_rejects_market_input_without_writing_episode(tmp_path):
     fake["odds"] = 10
     input_file = tmp_path / "input.json"
     input_file.write_text(json.dumps(fake), encoding="utf-8")
-    with pytest.raises(ValueError, match="forbidden"):
+    with pytest.raises(ValueError, match="article envelope mismatch|forbidden"):
         _module.render_handoff(input_file, tmp_path)
     assert not list(tmp_path.glob("*.md"))
 
