@@ -34,7 +34,8 @@ def sample():
             "status": "confirmed",
             "horses": [
                 {"name": "架空馬" + str(n), "number": n,
-                 "strength": 8.0 - n, "factors": factors}
+                 "strength": 8.0 - n, "upside_score": float(n),
+                 "upside_signals": ["近走内容", "距離適性"], "factors": factors}
                 for n in range(1, 5)
             ],
         }],
@@ -50,6 +51,8 @@ def test_handoff_always_requires_an_independent_publication_approval(tmp_path):
     assert receipt["sourceManifestSha256"] == sha256(input_file.read_bytes()).hexdigest()
     assert receipt["episodeId"] == "20261023"
     assert receipt["raceCount"] == 1
+    assert "穴馬1頭（非市場型の伏兵候補）：4番 架空馬4" in article.read_text(encoding="utf-8")
+    assert receipt["outsiderPerRace"] == 1
     assert receipt["status"] == "REVIEW_REQUIRED_NOT_APPROVED_FOR_AUTOPUBLISH"
     for key in (
         "sourceRightsIndependentlyVerified", "fullWeekendManifestVerified",
