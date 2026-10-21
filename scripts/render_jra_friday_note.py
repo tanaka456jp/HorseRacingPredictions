@@ -61,6 +61,8 @@ def render_handoff(input_path: Path, output_dir: Path) -> tuple[Path, Path]:
         "generatedAt": document["generated_at"],
         "modelId": document["model_id"],
         "raceCount": len(document["races"]),
+        "outsiderPerRace": 1,
+        "outsiderPolicy": "independent_pre_market_condition_upside_outside_top3",
         "articleSha256": sha256(article.encode("utf-8")).hexdigest(),
         "sourceManifestSha256": sha256(raw).hexdigest(),
         "jraOnly": True,
