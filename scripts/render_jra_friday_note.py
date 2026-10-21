@@ -12,6 +12,7 @@ from hashlib import sha256
 import json
 from pathlib import Path
 import sys
+import re
 
 from horse_racing_predictions.odds_free_friday_article import (
     ForecastInputError,
@@ -38,7 +39,12 @@ def _write_atomic(path: Path, text: str) -> None:
             pass
 
 
-def render_handoff(input_path: Path, output_dir: Path) -> tuple[Path, Path]:
+_COMMIT = re.compile(r"^[0-9a-f]{40}$")
+
+
+def render_handoff(input_path: Path, output_dir: Path, producer_commit: str) -> tuple[Path, Path]:
+    if not isinstance(producer_commit, str) or not _COMMIT.fullmatch(producer_commit):
+        raise ValueError("exact 40-hex producer commit is required")
     raw = input_path.read_bytes()
     if len(raw) > 2_000_000:
         raise ValueError("Friday article input is too large")
@@ -53,18 +59,26 @@ def render_handoff(input_path: Path, output_dir: Path) -> tuple[Path, Path]:
     if article_path.exists() or receipt_path.exists():
         raise ValueError("Friday edition already exists; never silently overwrite")
 
+    race_manifest_bytes = json.dumps(
+        document["expected_race_ids"], ensure_ascii=False, separators=(",", ":")
+    ).encode("utf-8")
     receipt = {
-        "schemaVersion": 1,
+        "schemaVersion": 2,
+        "producerRepo": "tanaka456jp/HorseRacingPredictions",
+        "producerCommit": producer_commit,
+        "rendererContract": "odds-free-friday-article-v1",
         "seriesId": "jra-weekly-top3-oddsfree",
         "issueDate": issue,
         "episodeId": episode,
         "generatedAt": document["generated_at"],
         "modelId": document["model_id"],
+        "modelFrozenAt": document["model_frozen_at"],
         "raceCount": len(document["races"]),
         "outsiderPerRace": 1,
         "outsiderPolicy": "independent_pre_market_condition_upside_outside_top3",
         "articleSha256": sha256(article.encode("utf-8")).hexdigest(),
         "sourceManifestSha256": sha256(raw).hexdigest(),
+        "raceManifestSha256": sha256(race_manifest_bytes).hexdigest(),
         "jraOnly": True,
         "syntheticOnly": True,
         "sourceRightsIndependentlyVerified": False,
@@ -88,9 +102,13 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--input-json", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
+    parser.add_argument("--producer-commit", required=True,
+                        help="exact 40-hex HorseRacingPredictions commit used to render")
     args = parser.parse_args()
     try:
-        article, receipt = render_handoff(args.input_json, args.output_dir)
+        article, receipt = render_handoff(
+            args.input_json, args.output_dir, args.producer_commit
+        )
     except (ValueError, OSError, KeyError, ForecastInputError, json.JSONDecodeError) as exc:
         print("BLOCKED: " + str(exc), file=sys.stderr)
         return 2
