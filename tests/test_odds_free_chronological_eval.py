@@ -152,3 +152,66 @@ def test_model_does_not_claim_expected_value_without_valid_pre_race_odds():
     assert result.positiveExpectedValueDemonstrated is False
     assert "ROI" not in result.__dict__
     assert "win_odds" not in result.__dict__
+
+
+
+@pytest.mark.parametrize("leaked", [
+    "finish_position", "is_winner", "last_3f", "corner_4",
+    "race_date", "race_id", "prize_money",
+    "unknown_future_finish", "win_odds", "popularity",
+])
+def test_cannot_inject_actual_outcomes_or_unapproved_features(leaked):
+    sample = _sample()
+    # Model payload might be constructed by other callers. Even when it
+    # contains perfectly predictive label information, the public metrics
+    # must fail rather than show an artificially impressive result.
+    bad = replace(sample, features=sample.features + (leaked,))
+    with pytest.raises(ValueError, match="leakage|unrecognized"):
+        _eval(bad)
+
+
+def test_duplicate_model_feature_names_are_not_accepted():
+    sample = _sample()
+    bad = replace(sample, features=sample.features + (sample.features[0],))
+    with pytest.raises(ValueError, match="duplicate"):
+        _eval(bad)
+
+
+def test_claimed_winner_label_must_match_actual_finish_rank():
+    sample = _sample()
+    tampered = sample.frame.copy()
+    target = tampered.index[tampered["race_id"].eq("FICTIONAL-012")][0]
+    tampered.loc[target, "is_winner"] = 1 - int(tampered.loc[target, "is_winner"])
+    with pytest.raises(ValueError, match="inconsistent"):
+        _eval(replace(sample, frame=tampered))
+
+
+def test_out_of_field_ranks_and_noninteger_ranks_are_rejected():
+    sample = _sample()
+    for invalid in (0, 2.5, 99):
+        bad = sample.frame.copy()
+        row = bad.index[bad["race_id"].eq("FICTIONAL-010") &
+                        bad["finish_position"].eq(4)][0]
+        bad.loc[row, "finish_position"] = invalid
+        with pytest.raises(ValueError, match="valid ranks"):
+            _eval(replace(sample, frame=bad))
+
+
+def test_forecast_day_feature_independent_of_its_own_finished_result():
+    # This only checks the existing feature builder's point-in-time use;
+    # later days may legitimately use earlier races' results.
+    original = _race_history()
+    sample = _sample(original)
+    altered = original.copy()
+    target_day = "2021-06-13"
+    altered.loc[altered["race_date"].eq(target_day), "finish_position"] = [4, 3, 2, 1]
+    changed = _sample(altered)
+    pre = sample.frame.loc[
+        sample.frame["race_date"].eq(pd.Timestamp(target_day)),
+        list(sample.features),
+    ].reset_index(drop=True)
+    post = changed.frame.loc[
+        changed.frame["race_date"].eq(pd.Timestamp(target_day)),
+        list(sample.features),
+    ].reset_index(drop=True)
+    pd.testing.assert_frame_equal(pre, post)
