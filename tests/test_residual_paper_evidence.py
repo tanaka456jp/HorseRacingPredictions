@@ -362,3 +362,31 @@ def test_settlement_evidence_audit_flags_missing_mismatch_and_model_drift(tmp_pa
     assert audit["structurally_consistent"] is False
     assert audit["official_payout_provenance_verified"] is False
     assert audit["economic_go_assessed"] is False
+
+
+def test_audit_catches_settled_bet_without_prediction_link(tmp_path):
+    """Missing bet linkage must not disappear through an inner SQL join."""
+    ledger_path = tmp_path / "paper.sqlite3"
+    ledger = Ledger(ledger_path)
+    try:
+        _insert_evaluation(ledger, race_id="LINK0", stake_yen=100, won=True)
+        _insert_evaluation(ledger, race_id="LINK1", stake_yen=100, won=False)
+        ledger.conn.execute(
+            """
+            DELETE FROM paper_bet_evidence
+            WHERE bet_id IN (SELECT id FROM bets WHERE race_id=?)
+            """,
+            ("LINK0",),
+        )
+        ledger.conn.commit()
+    finally:
+        ledger.close()
+
+    report = build_residual_v12_paper_evidence_report(ledger_path)
+    audit = report["settlement_evidence_audit"]
+    assert audit["settled_bets_checked"] == 2
+    assert audit["missing_bet_evidence"] == 1
+    assert audit["missing_settlement_evidence"] == 0
+    assert audit["structurally_consistent"] is False
+    assert report["statistical_positive_roi_evidence"] is False
+    assert audit["economic_go_assessed"] is False
