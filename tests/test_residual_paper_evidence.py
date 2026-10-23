@@ -288,7 +288,7 @@ def test_evidence_gate_reports_positive_roi_only_after_sample_gate(tmp_path):
         ledger.close()
     late_report = build_residual_v12_paper_evidence_report(ledger_path)
     assert late_report["sufficient_evidence"] is True
-    assert late_report["settlement_evidence_audit"]["structurally_consistent"] is True
+    assert late_report["settlement_evidence_audit"]["structurally_consistent"] is False
     assert late_report["settlement_evidence_audit"]["invalid_paper_record_timing"] == 1
     assert late_report["settlement_evidence_audit"]["paper_record_clock_consistent"] is False
     assert late_report["statistical_positive_roi_evidence"] is False
@@ -469,7 +469,7 @@ def test_paper_record_clock_does_not_accept_backfilled_history(tmp_path):
     report = build_residual_v12_paper_evidence_report(ledger_path)
     audit = report["settlement_evidence_audit"]
     assert audit["settled_bets_checked"] == 1
-    assert audit["structurally_consistent"] is True
+    assert audit["structurally_consistent"] is False
     assert audit["invalid_paper_record_timing"] == 1
     assert audit["paper_record_clock_consistent"] is False
     assert audit["actual_purchase_acceptance_verified"] is False
