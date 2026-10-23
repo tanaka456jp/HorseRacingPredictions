@@ -14,6 +14,8 @@ from pathlib import Path
 import re
 from typing import Any, Mapping
 
+from .friday_model_artifact_audit import inspect_frozen_model_bytes
+
 from .odds_free_friday_article import (
     ForecastInputError,
     render_friday_jra_article,
@@ -182,6 +184,7 @@ def audit_friday_inputs(
     source_rights_json: Path | None = None,
     race_manifest_json: Path | None = None,
     model_manifest_json: Path | None = None,
+    champion_artifact_dir: Path | None = None,
 ) -> dict[str, Any]:
     """Return disclosure-safe structural blockers; NEVER authorize publishing."""
     issue = _issue(issue_date)
@@ -224,6 +227,14 @@ def audit_friday_inputs(
     if documents["modelManifest"] is not None:
         checks["modelManifest"].update(
             _model_manifest(documents["modelManifest"], issue, forecast))
+
+    if champion_artifact_dir is not None:
+        checks["championArtifact"] = inspect_frozen_model_bytes(
+            artifact_directory=champion_artifact_dir,
+            candidate_model=documents["modelManifest"],
+            issue_date=issue.isoformat(),
+            forecast=forecast,
+        )
 
     return {
         "schemaVersion": 1,
