@@ -232,7 +232,9 @@ def test_evidence_gate_reports_positive_roi_only_after_sample_gate(tmp_path):
     # A positive legacy bootstrap with 200 evidence-free settlements is
     # NOT review-ready statistical evidence, much less economic proof.
     assert report["statistical_positive_roi_evidence"] is False
-    assert report["status"] == "review_ready_positive_observed_roi_inconclusive"
+    # Even a positive observed ROI cannot be review-ready when all 200
+    # synthetic settlements lack the required settlement evidence chain.
+    assert report["status"] == "blocked_unverified_settlement_evidence"
     assert report["settlement_evidence_audit"]["missing_settlement_evidence"] == 200
     assert report["settlement_evidence_audit"]["structurally_consistent"] is False
     assert report["automatic_live_promotion"] is False
