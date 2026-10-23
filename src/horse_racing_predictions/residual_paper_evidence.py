@@ -295,8 +295,13 @@ def build_residual_v12_paper_evidence_report(
         roi is not None and float(roi) > 0.0
     )
     roi_ci_lower = bootstrap["roi_ci_lower"]
+    # A positive legacy bootstrap is not review-ready when any settled
+    # Paper bet lacks internally consistent settlement evidence.  This
+    # structural gate does NOT verify official payout provenance, execution,
+    # licensing, market-relative net ROI, or economic GO.
     statistical_positive_roi_evidence = bool(
         sufficient_evidence
+        and settlement_audit["structurally_consistent"]
         and roi_ci_lower is not None
         and float(roi_ci_lower) > 0.0
     )
