@@ -183,3 +183,42 @@ def test_outsider_market_input_is_rejected_even_when_only_hidden_in_factors():
     doc["races"][0]["horses"][3]["factors"][0]["payout_bonus"] = 2
     with pytest.raises(ForecastInputError):
         render_friday_jra_article(doc)
+
+
+@pytest.mark.parametrize("finding", [
+    "単勝オッズは4.0倍", "前売り 人気 1 位", "人気順に注目",
+    "複勝 1.4倍", "単 勝 評 価", "ｵｯｽﾞ 4.5倍", "投票数 12345",
+    "配当期待値を調整", "popularity rank: 3", "odds 4/1",
+])
+def test_factor_narrative_cannot_hide_market_or_odds_evidence(finding):
+    doc = fixture()
+    doc["races"][0]["horses"][0]["factors"][0]["finding"] = finding
+    with pytest.raises(ForecastInputError, match="factor finding"):
+        render_friday_jra_article(doc)
+
+
+@pytest.mark.parametrize("source_url", [
+    "https://example.org/odds/latest",
+    "https://example.org/%E5%8D%98%E5%8B%9D/results",
+    "https://example.org/market_popularity/2026",
+])
+def test_market_related_source_url_is_rejected(source_url):
+    doc = fixture()
+    doc["races"][0]["horses"][0]["factors"][0]["source_url"] = source_url
+    with pytest.raises(ForecastInputError, match="factor evidence URL"):
+        render_friday_jra_article(doc)
+
+
+def test_market_based_model_id_is_rejected():
+    doc = fixture()
+    doc["model_id"] = "v1-market_odds_adjusted"
+    with pytest.raises(ForecastInputError, match="model_id"):
+        render_friday_jra_article(doc)
+
+
+def test_non_market_race_factors_still_render():
+    doc = fixture()
+    doc["races"][0]["horses"][0]["factors"][0]["finding"] = (
+        "前走の位置取りと上がり区間を考慮した比較"
+    )
+    assert "位置取り" in render_friday_jra_article(doc)
