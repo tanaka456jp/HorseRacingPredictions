@@ -392,3 +392,42 @@ def test_audit_catches_settled_bet_without_prediction_link(tmp_path):
     assert audit["structurally_consistent"] is False
     assert report["statistical_positive_roi_evidence"] is False
     assert audit["economic_go_assessed"] is False
+
+
+def test_audit_rejects_missing_or_post_race_odds_snapshot(tmp_path):
+    """Structural review cannot rely on an absent or post-time price."""
+    ledger_path = tmp_path / "paper.sqlite3"
+    ledger = Ledger(ledger_path)
+    try:
+        _insert_evaluation(ledger, race_id="NO_SNAP", stake_yen=100, won=True)
+        _insert_evaluation(ledger, race_id="LATE_SNAP", stake_yen=100, won=False)
+        ledger.conn.execute(
+            """
+            DELETE FROM paper_prediction_evidence
+            WHERE prediction_id IN (
+                SELECT id FROM predictions WHERE race_id=?
+            )
+            """,
+            ("NO_SNAP",),
+        )
+        ledger.conn.execute(
+            """
+            UPDATE pre_race_odds_snapshots
+            SET observed_at=?
+            WHERE race_id=?
+            """,
+            ("2026-09-29T02:00:00+00:00", "LATE_SNAP"),
+        )
+        ledger.conn.commit()
+    finally:
+        ledger.close()
+
+    report = build_residual_v12_paper_evidence_report(ledger_path)
+    audit = report["settlement_evidence_audit"]
+    assert audit["settled_bets_checked"] == 2
+    assert audit["missing_snapshot_evidence"] == 1
+    assert audit["invalid_pre_race_evidence"] == 1
+    assert audit["structurally_consistent"] is False
+    assert report["statistical_positive_roi_evidence"] is False
+    assert audit["official_payout_provenance_verified"] is False
+    assert audit["economic_go_assessed"] is False
