@@ -74,6 +74,8 @@ def prepare_strict_odds_free_training_sample(
     frame["race_date"] = pd.to_datetime(frame["race_date"], errors="raise")
     if frame["race_date"].dt.tz is not None:
         frame["race_date"] = frame["race_date"].dt.tz_convert("Asia/Tokyo").dt.tz_localize(None)
+    if frame["race_date"].dt.date.gt(_MAX_RESEARCH_DAY).any():
+        raise ValueError("input contains protected post-2024 holdout rows")
     frame = frame.loc[
         frame["race_date"].dt.date.between(start, end)
     ].copy()
