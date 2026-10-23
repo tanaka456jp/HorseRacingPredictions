@@ -220,10 +220,10 @@ def _audit_settlement_evidence(ledger: Ledger) -> dict:
             b.race_id,b.horse_id,b.result,b.payout_yen,
             b.model_version,p.model_version,
             se.bet_id,se.race_id,se.horse_id,se.result,
-            se.payout_yen,se.source
+            se.payout_yen,se.source,be.bet_id
         FROM bets b
-        JOIN paper_bet_evidence be ON be.bet_id=b.id
-        JOIN predictions p ON p.id=be.prediction_id
+        LEFT JOIN paper_bet_evidence be ON be.bet_id=b.id
+        LEFT JOIN predictions p ON p.id=be.prediction_id
         LEFT JOIN paper_settlement_evidence se ON se.bet_id=b.id
         WHERE b.model_version=?
           AND b.stake_yen > 0
@@ -233,9 +233,12 @@ def _audit_settlement_evidence(ledger: Ledger) -> dict:
         (PAPER_MODEL_VERSION,),
     ).fetchall()
     missing = 0
+    missing_bet_evidence = 0
     inconsistent = 0
     model_mismatch = 0
     for row in rows:
+        if row[12] is None:
+            missing_bet_evidence += 1
         if row[4] != row[5]:
             model_mismatch += 1
         if row[6] is None:
@@ -251,10 +254,13 @@ def _audit_settlement_evidence(ledger: Ledger) -> dict:
     return {
         "settled_bets_checked": len(rows),
         "missing_settlement_evidence": missing,
+        "missing_bet_evidence": missing_bet_evidence,
         "inconsistent_settlement_evidence": inconsistent,
         "prediction_model_mismatches": model_mismatch,
         "structurally_consistent": bool(
-            rows and not (missing or inconsistent or model_mismatch)
+            rows and not (
+                missing or missing_bet_evidence or inconsistent or model_mismatch
+            )
         ),
         "official_payout_provenance_verified": False,
         "economic_go_assessed": False,
