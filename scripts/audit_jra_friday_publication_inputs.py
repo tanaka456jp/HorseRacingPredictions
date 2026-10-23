@@ -20,6 +20,8 @@ def main() -> int:
     parser.add_argument("--source-rights-json", type=Path)
     parser.add_argument("--race-manifest-json", type=Path)
     parser.add_argument("--model-manifest-json", type=Path)
+    parser.add_argument("--champion-artifact-dir", type=Path,
+                        help="optional existing model.cbm and manifest.json; read-only")
     args = parser.parse_args()
     try:
         report = audit_friday_inputs(
@@ -28,6 +30,7 @@ def main() -> int:
             source_rights_json=args.source_rights_json,
             race_manifest_json=args.race_manifest_json,
             model_manifest_json=args.model_manifest_json,
+            champion_artifact_dir=args.champion_artifact_dir,
         )
     except FridayAuditError as exc:
         report = {
