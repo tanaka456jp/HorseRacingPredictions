@@ -1,0 +1,192 @@
+"""Chronological odds-free experimental win ranking evaluation.
+
+Research only, using approved pre-2025 local history. Produces measured
+validation metrics; never trains on the final 2025-2026 holdout, joins odds,
+computes economic EV, publishes to note, or promotes a production model.
+"""
+from __future__ import annotations
+
+from dataclasses import dataclass
+from datetime import date
+from math import isfinite, log
+import re
+
+import numpy as np
+import pandas as pd
+
+from .modeling import BaselineProbabilityModel
+from .odds_free_training import OddsFreeResearchSample
+
+_MARKET = re.compile(
+    r"odds|market|popular(?:ity)?|betting|payout|dividend|"
+    r"オッズ|人気|単勝|複勝|払戻|配当|投票", re.IGNORECASE
+)
+_FINAL_HOLDOUT_START = date(2025, 1, 1)
+
+
+@dataclass(frozen=True)
+class OddsFreeChronologicalReport:
+    status: str
+    model: str
+    fitThrough: str
+    validationFrom: str
+    validationThrough: str
+    trainingRaces: int
+    validationRaces: int
+    trainingRunners: int
+    validationRunners: int
+    featureCount: int
+    top1Accuracy: float
+    top3Coverage: float
+    orderedTop3Accuracy: float
+    predictedRankFourTop3Rate: float
+    brierRunner: float
+    winnerLogLoss: float
+    uniformTop1Reference: float
+    publicationAuthorized: bool
+    positiveExpectedValueDemonstrated: bool
+
+
+def _strict_date(value: str, label: str) -> date:
+    if type(value) is not str:
+        raise ValueError(f"{label}: ISO date required")
+    try:
+        day = date.fromisoformat(value)
+    except ValueError as exc:
+        raise ValueError(f"{label}: invalid date") from exc
+    if day.isoformat() != value:
+        raise ValueError(f"{label}: canonical YYYY-MM-DD required")
+    return day
+
+
+def _check_race_groups(df: pd.DataFrame, *, require_podium: bool) -> int:
+    count = 0
+    for _, group in df.groupby("race_id", sort=False):
+        race_day = group["race_date"].dt.normalize()
+        if race_day.nunique() != 1 or not 4 <= len(group) <= 18:
+            raise ValueError("incomplete or multi-day race in chronological fold")
+        if group["horse_name"].duplicated().any():
+            raise ValueError("duplicate horse identity within a race")
+        pos = pd.to_numeric(group["finish_position"], errors="coerce")
+        if pos.isna().any() or not pos.eq(1).sum() == 1:
+            raise ValueError("every research race requires one known winner")
+        if require_podium:
+            # Dead heats or incomplete top-three results cannot be treated
+            # as an unambiguous exact 1-2-3 ordering.
+            for finish in (1, 2, 3):
+                if pos.eq(finish).sum() != 1:
+                    raise ValueError("validation podium ranks must be unambiguous")
+        count += 1
+    return count
+
+
+def evaluate_strict_odds_free_chronologically(
+    sample: OddsFreeResearchSample,
+    *, fit_through: str, validation_from: str, validation_through: str,
+    minimum_training_races: int = 5,
+    minimum_validation_races: int = 3,
+) -> OddsFreeChronologicalReport:
+    """Single immutable chronological research split; no EV or publication claim.
+
+    Precomputed recent-form features must depend only on *prior* race days.
+    Evaluations that examine the result of the target race are used only to
+    score the held-out model, never as prediction inputs.
+    """
+    fit = _strict_date(fit_through, "fit_through")
+    start = _strict_date(validation_from, "validation_from")
+    end = _strict_date(validation_through, "validation_through")
+    if not fit < start <= end < _FINAL_HOLDOUT_START:
+        raise ValueError("validation must follow fitting and exclude final holdout")
+    if minimum_training_races < 5 or minimum_validation_races < 3:
+        raise ValueError("minimum fold sizes may not be bypassed")
+    if not isinstance(sample, OddsFreeResearchSample):
+        raise ValueError("strict odds-free research sample required")
+    if not sample.features or any(_MARKET.search(x) for x in sample.features):
+        raise ValueError("market-contaminated or missing model features")
+    if any(_MARKET.search(str(x)) for x in sample.frame.columns):
+        raise ValueError("market column passed to research model")
+    source_end = _strict_date(sample.cutoff, "sample.cutoff")
+    if source_end >= _FINAL_HOLDOUT_START:
+        raise ValueError("protected final holdout included")
+    if source_end < end:
+        raise ValueError("research input does not cover entire validation period")
+    frame = sample.frame.copy()
+    if not {"race_id", "race_date", "horse_name",
+            "finish_position", "is_winner"}.issubset(frame.columns):
+        raise ValueError("missing necessary research columns")
+    frame["race_date"] = pd.to_datetime(frame["race_date"], errors="raise")
+    if frame["race_date"].isna().any() or frame["race_date"].dt.tz is not None:
+        raise ValueError("research race days must be known local dates")
+    if frame["race_date"].dt.date.ge(_FINAL_HOLDOUT_START).any():
+        raise ValueError("protected final holdout must not be read")
+    train = frame.loc[frame["race_date"].dt.date.le(fit)].copy()
+    valid = frame.loc[frame["race_date"].dt.date.between(start, end)].copy()
+    if train.empty or valid.empty:
+        raise ValueError("empty chronological train or validation split")
+    if set(train["race_id"]) & set(valid["race_id"]):
+        raise ValueError("train-validation race identity overlap")
+    ntrain = _check_race_groups(train, require_podium=False)
+    nvalid = _check_race_groups(valid, require_podium=True)
+    if ntrain < minimum_training_races or nvalid < minimum_validation_races:
+        raise ValueError("insufficient independent train/validation races")
+    # The existing sklearn baseline is used as a new experimental candidate,
+    # not a rebranded champion; all metrics are measured on unseen dates.
+    model = BaselineProbabilityModel(list(sample.features))
+    model.fit(train, target_col="is_winner")
+    probability = model.predict_win_probability(valid, race_col="race_id")
+    if (len(probability) != len(valid)
+            or not probability.index.equals(valid.index)
+            or not np.isfinite(probability.to_numpy(dtype=float)).all()
+            or probability.le(0).any()
+            or probability.gt(1).any()):
+        raise ValueError("unusable validation probabilities")
+    valid["__research_probability"] = probability
+    totals = valid.groupby("race_id")["__research_probability"].sum()
+    if not np.allclose(totals.to_numpy(dtype=float), 1.0, atol=1e-9):
+        raise ValueError("race probabilities are not normalized")
+    actual = valid["is_winner"].astype(int)
+    brier = float(np.square(probability.to_numpy() - actual.to_numpy()).mean())
+    top1 = top3 = ordered = fourth = uniform = loss = 0.0
+    for _, race in valid.groupby("race_id", sort=False):
+        prediction = race.sort_values(
+            ["__research_probability", "horse_name"],
+            ascending=[False, True], kind="stable",
+        )
+        true_order = race.sort_values(
+            ["finish_position", "horse_name"], kind="stable",
+        )
+        predicted_names = prediction["horse_name"].astype(str).tolist()
+        actual_names = true_order["horse_name"].astype(str).tolist()
+        top1 += float(predicted_names[0] == actual_names[0])
+        top3 += len(set(predicted_names[:3]) & set(actual_names[:3])) / 3.0
+        ordered += float(predicted_names[:3] == actual_names[:3])
+        fourth += float(predicted_names[3] in set(actual_names[:3]))
+        uniform += 1.0 / len(race)
+        winning_p = race.loc[race["is_winner"].eq(1), "__research_probability"].iloc[0]
+        loss -= log(float(winning_p))
+    denom = float(nvalid)
+    values = (top1 / denom, top3 / denom, ordered / denom,
+              fourth / denom, brier, loss / denom, uniform / denom)
+    if not all(isfinite(v) for v in values):
+        raise ValueError("nonfinite validation metric")
+    return OddsFreeChronologicalReport(
+        status="RESEARCH_VALIDATED_NOT_RELEASED",
+        model="experimental-sklearn-logistic-odds-free-baseline",
+        fitThrough=fit.isoformat(),
+        validationFrom=start.isoformat(),
+        validationThrough=end.isoformat(),
+        trainingRaces=ntrain,
+        validationRaces=nvalid,
+        trainingRunners=len(train),
+        validationRunners=len(valid),
+        featureCount=len(sample.features),
+        top1Accuracy=values[0],
+        top3Coverage=values[1],
+        orderedTop3Accuracy=values[2],
+        predictedRankFourTop3Rate=values[3],
+        brierRunner=values[4],
+        winnerLogLoss=values[5],
+        uniformTop1Reference=values[6],
+        publicationAuthorized=False,
+        positiveExpectedValueDemonstrated=False,
+    )
