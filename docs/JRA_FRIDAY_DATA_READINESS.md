@@ -60,6 +60,35 @@ preliminary auditor, **not** the independent verifier. It never returns
 `publicationAuthorized: true` and cannot sign the Business Platform
 verification receipt.
 
+## Strict non-market research sample preparation (2026-10-24)
+
+`src/horse_racing_predictions/odds_free_training.py` now implements
+`prepare_strict_odds_free_training_sample`. This is a **research-only**
+pure function: it normalizes approved local source frames after dropping all
+odds, popularity, payout, betting and market fields **before row selection or
+feature engineering**. It does not run CatBoost, evaluate performance, load a
+2025–2026 final holdout or generate real forecasts. The test suite asserts
+identical resulting sample and features when market columns are removed,
+reordered in value, made null or populated with implausible odds.
+
+- Rejects any input containing post-2024 rows, even if the caller requests
+  an earlier training cutoff; no protected holdout access.
+- Rejects ambiguous duplicate horse/race IDs, blank identities, incomplete
+  results, races without exactly one winner, and impossible field sizes.
+- Uses only historical finish positions as *labels* and past-race inputs for
+  feature engineering. Target-race outcomes may never appear as prediction
+  features.
+- Does not reuse `scripts/train_champion_artifact.py`, which uses market
+  values to select rows and writes a v7 manifest with predetermined historical
+  evaluation values. New model promotion must require a separately executed
+  **genuine** chronological validation, never copied metrics.
+
+To actually produce a new trained candidate, the next independent steps are
+documented verified training-source provenance; an explicit train/validation
+split (through 2024 only, with protected final holdout untouched); retraining
+via a separate no-market pipeline; calibration/feature freeze and source
+rights. Until then it is *not* a frozen model or evidence of EV > 0.
+
 ## Release gates still required
 
 - independently permitted, timestamped data with rights for the intended use;
