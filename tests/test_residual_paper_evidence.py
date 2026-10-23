@@ -431,3 +431,53 @@ def test_audit_rejects_missing_or_post_race_odds_snapshot(tmp_path):
     assert report["statistical_positive_roi_evidence"] is False
     assert audit["official_payout_provenance_verified"] is False
     assert audit["economic_go_assessed"] is False
+
+
+def test_paper_record_clock_does_not_accept_backfilled_history(tmp_path):
+    """A historical quote plus a later Paper insert is not a forward record."""
+    ledger_path = tmp_path / "paper.sqlite3"
+    ledger = Ledger(ledger_path)
+    try:
+        # _insert_evaluation records a new Paper bet today, while its
+        # synthetic quote and scheduled post are fixed in September.
+        _insert_evaluation(
+            ledger, race_id="BACKFILLED", stake_yen=100, won=True
+        )
+    finally:
+        ledger.close()
+
+    report = build_residual_v12_paper_evidence_report(ledger_path)
+    audit = report["settlement_evidence_audit"]
+    assert audit["settled_bets_checked"] == 1
+    assert audit["structurally_consistent"] is True
+    assert audit["invalid_paper_record_timing"] == 1
+    assert audit["paper_record_clock_consistent"] is False
+    assert audit["actual_purchase_acceptance_verified"] is False
+    assert audit["economic_go_assessed"] is False
+
+
+def test_paper_record_clock_flags_post_time_link_even_with_early_bet(tmp_path):
+    ledger_path = tmp_path / "paper.sqlite3"
+    ledger = Ledger(ledger_path)
+    try:
+        _insert_evaluation(
+            ledger, race_id="LATE_LINK", stake_yen=100, won=False
+        )
+        ledger.conn.execute(
+            "UPDATE bets SET placed_at=? WHERE race_id=?",
+            ("2026-09-29T00:02:00+00:00", "LATE_LINK"),
+        )
+        ledger.conn.execute(
+            "UPDATE paper_bet_evidence SET recorded_at=? WHERE "
+            "bet_id IN (SELECT id FROM bets WHERE race_id=?)",
+            ("2026-09-29T01:01:00+00:00", "LATE_LINK"),
+        )
+        ledger.conn.commit()
+    finally:
+        ledger.close()
+
+    audit = build_residual_v12_paper_evidence_report(ledger_path)[
+        "settlement_evidence_audit"
+    ]
+    assert audit["invalid_paper_record_timing"] == 1
+    assert audit["paper_record_clock_consistent"] is False
