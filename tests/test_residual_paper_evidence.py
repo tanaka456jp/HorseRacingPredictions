@@ -110,6 +110,8 @@ def test_evidence_gate_stays_closed_below_frozen_thresholds(tmp_path):
     assert report["minimum_prospective_evaluated_races"] == 500
     assert report["minimum_settled_paper_bets"] == 200
     assert report["automatic_live_promotion"] is False
+    assert report["settlement_evidence_audit"]["structurally_consistent"] is True
+    assert report["settlement_evidence_audit"]["economic_go_assessed"] is False
     assert report["live_execution_enabled"] is False
     assert report["roi_bootstrap_status"] == "insufficient_race_clusters"
     assert report["roi_ci_lower"] is None
@@ -229,6 +231,8 @@ def test_evidence_gate_reports_positive_roi_only_after_sample_gate(tmp_path):
     assert 0.0 <= report["bootstrap_positive_roi_fraction"] <= 1.0
     assert report["statistical_positive_roi_evidence"] is True
     assert report["status"] == "review_ready_statistically_positive_roi"
+    assert report["settlement_evidence_audit"]["missing_settlement_evidence"] == 200
+    assert report["settlement_evidence_audit"]["structurally_consistent"] is False
     assert report["automatic_live_promotion"] is False
 
 
@@ -282,3 +286,42 @@ def test_risk_diagnostics_are_empty_safe_without_settled_bets(tmp_path):
         row["sample_bets"] == 0 and row["roi"] is None
         for row in report["recent_roi_windows"]
     )
+
+
+def test_settlement_evidence_audit_flags_missing_mismatch_and_model_drift(tmp_path):
+    ledger_path = tmp_path / "paper.sqlite3"
+    ledger = Ledger(ledger_path)
+    try:
+        for index in range(3):
+            _insert_evaluation(
+                ledger,
+                race_id=f"A{index}",
+                stake_yen=100,
+                won=index == 1,
+            )
+        ledger.conn.execute(
+            "DELETE FROM paper_settlement_evidence WHERE race_id=?",
+            ("A0",),
+        )
+        ledger.conn.execute(
+            "UPDATE paper_settlement_evidence SET payout_yen=payout_yen+1 "
+            "WHERE race_id=?",
+            ("A1",),
+        )
+        ledger.conn.execute(
+            "UPDATE predictions SET model_version=? WHERE race_id=?",
+            ("wrong-model", "A2"),
+        )
+        ledger.conn.commit()
+    finally:
+        ledger.close()
+
+    report = build_residual_v12_paper_evidence_report(ledger_path)
+    audit = report["settlement_evidence_audit"]
+    assert audit["settled_bets_checked"] == 3
+    assert audit["missing_settlement_evidence"] == 1
+    assert audit["inconsistent_settlement_evidence"] == 1
+    assert audit["prediction_model_mismatches"] == 1
+    assert audit["structurally_consistent"] is False
+    assert audit["official_payout_provenance_verified"] is False
+    assert audit["economic_go_assessed"] is False
