@@ -211,6 +211,56 @@ def _settled_risk_diagnostics(ledger: Ledger) -> dict:
         "recent_roi_windows": recent_roi_windows,
     }
 
+
+def _audit_settlement_evidence(ledger: Ledger) -> dict:
+    """Audit structural consistency; this is NOT an economic EV gate."""
+    rows = ledger.conn.execute(
+        """
+        SELECT
+            b.race_id,b.horse_id,b.result,b.payout_yen,
+            b.model_version,p.model_version,
+            se.bet_id,se.race_id,se.horse_id,se.result,
+            se.payout_yen,se.source
+        FROM bets b
+        JOIN paper_bet_evidence be ON be.bet_id=b.id
+        JOIN predictions p ON p.id=be.prediction_id
+        LEFT JOIN paper_settlement_evidence se ON se.bet_id=b.id
+        WHERE b.model_version=?
+          AND b.stake_yen > 0
+          AND b.result IS NOT NULL
+        ORDER BY b.id
+        """,
+        (PAPER_MODEL_VERSION,),
+    ).fetchall()
+    missing = 0
+    inconsistent = 0
+    model_mismatch = 0
+    for row in rows:
+        if row[4] != row[5]:
+            model_mismatch += 1
+        if row[6] is None:
+            missing += 1
+        elif (
+            row[0] != row[7]
+            or row[1] != row[8]
+            or row[2] != row[9]
+            or int(row[3] or 0) != int(row[10] or 0)
+            or not str(row[11] or "").strip()
+        ):
+            inconsistent += 1
+    return {
+        "settled_bets_checked": len(rows),
+        "missing_settlement_evidence": missing,
+        "inconsistent_settlement_evidence": inconsistent,
+        "prediction_model_mismatches": model_mismatch,
+        "structurally_consistent": bool(
+            rows and not (missing or inconsistent or model_mismatch)
+        ),
+        "official_payout_provenance_verified": False,
+        "economic_go_assessed": False,
+    }
+
+
 def build_residual_v12_paper_evidence_report(
     ledger_path: str | Path,
 ) -> dict:
@@ -231,6 +281,7 @@ def build_residual_v12_paper_evidence_report(
         performance = summarize_residual_v12_paper(ledger)
         bootstrap = _race_clustered_roi_bootstrap(ledger)
         risk = _settled_risk_diagnostics(ledger)
+        settlement_audit = _audit_settlement_evidence(ledger)
     finally:
         ledger.close()
 
@@ -311,6 +362,7 @@ def build_residual_v12_paper_evidence_report(
         "longest_losing_streak": risk["longest_losing_streak"],
         "current_losing_streak": risk["current_losing_streak"],
         "recent_roi_windows": risk["recent_roi_windows"],
+        "settlement_evidence_audit": settlement_audit,
         "risk_diagnostics_adaptive": False,
         "live_execution_enabled": False,
         "automatic_live_promotion": False,
