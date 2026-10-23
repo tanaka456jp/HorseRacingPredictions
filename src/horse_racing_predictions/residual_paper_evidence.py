@@ -224,7 +224,8 @@ def _audit_settlement_evidence(ledger: Ledger) -> dict:
             se.payout_yen,se.source,be.bet_id,
             pe.prediction_id,s.id,p.predicted_at,s.observed_at,
             s.scheduled_post_time,s.race_id,s.horse_id,
-            p.decimal_odds,s.decimal_odds,s.source
+            p.decimal_odds,s.decimal_odds,s.source,
+            b.placed_at,be.recorded_at
         FROM bets b
         LEFT JOIN paper_bet_evidence be ON be.bet_id=b.id
         LEFT JOIN predictions p ON p.id=be.prediction_id
@@ -242,6 +243,7 @@ def _audit_settlement_evidence(ledger: Ledger) -> dict:
     missing_bet_evidence = 0
     missing_snapshot_evidence = 0
     invalid_pre_race_evidence = 0
+    invalid_paper_record_timing = 0
     inconsistent = 0
     model_mismatch = 0
     for row in rows:
@@ -274,6 +276,23 @@ def _audit_settlement_evidence(ledger: Ledger) -> dict:
                 or not str(row[22] or "").strip()
             ):
                 invalid_pre_race_evidence += 1
+        # Internal record timestamps must also precede the scheduled post.
+        # This is a diagnostic, NOT proof of receipt or broker acceptance.
+        if row[13] is not None and row[14] is not None:
+            try:
+                predicted = datetime.fromisoformat(row[15])
+                post = datetime.fromisoformat(row[17])
+                placed = datetime.fromisoformat(row[23])
+                linked = datetime.fromisoformat(row[24])
+                valid_record_clock = bool(
+                    all(value.utcoffset() is not None for value in
+                        (predicted, post, placed, linked))
+                    and predicted <= placed <= linked < post
+                )
+            except (TypeError, ValueError):
+                valid_record_clock = False
+            if not valid_record_clock:
+                invalid_paper_record_timing += 1
         if row[6] is None:
             missing += 1
         elif (
@@ -290,6 +309,13 @@ def _audit_settlement_evidence(ledger: Ledger) -> dict:
         "missing_bet_evidence": missing_bet_evidence,
         "missing_snapshot_evidence": missing_snapshot_evidence,
         "invalid_pre_race_evidence": invalid_pre_race_evidence,
+        "invalid_paper_record_timing": invalid_paper_record_timing,
+        "paper_record_clock_consistent": bool(
+            rows and not (
+                missing_bet_evidence or missing_snapshot_evidence
+                or invalid_pre_race_evidence or invalid_paper_record_timing
+            )
+        ),
         "inconsistent_settlement_evidence": inconsistent,
         "prediction_model_mismatches": model_mismatch,
         "structurally_consistent": bool(
@@ -299,6 +325,7 @@ def _audit_settlement_evidence(ledger: Ledger) -> dict:
             )
         ),
         "official_payout_provenance_verified": False,
+        "actual_purchase_acceptance_verified": False,
         "economic_go_assessed": False,
     }
 
