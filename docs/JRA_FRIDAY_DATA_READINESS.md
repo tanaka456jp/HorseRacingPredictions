@@ -38,7 +38,23 @@ python scripts/audit_jra_friday_publication_inputs.py --issue-date 2026-10-30
 
 Add `--forecast-json`, `--source-rights-json`, `--race-manifest-json`,
 and `--model-manifest-json` pointing to actual reviewed candidate files
-when they exist. The output is JSON; **exit status is 2 by design**,
+when they exist. Optional `--champion-artifact-dir` reads an existing
+`model.cbm` / `manifest.json` pair and cross-checks the SHA-256 digest,
+feature-column sequence, model identity and creation/freeze chronology
+against the candidate model manifest; it never downloads or retrains a
+model. It is **only a byte-integrity check**, not proof that the model
+actually runs on current fields or has been validated as odds-free.
+
+The repository's historical v7 training script uses `win_odds` to filter
+training rows (`dropna`, then `win_odds > 1.0`) although current-target
+odds are not model input features. That market-dependent selection needs
+separate provenance / sampling-bias review before declaring an all-stages
+odds-independent forecast. The v7 artifact's history cutoff of 2021-07-31
+also leaves a multi-year gap. `predict_future_entries` rejects a >14-day
+history gap by default, so **do not override it** to force forecasts for
+2026. Acquiring approved up-to-date history and actual upcoming entries
+comes before genuine inference.
+ The output is JSON; **exit status is 2 by design**,
 including when all four files are structurally consistent. This is a
 preliminary auditor, **not** the independent verifier. It never returns
 `publicationAuthorized: true` and cannot sign the Business Platform
