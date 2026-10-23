@@ -22,6 +22,45 @@ _MARKET = re.compile(
     r"オッズ|人気|単勝|複勝|払戻|配当|投票", re.IGNORECASE
 )
 _FINAL_HOLDOUT_START = date(2025, 1, 1)
+# Column allowlist from pre-race current attributes plus builder-produced
+# prior-race features. The field values and candidate model still need
+# independent provenance inspection; this prevents obvious label injection.
+_CURRENT_ALLOWED_FEATURES = frozenset({
+    "distance_m", "post_position", "age", "carried_weight",
+    "horse_weight", "horse_weight_delta", "field_size",
+    "relative_post_position", "carried_weight_vs_race_mean",
+    "horse_weight_vs_race_mean", "racecourse", "surface", "weather",
+    "track_condition", "sex", "race_class", "graded_race",
+})
+_HISTORICAL_PREFIXES = (
+    "horse_past_", "horse_recent_", "horse_days_since_",
+    "jockey_past_", "jockey_days_since_",
+    "trainer_past_", "trainer_days_since_",
+    "horse_surface_past_", "horse_surface_days_since_",
+    "horse_course_past_", "horse_course_days_since_",
+    "horse_distance_past_", "horse_distance_days_since_",
+    "jockey_course_past_", "jockey_course_days_since_",
+    "trainer_course_past_", "trainer_course_days_since_",
+)
+_FORBIDDEN_LABEL_FEATURES = frozenset({
+    "is_winner", "finish_position", "finish_time", "margin",
+    "last_3f", "corner_1", "corner_2", "corner_3", "corner_4",
+    "race_date", "race_id", "_race_day", "prize_money",
+})
+
+
+def _validate_research_features(feature_names: tuple[str, ...]) -> None:
+    if (not feature_names
+            or len(feature_names) != len(set(feature_names))):
+        raise ValueError("research feature list missing or duplicate")
+    for name in feature_names:
+        if not isinstance(name, str) or not name.strip():
+            raise ValueError("research feature name missing")
+        if name in _FORBIDDEN_LABEL_FEATURES or _MARKET.search(name):
+            raise ValueError("market or target-result leakage in model features")
+        if (name not in _CURRENT_ALLOWED_FEATURES
+                and not name.startswith(_HISTORICAL_PREFIXES)):
+            raise ValueError("unrecognized research feature cannot be trusted")
 
 
 @dataclass(frozen=True)
@@ -68,8 +107,10 @@ def _check_race_groups(df: pd.DataFrame, *, require_podium: bool) -> int:
         if group["horse_name"].duplicated().any():
             raise ValueError("duplicate horse identity within a race")
         pos = pd.to_numeric(group["finish_position"], errors="coerce")
-        if pos.isna().any() or not pos.eq(1).sum() == 1:
-            raise ValueError("every research race requires one known winner")
+        if (pos.isna().any() or pos.lt(1).any()
+                or pos.gt(len(group)).any() or pos.mod(1).ne(0).any()
+                or pos.eq(1).sum() != 1):
+            raise ValueError("every research race requires valid ranks and one winner")
         if require_podium:
             # Dead heats or incomplete top-three results cannot be treated
             # as an unambiguous exact 1-2-3 ordering.
@@ -101,8 +142,7 @@ def evaluate_strict_odds_free_chronologically(
         raise ValueError("minimum fold sizes may not be bypassed")
     if not isinstance(sample, OddsFreeResearchSample):
         raise ValueError("strict odds-free research sample required")
-    if not sample.features or any(_MARKET.search(x) for x in sample.features):
-        raise ValueError("market-contaminated or missing model features")
+    _validate_research_features(sample.features)
     if any(_MARKET.search(str(x)) for x in sample.frame.columns):
         raise ValueError("market column passed to research model")
     source_end = _strict_date(sample.cutoff, "sample.cutoff")
@@ -119,6 +159,13 @@ def evaluate_strict_odds_free_chronologically(
         raise ValueError("research race days must be known local dates")
     if frame["race_date"].dt.date.ge(_FINAL_HOLDOUT_START).any():
         raise ValueError("protected final holdout must not be read")
+    # Verify outcome labels were not detached from actual historic finish
+    # positions; such tampering could inflate validation scores.
+    finish = pd.to_numeric(frame["finish_position"], errors="coerce")
+    winners = pd.to_numeric(frame["is_winner"], errors="coerce")
+    if (finish.isna().any() or winners.isna().any()
+            or not winners.eq(finish.eq(1).astype(int)).all()):
+        raise ValueError("research winner labels inconsistent with finish positions")
     train = frame.loc[frame["race_date"].dt.date.le(fit)].copy()
     valid = frame.loc[frame["race_date"].dt.date.between(start, end)].copy()
     if train.empty or valid.empty:
