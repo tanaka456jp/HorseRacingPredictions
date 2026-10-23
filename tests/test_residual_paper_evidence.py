@@ -229,11 +229,48 @@ def test_evidence_gate_reports_positive_roi_only_after_sample_gate(tmp_path):
     assert report["roi_ci_lower"] > 0.0
     assert report["roi_ci_upper"] > report["roi_ci_lower"]
     assert 0.0 <= report["bootstrap_positive_roi_fraction"] <= 1.0
-    assert report["statistical_positive_roi_evidence"] is True
-    assert report["status"] == "review_ready_statistically_positive_roi"
+    # A positive legacy bootstrap with 200 evidence-free settlements is
+    # NOT review-ready statistical evidence, much less economic proof.
+    assert report["statistical_positive_roi_evidence"] is False
+    assert report["status"] == "review_ready_positive_observed_roi_inconclusive"
     assert report["settlement_evidence_audit"]["missing_settlement_evidence"] == 200
     assert report["settlement_evidence_audit"]["structurally_consistent"] is False
     assert report["automatic_live_promotion"] is False
+
+    # Synthetic evidence can restore only structural/statistical review
+    # readiness. It cannot prove official payout provenance or economic GO.
+    ledger = Ledger(ledger_path)
+    try:
+        rows = ledger.conn.execute(
+            "SELECT id,race_id,horse_id,result,payout_yen FROM bets"
+        ).fetchall()
+        for bet_id, race_id, horse_id, result, payout_yen in rows:
+            won = result == "WIN"
+            ledger.conn.execute(
+                """
+                INSERT INTO paper_settlement_evidence (
+                    bet_id,race_id,horse_id,finish_position,final_win_odds,
+                    result,payout_yen,source,source_reference,recorded_at
+                ) VALUES (?,?,?,?,?,?,?,?,?,?)
+                """,
+                (
+                    bet_id, race_id, horse_id, 1 if won else 2,
+                    4.0 if won else None, result, payout_yen,
+                    "synthetic-test", "synthetic-test",
+                    "2026-09-29T02:00:00+00:00",
+                ),
+            )
+        ledger.conn.commit()
+    finally:
+        ledger.close()
+
+    structural_report = build_residual_v12_paper_evidence_report(ledger_path)
+    assert structural_report["statistical_positive_roi_evidence"] is True
+    assert structural_report["status"] == "review_ready_statistically_positive_roi"
+    audit = structural_report["settlement_evidence_audit"]
+    assert audit["structurally_consistent"] is True
+    assert audit["official_payout_provenance_verified"] is False
+    assert audit["economic_go_assessed"] is False
 
 
 def test_roi_bootstrap_is_deterministic_for_same_ledger(tmp_path):
