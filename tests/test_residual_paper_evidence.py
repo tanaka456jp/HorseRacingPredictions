@@ -273,6 +273,26 @@ def test_evidence_gate_reports_positive_roi_only_after_sample_gate(tmp_path):
     assert audit["structurally_consistent"] is True
     assert audit["official_payout_provenance_verified"] is False
     assert audit["economic_go_assessed"] is False
+    assert audit["paper_record_clock_consistent"] is True
+
+    # A single post-race Paper bet timestamp must revoke even synthetic
+    # statistical review readiness; it cannot be counted as Forward Paper.
+    ledger = Ledger(ledger_path)
+    try:
+        ledger.conn.execute(
+            "UPDATE bets SET placed_at=? WHERE id=(SELECT MIN(id) FROM bets)",
+            ("2026-09-29T02:00:00+00:00",),
+        )
+        ledger.conn.commit()
+    finally:
+        ledger.close()
+    late_report = build_residual_v12_paper_evidence_report(ledger_path)
+    assert late_report["sufficient_evidence"] is True
+    assert late_report["settlement_evidence_audit"]["structurally_consistent"] is True
+    assert late_report["settlement_evidence_audit"]["invalid_paper_record_timing"] == 1
+    assert late_report["settlement_evidence_audit"]["paper_record_clock_consistent"] is False
+    assert late_report["statistical_positive_roi_evidence"] is False
+    assert late_report["status"] == "blocked_unverified_paper_record_timing"
 
 
 def test_roi_bootstrap_is_deterministic_for_same_ledger(tmp_path):
