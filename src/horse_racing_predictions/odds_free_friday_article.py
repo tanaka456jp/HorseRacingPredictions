@@ -9,8 +9,9 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 from math import isfinite
-from urllib.parse import urlparse
+from urllib.parse import urlparse, unquote
 from typing import Any, Mapping
+from unicodedata import normalize
 import re
 
 _DISALLOWED = re.compile(
@@ -18,6 +19,24 @@ _DISALLOWED = re.compile(
     r"|オッズ|人気|投票|払戻|配当", re.IGNORECASE
 )
 _DATE = re.compile(r"\d{4}-\d{2}-\d{2}\Z")
+# Existing field-key rejection is insufficient: market data could be hidden
+# inside a permitted factor's human-language finding or source URL.
+_MARKET_NARRATIVE = re.compile(
+    r"odds|popular(?:ity)?|market[_ -]?(?:rank|share|odds)|"
+    r"betting|payout|dividend|"
+    r"オッズ|人気(?:順|順位|馬)?|単勝|複勝|払戻|配当|馬券|投票数|支持率",
+    re.IGNORECASE,
+)
+
+
+def _reject_market_narrative(value: str, label: str) -> None:
+    canonical = normalize("NFKC", value)
+    # Ignore separating spaces and zero-width characters.
+    searchable = re.sub(r"[\s\u200b-\u200d\u2060\ufeff]+", "", canonical)
+    if _MARKET_NARRATIVE.search(searchable):
+        _fail(f"{label}: market/odds/popularity evidence is forbidden")
+
+
 _ALLOWED_FACTORS = frozenset({
     "近走内容", "距離適性", "コース適性", "血統", "調教",
     "騎手", "枠順", "脚質・展開", "馬場・天候", "休養・ローテ",
@@ -81,6 +100,7 @@ def _source_url(value: Any) -> str:
     if (parsed.scheme != "https" or not parsed.hostname or parsed.username
             or parsed.password or parsed.fragment):
         _fail("factor evidence requires an HTTPS URL without embedded credentials")
+    _reject_market_narrative(unquote(value), "factor evidence URL")
     return value
 
 
@@ -117,6 +137,7 @@ def render_friday_jra_article(doc: Mapping[str, Any]) -> str:
     if frozen >= issued:
         _fail("model must be frozen before article generation")
     model = _limit_text(doc["model_id"], "model_id", 80)
+    _reject_market_narrative(model, "model_id")
     expected = doc["expected_race_ids"]
     races = doc["races"]
     if not isinstance(expected, list) or not expected or len(expected) > 72:
@@ -213,6 +234,7 @@ def render_friday_jra_article(doc: Mapping[str, Any]) -> str:
                 if observation > issued or observation > post:
                     _fail("post-publication/post-race evidence cannot enter forecast")
                 finding = _limit_text(f["finding"], "factor finding", 220)
+                _reject_market_narrative(finding, "factor finding")
                 evidence.append((category, finding, _source_url(f["source_url"])))
             if not set(upside_signals).issubset(categories):
                 _fail("upside signals require the same horse's verified factor evidence")
