@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from datetime import datetime
 import random
 
 from .ledger import Ledger
@@ -220,10 +221,15 @@ def _audit_settlement_evidence(ledger: Ledger) -> dict:
             b.race_id,b.horse_id,b.result,b.payout_yen,
             b.model_version,p.model_version,
             se.bet_id,se.race_id,se.horse_id,se.result,
-            se.payout_yen,se.source,be.bet_id
+            se.payout_yen,se.source,be.bet_id,
+            pe.prediction_id,s.id,p.predicted_at,s.observed_at,
+            s.scheduled_post_time,s.race_id,s.horse_id,
+            p.decimal_odds,s.decimal_odds,s.source
         FROM bets b
         LEFT JOIN paper_bet_evidence be ON be.bet_id=b.id
         LEFT JOIN predictions p ON p.id=be.prediction_id
+        LEFT JOIN paper_prediction_evidence pe ON pe.prediction_id=p.id
+        LEFT JOIN pre_race_odds_snapshots s ON s.id=pe.odds_snapshot_id
         LEFT JOIN paper_settlement_evidence se ON se.bet_id=b.id
         WHERE b.model_version=?
           AND b.stake_yen > 0
@@ -234,6 +240,8 @@ def _audit_settlement_evidence(ledger: Ledger) -> dict:
     ).fetchall()
     missing = 0
     missing_bet_evidence = 0
+    missing_snapshot_evidence = 0
+    invalid_pre_race_evidence = 0
     inconsistent = 0
     model_mismatch = 0
     for row in rows:
@@ -241,6 +249,31 @@ def _audit_settlement_evidence(ledger: Ledger) -> dict:
             missing_bet_evidence += 1
         if row[4] != row[5]:
             model_mismatch += 1
+        if row[13] is None or row[14] is None:
+            missing_snapshot_evidence += 1
+        else:
+            try:
+                predicted = datetime.fromisoformat(row[15])
+                observed = datetime.fromisoformat(row[16])
+                post = datetime.fromisoformat(row[17])
+                valid_timing = bool(
+                    predicted.utcoffset() is not None
+                    and observed.utcoffset() is not None
+                    and post.utcoffset() is not None
+                    and observed <= predicted < post
+                )
+            except (TypeError, ValueError):
+                valid_timing = False
+            if (
+                not valid_timing
+                or row[0] != row[18]
+                or row[1] != row[19]
+                or row[20] is None
+                or row[21] is None
+                or abs(float(row[20]) - float(row[21])) > 1e-12
+                or not str(row[22] or "").strip()
+            ):
+                invalid_pre_race_evidence += 1
         if row[6] is None:
             missing += 1
         elif (
@@ -255,11 +288,14 @@ def _audit_settlement_evidence(ledger: Ledger) -> dict:
         "settled_bets_checked": len(rows),
         "missing_settlement_evidence": missing,
         "missing_bet_evidence": missing_bet_evidence,
+        "missing_snapshot_evidence": missing_snapshot_evidence,
+        "invalid_pre_race_evidence": invalid_pre_race_evidence,
         "inconsistent_settlement_evidence": inconsistent,
         "prediction_model_mismatches": model_mismatch,
         "structurally_consistent": bool(
             rows and not (
-                missing or missing_bet_evidence or inconsistent or model_mismatch
+                missing or missing_bet_evidence or missing_snapshot_evidence
+                or invalid_pre_race_evidence or inconsistent or model_mismatch
             )
         ),
         "official_payout_provenance_verified": False,
