@@ -314,6 +314,10 @@ def build_residual_v12_paper_evidence_report(
 
     if not sufficient_evidence:
         status = "insufficient_evidence"
+    elif not settlement_audit["structurally_consistent"]:
+        # Legacy ROI remains diagnostic, never review-ready without the
+        # complete bet-to-prediction and settlement-evidence chain.
+        status = "blocked_unverified_settlement_evidence"
     elif statistical_positive_roi_evidence:
         status = "review_ready_statistically_positive_roi"
     elif observed_positive_roi:
