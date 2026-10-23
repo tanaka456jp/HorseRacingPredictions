@@ -321,7 +321,8 @@ def _audit_settlement_evidence(ledger: Ledger) -> dict:
         "structurally_consistent": bool(
             rows and not (
                 missing or missing_bet_evidence or missing_snapshot_evidence
-                or invalid_pre_race_evidence or inconsistent or model_mismatch
+                or invalid_pre_race_evidence or invalid_paper_record_timing
+                or inconsistent or model_mismatch
             )
         ),
         "official_payout_provenance_verified": False,
@@ -379,11 +380,19 @@ def build_residual_v12_paper_evidence_report(
     if not sufficient_evidence:
         status = "insufficient_evidence"
     elif not settlement_audit["structurally_consistent"]:
-        # Legacy ROI remains diagnostic, never review-ready without the
-        # complete bet-to-prediction and settlement-evidence chain.
-        status = "blocked_unverified_settlement_evidence"
-    elif not settlement_audit["paper_record_clock_consistent"]:
-        status = "blocked_unverified_paper_record_timing"
+        # A late Paper record is structurally invalid. Keep the specific
+        # timing status when no other evidence-chain defect is present.
+        other_defects = (
+            "missing_settlement_evidence", "missing_bet_evidence",
+            "missing_snapshot_evidence", "invalid_pre_race_evidence",
+            "inconsistent_settlement_evidence", "prediction_model_mismatches",
+        )
+        if settlement_audit["invalid_paper_record_timing"] and not any(
+            settlement_audit[key] for key in other_defects
+        ):
+            status = "blocked_unverified_paper_record_timing"
+        else:
+            status = "blocked_unverified_settlement_evidence"
     elif statistical_positive_roi_evidence:
         status = "review_ready_statistically_positive_roi"
     elif observed_positive_roi:
