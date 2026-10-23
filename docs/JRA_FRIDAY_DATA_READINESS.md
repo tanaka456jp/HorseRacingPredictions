@@ -60,6 +60,43 @@ preliminary auditor, **not** the independent verifier. It never returns
 `publicationAuthorized: true` and cannot sign the Business Platform
 verification receipt.
 
+## 2026-10-13 archived JRA-VAN trial data (reconciled 2026-10-24)
+
+The earlier phrase "no current source beyond 2021" describes the missing
+**canonical race-result history**, not an absence of ALL locally stored data.
+Older real Actions on the PC2 Windows self-hosted runner contain audited
+metadata for a local, privately stored free-trial archive on the **D drive**.
+
+- [RACE provenance diagnosis run #38390982174](https://github.com/tanaka456jp/HorseRacingPredictions/actions/runs/38390982174):
+  `status: race_blocked`, `RACE` failed with provider error `-301`,
+  **zero** RACE records, no RACE raw file and `research_use_allowed:false`.
+  The 5,159,201 records shown in manifest totals cover other dataspecs and
+  must **not** be described as race history.
+- [BLDN/pedigree provenance run #38385246243](https://github.com/tanaka456jp/HorseRacingPredictions/actions/runs/38385246243):
+  local BLDN 79,888 records, derived 62,880 pedigree rows, sire and damsire
+  presence 100% on that **pedigree snapshot**, created-date range
+  2017-01-03 to 2024-12-26. Not evidence of race/result coverage.
+- [Private storage health run #38384932029](https://github.com/tanaka456jp/HorseRacingPredictions/actions/runs/38384932029):
+  D-drive archive is available; the legacy C-drive archive is not proof of
+  an independently restorable RACE dataset.
+- Other successful archived dataspecs (BLOD, SNAP, SNPN, MING) are not
+  substitutes for RACE. SLOP and WOOD include later records and are
+  separately disallowed by existing research protection gates.
+
+**No JV-Link provider reconnection, new free-trial acquisition or raw
+archive upload is authorized by this finding.** The RACE error remains
+unresolved and any authentication or renewal requires separate review.
+
+**Joining pedigree to race-history data is also not yet proven.** BLDN
+snapshot records are keyed by blood-registration number, while the
+historical Kaggle race-history adapter currently exposes horse names but
+not a verified blood-registration linkage key. Do not join records by
+approximate horse names or silently use raw registration numbers as model
+features. An audited exact identifier crosswalk with date and uniqueness
+checks would be required. The present 62,880-row snapshot is a potentially
+valuable **local research input**, not proof of usable 2026 runner features
+or public-note redistribution rights.
+
 ## Strict non-market research sample preparation (2026-10-24)
 
 `src/horse_racing_predictions/odds_free_training.py` now implements
