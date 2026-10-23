@@ -110,7 +110,8 @@ def test_evidence_gate_stays_closed_below_frozen_thresholds(tmp_path):
     assert report["minimum_prospective_evaluated_races"] == 500
     assert report["minimum_settled_paper_bets"] == 200
     assert report["automatic_live_promotion"] is False
-    assert report["settlement_evidence_audit"]["structurally_consistent"] is True
+    assert report["settlement_evidence_audit"]["structurally_consistent"] is False
+    assert report["settlement_evidence_audit"]["invalid_paper_record_timing"] == 3
     assert report["settlement_evidence_audit"]["economic_go_assessed"] is False
     assert report["live_execution_enabled"] is False
     assert report["roi_bootstrap_status"] == "insufficient_race_clusters"
