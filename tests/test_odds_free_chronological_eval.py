@@ -190,6 +190,9 @@ def test_out_of_field_ranks_and_noninteger_ranks_are_rejected():
     sample = _sample()
     for invalid in (0, 2.5, 99):
         bad = sample.frame.copy()
+        # Current pandas rejects assigning a fractional value to an int64
+        # block, so explicitly widen the test fixture before corruption.
+        bad["finish_position"] = bad["finish_position"].astype(float)
         row = bad.index[bad["race_id"].eq("FICTIONAL-010") &
                         bad["finish_position"].eq(4)][0]
         bad.loc[row, "finish_position"] = invalid
