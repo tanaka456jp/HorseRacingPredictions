@@ -371,6 +371,7 @@ def build_residual_v12_paper_evidence_report(
     statistical_positive_roi_evidence = bool(
         sufficient_evidence
         and settlement_audit["structurally_consistent"]
+        and settlement_audit["paper_record_clock_consistent"]
         and roi_ci_lower is not None
         and float(roi_ci_lower) > 0.0
     )
@@ -381,6 +382,8 @@ def build_residual_v12_paper_evidence_report(
         # Legacy ROI remains diagnostic, never review-ready without the
         # complete bet-to-prediction and settlement-evidence chain.
         status = "blocked_unverified_settlement_evidence"
+    elif not settlement_audit["paper_record_clock_consistent"]:
+        status = "blocked_unverified_paper_record_timing"
     elif statistical_positive_roi_evidence:
         status = "review_ready_statistically_positive_roi"
     elif observed_positive_roi:
