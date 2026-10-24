@@ -121,7 +121,7 @@ def test_asof_pedigree_rejects_updated_record_after_race():
     }])
     pedigree = _pedigree()
     pedigree.loc[0, "pedigree_created_date"] = "20241226"
-    with pytest.raises(ValueError, match="later than target race"):
+    with pytest.raises(ValueError, match="not earlier than target race"):
         attach_pedigree_history_features(frame, pedigree)
 
 
@@ -164,3 +164,15 @@ def test_earlier_snapshot_can_supply_prior_lineage_features():
     assert result.matched_rows == 2
     assert result.frame.loc[1, "sire_past_starts"] == 1
     assert "pedigree_created_date" not in result.frame.columns
+
+
+
+def test_pedigree_update_same_race_day_is_unverifiable():
+    frame = pd.DataFrame([{
+        "race_id": "2024:R1", "race_date": "2024-12-26 10:00:00",
+        "finish_position": 1, "_jv_blood_registration_number": "H1",
+    }])
+    pedigree = _pedigree()
+    pedigree.loc[0, "pedigree_created_date"] = "20241226"
+    with pytest.raises(ValueError, match="not earlier than target race"):
+        attach_pedigree_history_features(frame, pedigree)
