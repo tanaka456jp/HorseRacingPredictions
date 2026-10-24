@@ -206,11 +206,13 @@ def attach_pedigree_history_features(
     )
     late = (
         df["_pedigree_created_day"].notna()
-        & df["_pedigree_created_day"].gt(df["_race_day"])
+        # Provider snapshots here have date granularity, not an exact
+        # intraday known-at time. Same-day updates are also ambiguous.
+        & df["_pedigree_created_day"].ge(df["_race_day"])
     )
     if late.any():
         raise ValueError(
-            "pedigree snapshot update is later than target race; "
+            "pedigree snapshot update is not earlier than target race; "
             "historical as-of lineage is not established"
         )
 
