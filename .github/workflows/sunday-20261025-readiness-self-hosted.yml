@@ -6,6 +6,8 @@ on:
       - "feature/weekly-odds-free-note-20261021"
     paths:
       - "src/horse_racing_predictions/sunday_auto_post_readiness.py"
+      - "src/horse_racing_predictions/sunday_ai_research.py"
+      - "tests/test_sunday_ai_research.py"
       - "scripts/inspect_sunday_auto_post_readiness.py"
       - "scripts/inspect_sunday_pc2_readonly.ps1"
       - "tests/test_sunday_auto_post_readiness.py"
