@@ -9,20 +9,13 @@ on:
       - "scripts/inspect_sunday_auto_post_readiness.py"
       - "tests/test_sunday_auto_post_readiness.py"
       - ".github/workflows/sunday-20261025-readiness-self-hosted.yml"
-  pull_request:
-    branches: [main]
-    paths:
-      - "src/horse_racing_predictions/sunday_auto_post_readiness.py"
-      - "scripts/inspect_sunday_auto_post_readiness.py"
-      - "tests/test_sunday_auto_post_readiness.py"
-      - ".github/workflows/sunday-20261025-readiness-self-hosted.yml"
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: sunday-20261025-readiness-pr142
+  group: sunday-20261025-readiness-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
