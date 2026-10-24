@@ -37,7 +37,14 @@ jobs:
           New-Item -ItemType Directory -Force -Path 'artifacts' | Out-Null
           $out = 'artifacts/sunday_20261025_readiness.json'
           $machine = if ($env:COMPUTERNAME -eq 'DESKTOP-MVV1FD4') { 'PC2' } else { 'NOT_PHYSICAL_PC2' }
+          # Historic archive is separate from a proposed complete Sunday
+          # prediction bundle. Never reinterpret BLDN as RACE or as a model.
           $base = 'D:\JRA-VAN\Data Lab\archive\pre2025'
+          $bundle = 'D:\HorseRacingPredictions\approved-sunday-20261025'
+          $requiredBundleInputs = @(
+            'model\manifest.json','model\model.cbm',
+            'race_history.csv','sunday_entries.csv','race_manifest.json'
+          )
           $result = [ordered]@{
             schemaVersion = 1
             status = 'BLOCKED'
@@ -53,26 +60,77 @@ jobs:
             blockers = @('UNVERIFIED_REAL_36_RACE_MODEL_INPUTS')
           }
           if ($machine -eq 'PC2') {
-            $py = Get-Command py -ErrorAction SilentlyContinue
-            if ($null -ne $py) {
-              $json = & py -3 scripts/inspect_sunday_auto_post_readiness.py --bundle-dir $base 2>$null
-              if ($json) {
-                try {
-                  $parsed = $json | ConvertFrom-Json
-                  $result['blockers'] = @($parsed.blockers)
-                  $result['modelComputed'] = [bool]$parsed.modelComputed
-                  if ($parsed.raceCount) { $result['raceCount'] = [int]$parsed.raceCount }
-                  if ($parsed.modelOutputSha256) {
-                    $result['modelOutputSha256'] = [string]$parsed.modelOutputSha256
-                  }
-                } catch {
-                  $result['blockers'] = @('LOCAL_READINESS_DIAG_INVALID_JSON')
+            $raceManifest = Join-Path $base 'relocated_manifest_v2.json'
+            if (Test-Path -LiteralPath $raceManifest -PathType Leaf) {
+              try {
+                $metadata = Get-Content -LiteralPath $raceManifest -Raw -Encoding UTF8 |
+                  ConvertFrom-Json
+                $race = @($metadata.parts | Where-Object { $_.dataspec -eq 'RACE' })
+                if ($race.Count -eq 1) {
+                  $result['raceArchiveStatus'] = [string]$race[0].status
+                  $result['raceArchiveRecords'] = [int]($race[0].records_written)
+                  $result['raceArchiveResearchUseAllowed'] = (
+                    $race[0].research_use_allowed -eq $true
+                  )
+                } else {
+                  $result['raceArchiveStatus'] = 'RACE_MANIFEST_AMBIGUOUS'
                 }
-              } else {
-                $result['blockers'] = @('LOCAL_PYTHON_OR_READINESS_DIAG_UNAVAILABLE')
+              } catch {
+                $result['raceArchiveStatus'] = 'RACE_MANIFEST_UNREADABLE'
               }
             } else {
-              $result['blockers'] = @('LOCAL_PYTHON_UNAVAILABLE')
+              $result['raceArchiveStatus'] = 'RACE_MANIFEST_MISSING'
+            }
+            $missing = @(
+              foreach ($relative in $requiredBundleInputs) {
+                if (-not (Test-Path -LiteralPath (Join-Path $bundle $relative) -PathType Leaf)) {
+                  if ($relative.StartsWith('model\')) { 'MODEL' }
+                  elseif ($relative -eq 'race_history.csv') { 'HISTORY' }
+                  elseif ($relative -eq 'sunday_entries.csv') { 'ENTRIES' }
+                  else { 'RACE_MANIFEST' }
+                }
+              }
+            ) | Select-Object -Unique
+            $result['bundlePresent'] = Test-Path -LiteralPath $bundle -PathType Container
+            $result['missingInputRoles'] = @($missing)
+            if (@($missing).Count -gt 0) {
+              $result['blockers'] = @('LOCAL_INPUTS_INCOMPLETE')
+              if ($result['raceArchiveStatus'] -ne 'success' -or
+                  $result['raceArchiveRecords'] -eq 0) {
+                $result['blockers'] += 'HISTORICAL_RACE_ARCHIVE_UNAVAILABLE'
+              }
+            } else {
+              # A model/history/entry bundle is only a candidate. The Python
+              # validator checks structure; never grants source or publication rights.
+              $py = Get-Command py -ErrorAction SilentlyContinue
+              if ($null -eq $py) {
+                $result['blockers'] = @('LOCAL_PYTHON_UNAVAILABLE')
+              } else {
+                $json = $null
+                $exitCode = 2
+                try {
+                  $json = & py -3 scripts/inspect_sunday_auto_post_readiness.py --bundle-dir $bundle 2>$null
+                  $exitCode = $LASTEXITCODE
+                } catch {
+                  $json = $null
+                }
+                if ($json) {
+                  try {
+                    $parsed = $json | ConvertFrom-Json
+                    $result['blockers'] = @($parsed.blockers)
+                    $result['modelComputed'] = [bool]$parsed.modelComputed
+                    if ($parsed.raceCount) { $result['raceCount'] = [int]$parsed.raceCount }
+                    if ($parsed.modelOutputSha256) {
+                      $result['modelOutputSha256'] = [string]$parsed.modelOutputSha256
+                    }
+                    $result['researchAuditExitCode'] = [int]$exitCode
+                  } catch {
+                    $result['blockers'] = @('LOCAL_READINESS_DIAG_INVALID_JSON')
+                  }
+                } else {
+                  $result['blockers'] = @('LOCAL_READINESS_DIAG_UNAVAILABLE')
+                }
+              }
             }
           } else {
             $result['blockers'] = @('NOT_PHYSICAL_PC2_LOCAL_ARCHIVE_UNAVAILABLE')
