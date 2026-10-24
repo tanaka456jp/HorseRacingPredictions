@@ -73,9 +73,18 @@ def private_sunday_ai_preview(
         raise ValueError("target must be a Sunday")
     if not isinstance(observed_at, datetime) or observed_at.utcoffset() is None:
         raise ValueError("observed_at must have timezone")
-    observed = observed_at.astimezone(_JST).date()
-    if not day - timedelta(days=2) <= observed < day:
-        raise ValueError("must prepare preview before Sunday, within two days")
+    observed_jst = observed_at.astimezone(_JST)
+    observed = observed_jst.date()
+    # An early Sunday preview is still pre-race, but never permit a model
+    # recomputation near the first post time or after outcomes may arrive.
+    # Verify the clock in JST so a UTC/other-offset timestamp cannot bypass
+    # the cutoff. This does not relax data-source or publication proof.
+    early_sunday = observed == day and observed_jst.time() < time(8, 0)
+    if not (day - timedelta(days=2) <= observed < day or early_sunday):
+        raise ValueError(
+            "preview must be within two days before Sunday "
+            "or on Sunday strictly before 08:00 JST"
+        )
 
     manifest = getattr(champion, "manifest", None)
     version = getattr(manifest, "model_version", "")
