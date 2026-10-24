@@ -104,6 +104,47 @@ def test_created_later_than_frozen_is_rejected(tmp_path):
     assert _check(directory, candidate)["status"] == "REJECTED"
 
 
+def test_protected_2025_2026_final_holdout_is_rejected_even_before_issue(tmp_path):
+    directory, native, candidate = _fixture(tmp_path)
+    for forbidden in ("2025-01-01", "2026-06-01"):
+        native["train_end"] = forbidden
+        (directory / "manifest.json").write_text(
+            json.dumps(native), encoding="utf-8"
+        )
+        result = _check(directory, candidate)
+        assert result["status"] == "REJECTED"
+        assert "protected final holdout" in result["reason"]
+
+
+def test_training_start_after_end_rejected(tmp_path):
+    directory, native, candidate = _fixture(tmp_path)
+    native["train_start"] = "2024-01-01"
+    (directory / "manifest.json").write_text(
+        json.dumps(native), encoding="utf-8"
+    )
+    assert "training start" in _check(directory, candidate)["reason"]
+
+
+def test_fullwidth_market_columns_rejected(tmp_path):
+    directory, native, candidate = _fixture(tmp_path)
+    native["feature_columns"] = ["distance_m", "ｏｄｄｓ"]
+    candidate["featureNames"] = list(native["feature_columns"])
+    (directory / "manifest.json").write_text(
+        json.dumps(native), encoding="utf-8"
+    )
+    assert "market/popularity" in _check(directory, candidate)["reason"]
+
+
+def test_model_creation_before_training_end_rejected(tmp_path):
+    directory, native, candidate = _fixture(tmp_path)
+    native["train_end"] = "2024-12-31"
+    native["created_at"] = "2024-01-01T09:00:00+09:00"
+    (directory / "manifest.json").write_text(
+        json.dumps(native), encoding="utf-8"
+    )
+    assert "creation predates" in _check(directory, candidate)["reason"]
+
+
 def test_post_issue_model_training_rejected(tmp_path):
     directory, native, candidate = _fixture(tmp_path)
     native["train_end"] = "2026-10-24"
