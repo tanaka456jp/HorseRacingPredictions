@@ -186,5 +186,5 @@ def test_phase12_blocks_later_pedigree_before_model_construction(monkeypatch):
         raise AssertionError("model construction must not occur")
 
     monkeypatch.setattr(phase12, "Top3ProbabilityModel", forbidden_model)
-    with pytest.raises(ValueError, match="later than target race"):
+    with pytest.raises(ValueError, match="not earlier than target race"):
         phase12.evaluate_pedigree_phase12(_history(), pedigree)
