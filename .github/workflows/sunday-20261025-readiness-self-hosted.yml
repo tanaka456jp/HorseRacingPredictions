@@ -15,7 +15,7 @@ permissions:
 
 concurrency:
   group: sunday-20261025-readiness-pr142
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   local-readonly-probe:
