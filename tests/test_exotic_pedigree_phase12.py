@@ -48,6 +48,7 @@ def _pedigree():
     return pd.DataFrame([
         {
             "blood_registration_number": f"B{post}",
+            "pedigree_created_date": "20170101",
             "sire_breeding_registration_number": "S1",
             "damsire_breeding_registration_number": "D1",
         }
@@ -174,3 +175,16 @@ def test_phase12_synthetic_e2e_uses_same_baseline_plus_only_ten_pedigree_feature
         assert bootstrap["brier_improvement_support"] >= 0.80
 
     assert result["development_pedigree_gate_passed"] is True
+
+
+
+def test_phase12_blocks_later_pedigree_before_model_construction(monkeypatch):
+    pedigree = _pedigree()
+    pedigree.loc[0, "pedigree_created_date"] = "20241226"
+
+    def forbidden_model(*args, **kwargs):
+        raise AssertionError("model construction must not occur")
+
+    monkeypatch.setattr(phase12, "Top3ProbabilityModel", forbidden_model)
+    with pytest.raises(ValueError, match="later than target race"):
+        phase12.evaluate_pedigree_phase12(_history(), pedigree)
