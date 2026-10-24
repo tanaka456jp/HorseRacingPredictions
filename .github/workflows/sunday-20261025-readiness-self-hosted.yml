@@ -7,6 +7,7 @@ on:
     paths:
       - "src/horse_racing_predictions/sunday_auto_post_readiness.py"
       - "scripts/inspect_sunday_auto_post_readiness.py"
+      - "scripts/inspect_sunday_pc2_readonly.ps1"
       - "tests/test_sunday_auto_post_readiness.py"
       - ".github/workflows/sunday-20261025-readiness-self-hosted.yml"
   workflow_dispatch:
@@ -15,135 +16,64 @@ permissions:
   contents: read
 
 concurrency:
-  group: sunday-20261025-readiness-${{ github.event_name }}-${{ github.ref }}
+  group: sunday-20261025-readiness-pc2
   cancel-in-progress: false
 
 jobs:
+  verify-readonly-script:
+    name: PowerShell parser and no-provider-mutation guard
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Parse PC2 diagnostic without executing it
+        shell: pwsh
+        run: |
+          $source = 'scripts/inspect_sunday_pc2_readonly.ps1'
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path $source).Path, [ref]$tokens, [ref]$errors
+          ) | Out-Null
+          if (@($errors).Count -ne 0) {
+            throw 'PC2_DIAGNOSTIC_POWERSHELL_SYNTAX_ERROR'
+          }
+          $text = Get-Content -LiteralPath $source -Raw
+          foreach ($forbidden in @(
+            '\bJVOpen\s*\(',
+            '\bJVInit\s*\(',
+            '\bStart-Service\b',
+            '\bSet-Service\b',
+            '\bRemove-Item\b',
+            '\bInvoke-WebRequest\b',
+            '\bInvoke-RestMethod\b'
+          )) {
+            if ($text -match $forbidden) {
+              throw 'PC2_DIAGNOSTIC_MUST_BE_READ_ONLY'
+            }
+          }
+
   local-readonly-probe:
-    name: Existing local inputs only (no JV-Link/no note)
+    name: PC2 local input metadata only
+    needs: verify-readonly-script
     runs-on: [self-hosted, Windows]
     timeout-minutes: 10
     steps:
-      - name: Checkout without deleting private ignored archives
+      - name: Checkout without deleting local ignored archives
         uses: actions/checkout@v4
         with:
           clean: false
           persist-credentials: false
 
-      - name: Check local Sunday AI model and archive presence
+      - name: Diagnose existing archive and Sunday candidate bundle
         shell: powershell
         run: |
           $ErrorActionPreference = 'Stop'
-          New-Item -ItemType Directory -Force -Path 'artifacts' | Out-Null
-          $out = 'artifacts/sunday_20261025_readiness.json'
-          $machine = if ($env:COMPUTERNAME -eq 'DESKTOP-MVV1FD4') { 'PC2' } else { 'NOT_PHYSICAL_PC2' }
-          # Historic archive is separate from a proposed complete Sunday
-          # prediction bundle. Never reinterpret BLDN as RACE or as a model.
-          $base = 'D:\JRA-VAN\Data Lab\archive\pre2025'
-          $bundle = 'D:\HorseRacingPredictions\approved-sunday-20261025'
-          $requiredBundleInputs = @(
-            'model\manifest.json','model\model.cbm',
-            'race_history.csv','sunday_entries.csv','race_manifest.json'
-          )
-          $result = [ordered]@{
-            schemaVersion = 1
-            status = 'BLOCKED'
-            machineClass = $machine
-            raceDate = '2026-10-25'
-            archivePre2025Present = Test-Path -LiteralPath $base -PathType Container
-            publicationAuthorized = $false
-            notePostAttempted = $false
-            providerAccessAttempted = $false
-            usageKeyRead = $false
-            rawDataUploaded = $false
-            private2025_2026HoldoutOpened = $false
-            blockers = @('UNVERIFIED_REAL_36_RACE_MODEL_INPUTS')
-          }
-          if ($machine -eq 'PC2') {
-            $raceManifest = Join-Path $base 'relocated_manifest_v2.json'
-            if (Test-Path -LiteralPath $raceManifest -PathType Leaf) {
-              try {
-                $metadata = Get-Content -LiteralPath $raceManifest -Raw -Encoding UTF8 |
-                  ConvertFrom-Json
-                $race = @($metadata.parts | Where-Object { $_.dataspec -eq 'RACE' })
-                if ($race.Count -eq 1) {
-                  $result['raceArchiveStatus'] = [string]$race[0].status
-                  $result['raceArchiveRecords'] = [int]($race[0].records_written)
-                  $result['raceArchiveResearchUseAllowed'] = (
-                    $race[0].research_use_allowed -eq $true
-                  )
-                } else {
-                  $result['raceArchiveStatus'] = 'RACE_MANIFEST_AMBIGUOUS'
-                }
-              } catch {
-                $result['raceArchiveStatus'] = 'RACE_MANIFEST_UNREADABLE'
-              }
-            } else {
-              $result['raceArchiveStatus'] = 'RACE_MANIFEST_MISSING'
-            }
-            $missing = @(
-              foreach ($relative in $requiredBundleInputs) {
-                if (-not (Test-Path -LiteralPath (Join-Path $bundle $relative) -PathType Leaf)) {
-                  if ($relative.StartsWith('model\')) { 'MODEL' }
-                  elseif ($relative -eq 'race_history.csv') { 'HISTORY' }
-                  elseif ($relative -eq 'sunday_entries.csv') { 'ENTRIES' }
-                  else { 'RACE_MANIFEST' }
-                }
-              }
-            ) | Select-Object -Unique
-            $result['bundlePresent'] = Test-Path -LiteralPath $bundle -PathType Container
-            $result['missingInputRoles'] = @($missing)
-            if (@($missing).Count -gt 0) {
-              $result['blockers'] = @('LOCAL_INPUTS_INCOMPLETE')
-              if ($result['raceArchiveStatus'] -ne 'success' -or
-                  $result['raceArchiveRecords'] -eq 0) {
-                $result['blockers'] += 'HISTORICAL_RACE_ARCHIVE_UNAVAILABLE'
-              }
-            } else {
-              # A model/history/entry bundle is only a candidate. The Python
-              # validator checks structure; never grants source or publication rights.
-              $py = Get-Command py -ErrorAction SilentlyContinue
-              if ($null -eq $py) {
-                $result['blockers'] = @('LOCAL_PYTHON_UNAVAILABLE')
-              } else {
-                $json = $null
-                $exitCode = 2
-                try {
-                  $json = & py -3 scripts/inspect_sunday_auto_post_readiness.py --bundle-dir $bundle 2>$null
-                  $exitCode = $LASTEXITCODE
-                } catch {
-                  $json = $null
-                }
-                if ($json) {
-                  try {
-                    $parsed = $json | ConvertFrom-Json
-                    $result['blockers'] = @($parsed.blockers)
-                    $result['modelComputed'] = [bool]$parsed.modelComputed
-                    if ($parsed.raceCount) { $result['raceCount'] = [int]$parsed.raceCount }
-                    if ($parsed.modelOutputSha256) {
-                      $result['modelOutputSha256'] = [string]$parsed.modelOutputSha256
-                    }
-                    $result['researchAuditExitCode'] = [int]$exitCode
-                  } catch {
-                    $result['blockers'] = @('LOCAL_READINESS_DIAG_INVALID_JSON')
-                  }
-                } else {
-                  $result['blockers'] = @('LOCAL_READINESS_DIAG_UNAVAILABLE')
-                }
-              }
-            }
-          } else {
-            $result['blockers'] = @('NOT_PHYSICAL_PC2_LOCAL_ARCHIVE_UNAVAILABLE')
-          }
-          $result | ConvertTo-Json -Depth 6 |
-            Set-Content -LiteralPath $out -Encoding UTF8
-          Get-Content -LiteralPath $out -Encoding UTF8
-          # This is NOT an auto-publisher and cannot unlock note.
-          if ($result['publicationAuthorized']) {
-            throw 'UNEXPECTED_LOCAL_READINESS_PUBLISH_AUTHORIZATION'
-          }
+          & .\scripts\inspect_sunday_pc2_readonly.ps1 -OutputPath 'artifacts/sunday_20261025_readiness.json'
 
-      - name: Upload sanitized readiness, never actual entries or model
+      - name: Upload metadata only, never raw entries/model/key
         if: always()
         uses: actions/upload-artifact@v4
         with:
