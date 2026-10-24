@@ -2,12 +2,19 @@
 from __future__ import annotations
 
 from datetime import date, timedelta
+from importlib.util import module_from_spec, spec_from_file_location
+from pathlib import Path
 import json
 import sys
 
 import pandas as pd
 
-from scripts import evaluate_outsider_pre2025_local as cli
+# scripts/ is a CLI directory, not an installed Python package.
+script = Path(__file__).resolve().parents[1] / "scripts" / "evaluate_outsider_pre2025_local.py"
+spec = spec_from_file_location("evaluate_outsider_pre2025_local", script)
+assert spec is not None and spec.loader is not None
+cli = module_from_spec(spec)
+spec.loader.exec_module(cli)
 
 
 def _args(path):
