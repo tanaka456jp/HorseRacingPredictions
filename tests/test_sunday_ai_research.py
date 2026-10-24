@@ -149,8 +149,26 @@ def test_target_race_date_and_observation_boundary():
         _run(entries=bad)
     with pytest.raises(ValueError, match="within two days"):
         _run(asof=datetime.fromisoformat("2026-10-20T12:00:00+09:00"))
-    with pytest.raises(ValueError, match="before Sunday"):
-        _run(asof=datetime.fromisoformat("2026-10-25T09:00:00+09:00"))
+    # Sunday early-morning inference remains PRIVATE; it cannot post to note.
+    before_cutoff = _run(
+        asof=datetime.fromisoformat("2026-10-25T07:59:59+09:00")
+    )
+    assert before_cutoff["status"] == "PRIVATE_MODEL_RESEARCH_ONLY"
+    assert before_cutoff["publicationAuthorized"] is False
+    assert before_cutoff["independentOutsiderModelVerified"] is False
+    # Same instant represented in UTC must obey the same JST boundary.
+    utc_before = _run(
+        asof=datetime.fromisoformat("2026-10-24T22:59:59+00:00")
+    )
+    assert utc_before["modelOutputSha256"] == before_cutoff["modelOutputSha256"]
+    for invalid in (
+        "2026-10-25T08:00:00+09:00",
+        "2026-10-25T09:00:00+09:00",
+        "2026-10-24T23:00:00+00:00",
+        "2026-10-26T00:00:00+09:00",
+    ):
+        with pytest.raises(ValueError, match="before 08:00 JST"):
+            _run(asof=datetime.fromisoformat(invalid))
 
 
 def test_mismatched_race_id_date_and_invalid_model_features():
