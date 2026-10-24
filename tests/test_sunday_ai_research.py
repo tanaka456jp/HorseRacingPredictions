@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from dataclasses import replace
 from datetime import datetime
 from types import SimpleNamespace
 
@@ -62,6 +63,7 @@ def _inputs():
         model_version="strict-oddsfree-fictional-only-v1",
         source_id="synthetic-test-fixture",
     )
+    manifest = replace(manifest, created_at="2026-10-23T12:00:00+09:00")
     champion = LoadedChampion(model=FakeFittedModel(), manifest=manifest)
     return champion, history, entries
 
@@ -89,6 +91,8 @@ def test_synthetic_fitted_model_is_called_and_never_approves_note():
     assert result["notePublishingPermitted"] is False
     assert result["independentOutsiderModelVerified"] is False
     assert result["predictionAccuracyOrEVProven"] is False
+    assert len(result["modelOutputSha256"]) == 64
+    assert result["publicationAuthorized"] is False
 
 
 def test_legacy_champion_v7_is_always_rejected():
@@ -171,3 +175,80 @@ def test_research_preview_never_ranks_an_unscored_horse():
     assert result["runnerCount"] == 5
     assert len(result["races"][0]["modelTopThree"]) == 3
     assert result["publicationAuthorized"] is False
+
+
+
+def test_historical_market_columns_never_reach_model_feature_builder(monkeypatch):
+    import horse_racing_predictions.sunday_ai_research as mod
+    original = mod.predict_future_entries
+    observed = {"called": False}
+
+    def capture(champion, history, entries, **kwargs):
+        observed["called"] = True
+        assert "win_odds" not in history
+        assert "market_popularity" not in history
+        assert "単 勝" not in history
+        assert "ｵｯｽﾞ" not in history
+        return original(champion, history, entries, **kwargs)
+
+    monkeypatch.setattr(mod, "predict_future_entries", capture)
+    _, history, _ = _inputs()
+    history["win_odds"] = [2.0] * len(history)
+    history["market_popularity"] = [1] * len(history)
+    history["単 勝"] = ["100"] * len(history)
+    history["ｵｯｽﾞ"] = ["2.5"] * len(history)
+    assert _run(history=history)["status"] == "PRIVATE_MODEL_RESEARCH_ONLY"
+    assert observed["called"]
+
+
+def test_historical_odds_perturbations_do_not_change_model_output_digest():
+    _, history, _ = _inputs()
+    baseline = _run(history=history)
+    changed = history.copy()
+    changed["win_odds"] = [None, -3, 2.0, 100.0] * 2
+    changed["人気 順位"] = [99] * len(changed)
+    changed["ｵｯｽﾞ"] = [1.5] * len(changed)
+    alternative = _run(history=changed)
+    assert baseline["races"] == alternative["races"]
+    assert baseline["modelOutputSha256"] == alternative["modelOutputSha256"]
+    assert alternative["publicationAuthorized"] is False
+
+
+def test_model_created_after_prediction_cutoff_is_not_accepted():
+    c, _, _ = _inputs()
+    c.manifest = replace(c.manifest, created_at="2026-10-25T12:00:00+09:00")
+    with pytest.raises(ValueError, match="predate"):
+        _run(champion=c)
+
+
+def test_invalid_or_protected_training_dates_are_blocked():
+    champion, _, _ = _inputs()
+    for invalid in ("2026-10-01", "2024-2-01", "2020-01-01"):
+        case = replace(champion.manifest, train_end=invalid)
+        # For 2020-01-01, the model is invalid because train_start=2021-01-01.
+        with pytest.raises(ValueError, match="training window|holdout"):
+            _run(champion=LoadedChampion(model=FakeFittedModel(), manifest=case))
+
+
+def test_same_day_history_is_rejected_without_a_verified_event_timestamp():
+    _, history, _ = _inputs()
+    history.loc[0, "race_date"] = "2026-10-24"
+    with pytest.raises(ValueError, match="same-day"):
+        _run(history=history)
+
+
+def test_market_column_unicode_variants_rejected_from_entry_input():
+    _, _, entries = _inputs()
+    for name in ("ｵｯｽﾞ", "人 気 順 位", "単 勝"):
+        altered = entries.copy()
+        altered[name] = 1
+        with pytest.raises(ValueError, match="market"):
+            _run(entries=altered)
+
+
+def test_model_output_digest_does_not_grant_provenance_or_publication():
+    evidence = _run()
+    assert evidence["modelOutputSha256"]
+    assert evidence["modelTrainingAndProvenanceIndependentlyVerified"] is False
+    assert evidence["sourceRightsVerified"] is False
+    assert evidence["notePublishingPermitted"] is False
