@@ -25,6 +25,7 @@ _ID = re.compile(r"JRA-[0-9]{8}-[0-9A-Za-z-]{1,24}\Z")
 _RESULT = frozenset({
     "finish_position", "is_winner", "finish_time", "last_3f", "margin",
     "prize_money", "corner_1", "corner_2", "corner_3", "corner_4",
+    "strength", "upside_score", "predicted_win_probability", "manual_rank",
 })
 
 
@@ -97,6 +98,9 @@ def private_sunday_ai_preview(
     if hist_days.max().date() > observed:
         raise ValueError("history observations are from the future")
 
+    if any(not rid.startswith("JRA-" + day.strftime("%Y%m%d") + "-")
+           for rid in expected_race_ids):
+        raise ValueError("race IDs do not encode the target Sunday date")
     if set(entries["race_id"]) != set(expected_race_ids):
         raise ValueError("all expected Sunday races must be present")
     if entries[["race_id", "horse_name", "post_position"]].isna().any().any():
