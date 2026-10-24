@@ -148,6 +148,7 @@ def attach_pedigree_history_features(
 
     pedigree_required = {
         "blood_registration_number",
+        "pedigree_created_date",
         "sire_breeding_registration_number",
         "damsire_breeding_registration_number",
     }
@@ -173,16 +174,28 @@ def attach_pedigree_history_features(
             .astype(float)
         )
 
+    # The latest snapshot is not a historical as-of snapshot. Fail before
+    # feature generation if a later update could leak into an earlier race.
+    created_text = pedigree["pedigree_created_date"].astype("string")
+    if not created_text.str.fullmatch(r"\\d{8}").fillna(False).all():
+        raise ValueError("pedigree snapshot has invalid created dates")
+    created = pd.to_datetime(
+        created_text, format="%Y%m%d", errors="raise",
+    )
+    if created.dt.date.ge(pd.Timestamp("2025-01-01").date()).any():
+        raise ValueError("pedigree snapshot includes protected post-2024 records")
+    if pedigree["blood_registration_number"].duplicated().any():
+        raise ValueError("duplicate pedigree registration keys are ambiguous")
+
     mapping = pedigree[
         [
             "blood_registration_number",
+            "pedigree_created_date",
             "sire_breeding_registration_number",
             "damsire_breeding_registration_number",
         ]
-    ].drop_duplicates(
-        subset=["blood_registration_number"],
-        keep="last",
-    )
+    ].copy()
+    mapping["_pedigree_created_day"] = created.dt.normalize().to_numpy()
 
     df = df.merge(
         mapping,
@@ -191,6 +204,16 @@ def attach_pedigree_history_features(
         how="left",
         sort=False,
     )
+    late = (
+        df["_pedigree_created_day"].notna()
+        & df["_pedigree_created_day"].gt(df["_race_day"])
+    )
+    if late.any():
+        raise ValueError(
+            "pedigree snapshot update is later than target race; "
+            "historical as-of lineage is not established"
+        )
+
     matched = int(
         df["sire_breeding_registration_number"]
         .astype("string")
@@ -229,6 +252,8 @@ def attach_pedigree_history_features(
                 "_pedigree_row_order",
                 "_race_day",
                 "blood_registration_number",
+                "_pedigree_created_day",
+                "pedigree_created_date",
                 "sire_breeding_registration_number",
                 "damsire_breeding_registration_number",
             ],
