@@ -7,7 +7,7 @@ using win_odds. Missing/old history and incomplete entries are hard errors.
 """
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from hashlib import sha256
 import json
 import re
