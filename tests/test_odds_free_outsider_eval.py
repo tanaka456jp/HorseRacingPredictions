@@ -57,7 +57,8 @@ def test_separate_podium_model_is_fitted_and_only_research():
     assert result.winnerModelTarget == "is_winner"
     assert result.outsiderModelTarget == "finish_position_le_3_train_only"
     assert result.status == "RESEARCH_ONLY_NOT_FROZEN_NOT_PUBLISHABLE"
-    assert result.modelSelectionIndependentOfOdds is True
+    assert result.marketColumnsExcludedByResearchPipeline is True
+    assert result.upstreamSampleSelectionIndependentlyVerified is False
     assert result.independentModelPublicationProven is False
     assert result.publicationAuthorized is False
     assert result.positiveExpectedValueDemonstrated is False
