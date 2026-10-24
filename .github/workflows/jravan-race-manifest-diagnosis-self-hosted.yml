@@ -1,0 +1,51 @@
+name: JRA-VAN RACE Manifest Diagnosis (Offline)
+
+on:
+  push:
+    branches:
+      - research/exotic-longshot-race-centered-phase11
+    paths:
+      - "research/jravan_race_manifest_diagnosis_request.txt"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: jravan-race-manifest-diagnosis
+  cancel-in-progress: false
+
+jobs:
+  diagnose:
+    name: Diagnose existing RACE provenance without provider calls
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 10
+    steps:
+      - name: Checkout without deleting local archives
+        uses: actions/checkout@v4
+        with:
+          clean: false
+          persist-credentials: false
+      - name: Inspect only approved D-drive manifest metadata on PC2
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          if ($env:COMPUTERNAME -ne "DESKTOP-MVV1FD4") {
+            throw "Offline provenance audit must run on physical PC2."
+          }
+          $python = Join-Path $PWD ".venv-jravan\Scripts\python.exe"
+          if (-not (Test-Path -LiteralPath $python -PathType Leaf)) {
+            throw "Local JRA-VAN Python environment unavailable."
+          }
+          & $python "scripts\diagnose_jravan_race_manifest_offline.py"
+          if ($LASTEXITCODE -ne 0) {
+            throw "Offline RACE provenance diagnostic failed."
+          }
+      - name: Publish sanitized provenance statuses only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jravan-race-manifest-diagnosis-sanitized
+          path: artifacts/jravan_race_manifest_diagnosis.json
+          if-no-files-found: warn
+          retention-days: 14

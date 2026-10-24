@@ -1,0 +1,11 @@
+JRA-VAN private archive storage verification after official D cutover
+request=2026-10-13-approved-D-storage-health
+source_verification=38384048506
+copy_verification=38384279230
+expected_root=D:\JRA-VAN\Data Lab\archive\pre2025
+legacy_C_tombstone_preserved=true
+previous_D_source_preserved=true
+provider_cache_changed=false
+jvlink_settings_changed=false
+holdout_2025_2026_evaluation=false
+report_sanitized_only=true

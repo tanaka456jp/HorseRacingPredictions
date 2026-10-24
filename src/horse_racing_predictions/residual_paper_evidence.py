@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from datetime import datetime
 import random
 
 from .ledger import Ledger
@@ -211,6 +212,125 @@ def _settled_risk_diagnostics(ledger: Ledger) -> dict:
         "recent_roi_windows": recent_roi_windows,
     }
 
+
+def _audit_settlement_evidence(ledger: Ledger) -> dict:
+    """Audit structural consistency; this is NOT an economic EV gate."""
+    rows = ledger.conn.execute(
+        """
+        SELECT
+            b.race_id,b.horse_id,b.result,b.payout_yen,
+            b.model_version,p.model_version,
+            se.bet_id,se.race_id,se.horse_id,se.result,
+            se.payout_yen,se.source,be.bet_id,
+            pe.prediction_id,s.id,p.predicted_at,s.observed_at,
+            s.scheduled_post_time,s.race_id,s.horse_id,
+            p.decimal_odds,s.decimal_odds,s.source,
+            b.placed_at,be.recorded_at
+        FROM bets b
+        LEFT JOIN paper_bet_evidence be ON be.bet_id=b.id
+        LEFT JOIN predictions p ON p.id=be.prediction_id
+        LEFT JOIN paper_prediction_evidence pe ON pe.prediction_id=p.id
+        LEFT JOIN pre_race_odds_snapshots s ON s.id=pe.odds_snapshot_id
+        LEFT JOIN paper_settlement_evidence se ON se.bet_id=b.id
+        WHERE b.model_version=?
+          AND b.stake_yen > 0
+          AND b.result IS NOT NULL
+        ORDER BY b.id
+        """,
+        (PAPER_MODEL_VERSION,),
+    ).fetchall()
+    missing = 0
+    missing_bet_evidence = 0
+    missing_snapshot_evidence = 0
+    invalid_pre_race_evidence = 0
+    invalid_paper_record_timing = 0
+    inconsistent = 0
+    model_mismatch = 0
+    for row in rows:
+        if row[12] is None:
+            missing_bet_evidence += 1
+        if row[4] != row[5]:
+            model_mismatch += 1
+        if row[13] is None or row[14] is None:
+            missing_snapshot_evidence += 1
+        else:
+            try:
+                predicted = datetime.fromisoformat(row[15])
+                observed = datetime.fromisoformat(row[16])
+                post = datetime.fromisoformat(row[17])
+                valid_timing = bool(
+                    predicted.utcoffset() is not None
+                    and observed.utcoffset() is not None
+                    and post.utcoffset() is not None
+                    and observed <= predicted < post
+                )
+            except (TypeError, ValueError):
+                valid_timing = False
+            if (
+                not valid_timing
+                or row[0] != row[18]
+                or row[1] != row[19]
+                or row[20] is None
+                or row[21] is None
+                or abs(float(row[20]) - float(row[21])) > 1e-12
+                or not str(row[22] or "").strip()
+            ):
+                invalid_pre_race_evidence += 1
+        # Internal record timestamps must also precede the scheduled post.
+        # This is a diagnostic, NOT proof of receipt or broker acceptance.
+        if row[13] is not None and row[14] is not None:
+            try:
+                predicted = datetime.fromisoformat(row[15])
+                post = datetime.fromisoformat(row[17])
+                placed = datetime.fromisoformat(row[23])
+                linked = datetime.fromisoformat(row[24])
+                valid_record_clock = bool(
+                    all(value.utcoffset() is not None for value in
+                        (predicted, post, placed, linked))
+                    and predicted <= placed <= linked < post
+                )
+            except (TypeError, ValueError):
+                valid_record_clock = False
+            if not valid_record_clock:
+                invalid_paper_record_timing += 1
+        if row[6] is None:
+            missing += 1
+        elif (
+            row[0] != row[7]
+            or row[1] != row[8]
+            or row[2] != row[9]
+            or int(row[3] or 0) != int(row[10] or 0)
+            or not str(row[11] or "").strip()
+        ):
+            inconsistent += 1
+    return {
+        "settled_bets_checked": len(rows),
+        "missing_settlement_evidence": missing,
+        "missing_bet_evidence": missing_bet_evidence,
+        "missing_snapshot_evidence": missing_snapshot_evidence,
+        "invalid_pre_race_evidence": invalid_pre_race_evidence,
+        "invalid_paper_record_timing": invalid_paper_record_timing,
+        "paper_record_clock_consistent": bool(
+            rows and not (
+                missing_bet_evidence or missing_snapshot_evidence
+                or invalid_pre_race_evidence or invalid_paper_record_timing
+            )
+        ),
+        "inconsistent_settlement_evidence": inconsistent,
+        "prediction_model_mismatches": model_mismatch,
+        "structurally_consistent": bool(
+            rows and not (
+                missing or missing_bet_evidence or missing_snapshot_evidence
+                or invalid_pre_race_evidence or invalid_paper_record_timing
+                or inconsistent or model_mismatch
+            )
+        ),
+        "official_payout_provenance_verified": False,
+        "actual_purchase_acceptance_verified": False,
+        "economic_go_assessed": False,
+    }
+
+
 def build_residual_v12_paper_evidence_report(
     ledger_path: str | Path,
 ) -> dict:
@@ -231,6 +351,7 @@ def build_residual_v12_paper_evidence_report(
         performance = summarize_residual_v12_paper(ledger)
         bootstrap = _race_clustered_roi_bootstrap(ledger)
         risk = _settled_risk_diagnostics(ledger)
+        settlement_audit = _audit_settlement_evidence(ledger)
     finally:
         ledger.close()
 
@@ -244,14 +365,34 @@ def build_residual_v12_paper_evidence_report(
         roi is not None and float(roi) > 0.0
     )
     roi_ci_lower = bootstrap["roi_ci_lower"]
+    # A positive legacy bootstrap is not review-ready when any settled
+    # Paper bet lacks internally consistent settlement evidence.  This
+    # structural gate does NOT verify official payout provenance, execution,
+    # licensing, market-relative net ROI, or economic GO.
     statistical_positive_roi_evidence = bool(
         sufficient_evidence
+        and settlement_audit["structurally_consistent"]
+        and settlement_audit["paper_record_clock_consistent"]
         and roi_ci_lower is not None
         and float(roi_ci_lower) > 0.0
     )
 
     if not sufficient_evidence:
         status = "insufficient_evidence"
+    elif not settlement_audit["structurally_consistent"]:
+        # A late Paper record is structurally invalid. Keep the specific
+        # timing status when no other evidence-chain defect is present.
+        other_defects = (
+            "missing_settlement_evidence", "missing_bet_evidence",
+            "missing_snapshot_evidence", "invalid_pre_race_evidence",
+            "inconsistent_settlement_evidence", "prediction_model_mismatches",
+        )
+        if settlement_audit["invalid_paper_record_timing"] and not any(
+            settlement_audit[key] for key in other_defects
+        ):
+            status = "blocked_unverified_paper_record_timing"
+        else:
+            status = "blocked_unverified_settlement_evidence"
     elif statistical_positive_roi_evidence:
         status = "review_ready_statistically_positive_roi"
     elif observed_positive_roi:
@@ -311,6 +452,7 @@ def build_residual_v12_paper_evidence_report(
         "longest_losing_streak": risk["longest_losing_streak"],
         "current_losing_streak": risk["current_losing_streak"],
         "recent_roi_windows": risk["recent_roi_windows"],
+        "settlement_evidence_audit": settlement_audit,
         "risk_diagnostics_adaptive": False,
         "live_execution_enabled": False,
         "automatic_live_promotion": False,

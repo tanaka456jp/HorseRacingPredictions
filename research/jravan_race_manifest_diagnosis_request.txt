@@ -1,0 +1,13 @@
+request=2026-10-13-2028-jravan-race-manifest-offline-diagnosis
+physical_pc=DESKTOP-MVV1FD4
+authoritative_storage=D:\JRA-VAN\Data Lab\archive\pre2025
+read_only=true
+manifest_metadata_only=true
+provider_access=false
+read_usage_key=false
+read_raw_data=false
+holdout_2025_2026=false
+evaluate_phase12_phase13=false
+raw_upload=false
+
+retry=2026-10-13-2031-fixed-return-code-parser

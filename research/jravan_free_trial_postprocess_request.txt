@@ -1,0 +1,28 @@
+JRA-VAN free-trial local postprocess request
+
+authorized_by_user=true
+requested_at_jst=2026-10-11T20:45:00+09:00
+
+Purpose:
+- Do NOT call JVOpen/JVRTOpen or redownload provider data.
+- Preserve the original local latest_manifest.json unchanged.
+- Write latest_manifest_v2.json by metadata-only reassessment.
+- Reclassify JVOpen -1 failures as no_data.
+- Quarantine any successful archive part whose provider last_file_timestamp is not certifiably pre-2025.
+- Validate BLDN hash/provenance from the reassessed manifest.
+- Build private pedigree_snapshot.csv from BLDN only.
+- Publish sanitized reassessment and pedigree coverage/hash reports only.
+- Do not upload raw JV-Data, pedigree_snapshot.csv, or local manifests.
+- Do not run Phase 12 or Phase 13 real-data evaluation in this workflow.
+- Do not touch 2025-2026 final holdout for research/modeling.
+
+Known first archive:
+run_id=38099488055
+records_archived=5159201
+race_status=failed_-301
+legacy_blood_format=BLOD
+modern_blood_format=BLDN
+
+request_generation=2-d-drive
+expected_archive_root=D:\\HorseRacingPredictions\\JraVanFreeTrialArchive\\pre2025
+provider_access=false

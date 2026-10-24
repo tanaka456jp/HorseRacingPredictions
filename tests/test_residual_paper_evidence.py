@@ -110,6 +110,9 @@ def test_evidence_gate_stays_closed_below_frozen_thresholds(tmp_path):
     assert report["minimum_prospective_evaluated_races"] == 500
     assert report["minimum_settled_paper_bets"] == 200
     assert report["automatic_live_promotion"] is False
+    assert report["settlement_evidence_audit"]["structurally_consistent"] is False
+    assert report["settlement_evidence_audit"]["invalid_paper_record_timing"] == 3
+    assert report["settlement_evidence_audit"]["economic_go_assessed"] is False
     assert report["live_execution_enabled"] is False
     assert report["roi_bootstrap_status"] == "insufficient_race_clusters"
     assert report["roi_ci_lower"] is None
@@ -227,9 +230,70 @@ def test_evidence_gate_reports_positive_roi_only_after_sample_gate(tmp_path):
     assert report["roi_ci_lower"] > 0.0
     assert report["roi_ci_upper"] > report["roi_ci_lower"]
     assert 0.0 <= report["bootstrap_positive_roi_fraction"] <= 1.0
-    assert report["statistical_positive_roi_evidence"] is True
-    assert report["status"] == "review_ready_statistically_positive_roi"
+    # A positive legacy bootstrap with 200 evidence-free settlements is
+    # NOT review-ready statistical evidence, much less economic proof.
+    assert report["statistical_positive_roi_evidence"] is False
+    # Even a positive observed ROI cannot be review-ready when all 200
+    # synthetic settlements lack the required settlement evidence chain.
+    assert report["status"] == "blocked_unverified_settlement_evidence"
+    assert report["settlement_evidence_audit"]["missing_settlement_evidence"] == 200
+    assert report["settlement_evidence_audit"]["structurally_consistent"] is False
     assert report["automatic_live_promotion"] is False
+
+    # Synthetic evidence can restore only structural/statistical review
+    # readiness. It cannot prove official payout provenance or economic GO.
+    ledger = Ledger(ledger_path)
+    try:
+        rows = ledger.conn.execute(
+            "SELECT id,race_id,horse_id,result,payout_yen FROM bets"
+        ).fetchall()
+        for bet_id, race_id, horse_id, result, payout_yen in rows:
+            won = result == "WIN"
+            ledger.conn.execute(
+                """
+                INSERT INTO paper_settlement_evidence (
+                    bet_id,race_id,horse_id,finish_position,final_win_odds,
+                    result,payout_yen,source,source_reference,recorded_at
+                ) VALUES (?,?,?,?,?,?,?,?,?,?)
+                """,
+                (
+                    bet_id, race_id, horse_id, 1 if won else 2,
+                    4.0 if won else None, result, payout_yen,
+                    "synthetic-test", "synthetic-test",
+                    "2026-09-29T02:00:00+00:00",
+                ),
+            )
+        ledger.conn.commit()
+    finally:
+        ledger.close()
+
+    structural_report = build_residual_v12_paper_evidence_report(ledger_path)
+    assert structural_report["statistical_positive_roi_evidence"] is True
+    assert structural_report["status"] == "review_ready_statistically_positive_roi"
+    audit = structural_report["settlement_evidence_audit"]
+    assert audit["structurally_consistent"] is True
+    assert audit["official_payout_provenance_verified"] is False
+    assert audit["economic_go_assessed"] is False
+    assert audit["paper_record_clock_consistent"] is True
+
+    # A single post-race Paper bet timestamp must revoke even synthetic
+    # statistical review readiness; it cannot be counted as Forward Paper.
+    ledger = Ledger(ledger_path)
+    try:
+        ledger.conn.execute(
+            "UPDATE bets SET placed_at=? WHERE id=(SELECT MIN(id) FROM bets)",
+            ("2026-09-29T02:00:00+00:00",),
+        )
+        ledger.conn.commit()
+    finally:
+        ledger.close()
+    late_report = build_residual_v12_paper_evidence_report(ledger_path)
+    assert late_report["sufficient_evidence"] is True
+    assert late_report["settlement_evidence_audit"]["structurally_consistent"] is False
+    assert late_report["settlement_evidence_audit"]["invalid_paper_record_timing"] == 1
+    assert late_report["settlement_evidence_audit"]["paper_record_clock_consistent"] is False
+    assert late_report["statistical_positive_roi_evidence"] is False
+    assert late_report["status"] == "blocked_unverified_paper_record_timing"
 
 
 def test_roi_bootstrap_is_deterministic_for_same_ledger(tmp_path):
@@ -282,3 +346,159 @@ def test_risk_diagnostics_are_empty_safe_without_settled_bets(tmp_path):
         row["sample_bets"] == 0 and row["roi"] is None
         for row in report["recent_roi_windows"]
     )
+
+
+def test_settlement_evidence_audit_flags_missing_mismatch_and_model_drift(tmp_path):
+    ledger_path = tmp_path / "paper.sqlite3"
+    ledger = Ledger(ledger_path)
+    try:
+        for index in range(3):
+            _insert_evaluation(
+                ledger,
+                race_id=f"A{index}",
+                stake_yen=100,
+                won=index == 1,
+            )
+        ledger.conn.execute(
+            "DELETE FROM paper_settlement_evidence WHERE race_id=?",
+            ("A0",),
+        )
+        ledger.conn.execute(
+            "UPDATE paper_settlement_evidence SET payout_yen=payout_yen+1 "
+            "WHERE race_id=?",
+            ("A1",),
+        )
+        ledger.conn.execute(
+            "UPDATE predictions SET model_version=? WHERE race_id=?",
+            ("wrong-model", "A2"),
+        )
+        ledger.conn.commit()
+    finally:
+        ledger.close()
+
+    report = build_residual_v12_paper_evidence_report(ledger_path)
+    audit = report["settlement_evidence_audit"]
+    assert audit["settled_bets_checked"] == 3
+    assert audit["missing_settlement_evidence"] == 1
+    assert audit["inconsistent_settlement_evidence"] == 1
+    assert audit["prediction_model_mismatches"] == 1
+    assert audit["structurally_consistent"] is False
+    assert audit["official_payout_provenance_verified"] is False
+    assert audit["economic_go_assessed"] is False
+
+
+def test_audit_catches_settled_bet_without_prediction_link(tmp_path):
+    """Missing bet linkage must not disappear through an inner SQL join."""
+    ledger_path = tmp_path / "paper.sqlite3"
+    ledger = Ledger(ledger_path)
+    try:
+        _insert_evaluation(ledger, race_id="LINK0", stake_yen=100, won=True)
+        _insert_evaluation(ledger, race_id="LINK1", stake_yen=100, won=False)
+        ledger.conn.execute(
+            """
+            DELETE FROM paper_bet_evidence
+            WHERE bet_id IN (SELECT id FROM bets WHERE race_id=?)
+            """,
+            ("LINK0",),
+        )
+        ledger.conn.commit()
+    finally:
+        ledger.close()
+
+    report = build_residual_v12_paper_evidence_report(ledger_path)
+    audit = report["settlement_evidence_audit"]
+    assert audit["settled_bets_checked"] == 2
+    assert audit["missing_bet_evidence"] == 1
+    assert audit["missing_settlement_evidence"] == 0
+    assert audit["structurally_consistent"] is False
+    assert report["statistical_positive_roi_evidence"] is False
+    assert audit["economic_go_assessed"] is False
+
+
+def test_audit_rejects_missing_or_post_race_odds_snapshot(tmp_path):
+    """Structural review cannot rely on an absent or post-time price."""
+    ledger_path = tmp_path / "paper.sqlite3"
+    ledger = Ledger(ledger_path)
+    try:
+        _insert_evaluation(ledger, race_id="NO_SNAP", stake_yen=100, won=True)
+        _insert_evaluation(ledger, race_id="LATE_SNAP", stake_yen=100, won=False)
+        ledger.conn.execute(
+            """
+            DELETE FROM paper_prediction_evidence
+            WHERE prediction_id IN (
+                SELECT id FROM predictions WHERE race_id=?
+            )
+            """,
+            ("NO_SNAP",),
+        )
+        ledger.conn.execute(
+            """
+            UPDATE pre_race_odds_snapshots
+            SET observed_at=?
+            WHERE race_id=?
+            """,
+            ("2026-09-29T02:00:00+00:00", "LATE_SNAP"),
+        )
+        ledger.conn.commit()
+    finally:
+        ledger.close()
+
+    report = build_residual_v12_paper_evidence_report(ledger_path)
+    audit = report["settlement_evidence_audit"]
+    assert audit["settled_bets_checked"] == 2
+    assert audit["missing_snapshot_evidence"] == 1
+    assert audit["invalid_pre_race_evidence"] == 1
+    assert audit["structurally_consistent"] is False
+    assert report["statistical_positive_roi_evidence"] is False
+    assert audit["official_payout_provenance_verified"] is False
+    assert audit["economic_go_assessed"] is False
+
+
+def test_paper_record_clock_does_not_accept_backfilled_history(tmp_path):
+    """A historical quote plus a later Paper insert is not a forward record."""
+    ledger_path = tmp_path / "paper.sqlite3"
+    ledger = Ledger(ledger_path)
+    try:
+        # _insert_evaluation records a new Paper bet today, while its
+        # synthetic quote and scheduled post are fixed in September.
+        _insert_evaluation(
+            ledger, race_id="BACKFILLED", stake_yen=100, won=True
+        )
+    finally:
+        ledger.close()
+
+    report = build_residual_v12_paper_evidence_report(ledger_path)
+    audit = report["settlement_evidence_audit"]
+    assert audit["settled_bets_checked"] == 1
+    assert audit["structurally_consistent"] is False
+    assert audit["invalid_paper_record_timing"] == 1
+    assert audit["paper_record_clock_consistent"] is False
+    assert audit["actual_purchase_acceptance_verified"] is False
+    assert audit["economic_go_assessed"] is False
+
+
+def test_paper_record_clock_flags_post_time_link_even_with_early_bet(tmp_path):
+    ledger_path = tmp_path / "paper.sqlite3"
+    ledger = Ledger(ledger_path)
+    try:
+        _insert_evaluation(
+            ledger, race_id="LATE_LINK", stake_yen=100, won=False
+        )
+        ledger.conn.execute(
+            "UPDATE bets SET placed_at=? WHERE race_id=?",
+            ("2026-09-29T00:02:00+00:00", "LATE_LINK"),
+        )
+        ledger.conn.execute(
+            "UPDATE paper_bet_evidence SET recorded_at=? WHERE "
+            "bet_id IN (SELECT id FROM bets WHERE race_id=?)",
+            ("2026-09-29T01:01:00+00:00", "LATE_LINK"),
+        )
+        ledger.conn.commit()
+    finally:
+        ledger.close()
+
+    audit = build_residual_v12_paper_evidence_report(ledger_path)[
+        "settlement_evidence_audit"
+    ]
+    assert audit["invalid_paper_record_timing"] == 1
+    assert audit["paper_record_clock_consistent"] is False

@@ -189,7 +189,7 @@ class Ledger:
         broker_reference="",
     ):
         row = self.conn.execute(
-            "SELECT p.race_id,p.horse_id,p.decimal_odds "
+            "SELECT p.race_id,p.horse_id,p.decimal_odds,p.model_version "
             "FROM paper_prediction_evidence e "
             "JOIN predictions p ON p.id=e.prediction_id "
             "WHERE p.id=?",
@@ -208,6 +208,10 @@ class Ledger:
         if abs(float(decision.decimal_odds) - float(row[2])) > 1e-12:
             raise ValueError(
                 "paper bet odds must match prediction evidence"
+            )
+        if decision.model_version != row[3]:
+            raise ValueError(
+                "paper bet model_version must match prediction evidence"
             )
 
         with self.conn:

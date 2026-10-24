@@ -1,0 +1,62 @@
+name: JRA-VAN Archive Migrate to D Drive
+
+on:
+  push:
+    branches:
+      - research/exotic-longshot-race-centered-phase11
+    paths:
+      - "research/jravan_archive_migration_request.txt"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: jravan-archive-migrate-to-d-drive
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    name: Copy and SHA-verify private JRA-VAN archive to D drive
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout without deleting local archives
+        uses: actions/checkout@v4
+        with:
+          clean: false
+          persist-credentials: false
+
+      - name: Copy archive and verify SHA-256 without deleting C source
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          if ($env:COMPUTERNAME -ne "DESKTOP-MVV1FD4") {
+            throw "Migration may only execute on the confirmed physical PC2."
+          }
+          if ($env:HORSE_RACING_JRAVAN_ARCHIVE_ROOT -and
+              $env:HORSE_RACING_JRAVAN_ARCHIVE_ROOT -ne "D:\JRA-VAN\Data Lab\archive\pre2025") {
+            throw "Unexpected JRA-VAN archive override; refusing to change storage routing."
+          }
+          $python = Join-Path $PWD ".venv-jravan\Scripts\python.exe"
+          if (-not (Test-Path -LiteralPath $python -PathType Leaf)) {
+            throw ".venv-jravan is missing."
+          }
+          if (-not (Test-Path -LiteralPath "D:\" -PathType Container)) {
+            throw "D drive is unavailable; C-drive archive will remain untouched."
+          }
+          & $python "scripts\migrate_jravan_archive_to_d.py" `
+            --report-output "artifacts\jravan_archive_d_drive_migration_report.json"
+          if ($LASTEXITCODE -ne 0) {
+            throw "JRA-VAN D-drive migration failed; source archive remains on C drive."
+          }
+
+      - name: Publish sanitized migration report only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jravan-archive-d-drive-migration-report
+          path: artifacts/jravan_archive_d_drive_migration_report.json
+          if-no-files-found: warn
+          retention-days: 30

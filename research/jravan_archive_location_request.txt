@@ -1,0 +1,8 @@
+request=2026-10-13-source-location-discovery
+physical_machine=DESKTOP-MVV1FD4
+candidate_roots=legacy-C,prior-D,approved-D
+hash_manifests_only=true
+touch_provider=false
+do_not_modify_data=true
+do_not_delete_c=true
+do_not_evaluate_holdout=true

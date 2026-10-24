@@ -253,3 +253,31 @@ def test_residual_v12_paper_rejects_stale_prerace_odds(tmp_path):
     assert summary["new_selected_bets"] == 0
     assert summary["max_odds_age_minutes"] == 10
     assert summary["performance"]["selected_bets"] == 0
+
+
+@pytest.mark.parametrize(
+    ("column", "value"),
+    [
+        ("source", None),
+        ("source", ""),
+        ("source", "nan"),
+        ("source_reference", None),
+        ("source_reference", ""),
+        ("source_reference", "nan"),
+    ],
+)
+def test_residual_v12_paper_rejects_missing_odds_provenance(
+    tmp_path, column, value
+):
+    observed = datetime(2026, 9, 29, 0, 0, tzinfo=UTC)
+    rows = _prediction_rows(observed=observed)
+    rows[column] = value
+
+    with pytest.raises(
+        ValueError, match="explicit source and source_reference"
+    ):
+        run_residual_v12_forward_paper(
+            rows,
+            ledger_path=tmp_path / "paper.sqlite3",
+            decision_time=observed + timedelta(minutes=5),
+        )

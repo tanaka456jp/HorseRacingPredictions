@@ -1,0 +1,176 @@
+# HorseRacingPredictions: economic viability / GO–NO-GO review
+
+Decision record prepared 2026-10-19 JST for the remaining one-week
+hourly EV-validation research. **Top priority: independently demonstrate
+a positive expected net return for a legitimately purchasable market.
+Otherwise recommend freezing/retiring this project.**
+
+This is NOT a claim of verified positive or negative real-world EV.
+It does not open data, request access, place orders or alter one-shot
+evaluations. Retiring the project is a human decision; preserve repo and
+private data unless explicitly authorized.
+
+## Current evidence, with separate research and economic claims
+
+| Finding | Evidence | What it establishes | Economic decision |
+| --- | --- | --- | --- |
+| Champion v7 historical research | README: 12,114 races / 19 OOS folds / research ROI **-1.90%**, 2018–2021 | Existing baseline is not profitable in its reported retrospective setup | No evidence of a positive edge |
+| v12 Market Residual | Existing retrospective Brier/LogLoss diagnostics | Small gains in *probability quality*, not in executable returns | Insufficient |
+| Recent synthetic-only modules | PR #141, latest source head at inception `fedd955216b3356266044c9f2d1f5b95b515484b`, CI #39207567830: 1097 passed/15 skipped | Software invariants and hypothetical arithmetic | NOT a real-market profitability experiment |
+| RACE pre-2025 archive | Offline diagnosis #38390982174: `JVOpen=-301`, zero RACE records | History needed for relevant real-data experiments is absent from the approved PC2 archive | Blocked |
+| Bloodline archive | 79,888 BLDN records and 62,880 snapshot rows, CI #38385246243 SUCCESS | Valid pedigree data, not the outcomes or executable price quotes | Insufficient |
+| Pre-purchase exotic odds | No independently verified free/licensed timestamped trio/trifecta quote source | Final dividends and final O5/O6 are *not* executable prebet prices | Blocked |
+| Existing single-win Paper infrastructure | `residual_paper_evidence.py` has immutable quote timestamps, 500 prospective race / 200 settled Paper-bet minimum and race-cluster bootstrap | An already-implemented prospective evaluation pathway, **not** proof that enough approved live quotes or bets exist | Missing verified current evidence |
+
+The actual forward-Paper evaluated-race count, settled-bet count, economic
+ROI, lower confidence bound, purchase-failure rate and market benchmark
+on the **current live-data-approved cohort** are **NOT VERIFIED**.
+Do not misstate "not verified" as zero, or a synthetic positive statistic
+as a real-world edge.
+
+## Shortest research path toward a defensible answer
+
+1. **Stop expanding models by default.** Do not optimize more predictors
+   or add synthetic modules simply to increase CI tests; only address an
+   identified gate failure that blocks real EV evaluation.
+2. **Prioritize any demonstrably affordable, lawful, timestamped prebet
+   market, including SINGLE WIN**. Three-horse combinations are no longer
+   assumed the mandatory first market. For win, reuse the existing
+   immutable odds/prediction link and frozen Paper evidence gate. Do not
+   change existing thresholds after inspecting results.
+3. **Verify rights, cost and timestamps** for each candidate data
+   provider *before* collecting anything. Public page visibility,
+   freeware label and actual data license are different. No unlicensed
+   scraping, automated purchases, new paid accounts, token reads or
+   unlimited authentication retries.
+4. **Verify price *before* the independent purchase cutoff**, with
+   source/capture time, market ID, source rights, and all abstentions
+   included. A display quote may diverge from the eventual pari-mutuel
+   dividend; report a conservative bound for this instability.
+   Model eligible attempts, refused attempts, quote outages, nonfills,
+   purchase constraints and all costs as applicable. A retrospective
+   final payout is an OUTCOME, never a prebet executable quote.
+5. **Use original, independent strict-OOS evidence** with market baseline
+   on identical eligible races and frozen policy. No touching protected
+   2025–2026 final holdout to backfill current data. The 2023/2024
+   one-shot Phase12/13 evaluation remains unconsumed.
+6. **Meet existing Paper evidence gate**: at least 500 prospectively
+   evaluated races AND 200 settled Paper bets; independently verify
+   market comparator, all fees, lower return confidence bound and
+   sufficiently independent race/day cohorts. Positive observed ROI
+   alone or improved Brier/LogLoss are not sufficient.
+7. **Report explicit decision and data gap every cycle**, including
+   available eligible races, actual *approved* decision-time quotes,
+   attempts/nonfills, settled bets, net ROI, market delta, interval
+   lower bound and proof of rights. Missing entries must say UNKNOWN.
+
+## Decision classification (not an automated trading permission)
+
+- `PROVEN_POSITIVE_EV_FOR_HUMAN_REVIEW`: only after all evidence/rights,
+  cutoff, frozen OOS, settled costs, sample and comparator checks pass,
+  net ROI > 0, *independently justified lower bound* > 0, and sensitivity
+  to price deterioration/selection and missing opportunities remains
+  positive. Still **NOT** permission to bet; a statistical estimate is
+  never certainty.
+- `MEASUREMENT_BLOCKED`: outcome or executable quote records, rights,
+  sampled opportunities, OOS provenance, or settlement evidence missing.
+  This is the **current status**, not a finding of zero/negative EV.
+- `EVIDENCE_AGAINST_EDGE`: sufficiently powered, independently valid
+  economic test finds nonpositive/negative net edge or the plausible
+  lower-bound threshold fails. A small/inconclusive test must not be
+  mislabeled a strong negative conclusion.
+- `NO_GO_RECOMMENDED`: at scheduled one-week conclusion,
+  *either* required no-cost lawful acquisition route is unavailable
+  *or* the necessary economic evidence cannot credibly be obtained
+  within the project's budget/horizon *or* trustworthy testing rejects
+  profitability. Explain which cause applies. Recommend pausing
+  development and preserving artifacts, not deleting anything.
+
+The last scheduled hourly iteration follows the existing automation
+(`DTSTART=2026-10-16T18:31:15Z`; `FREQ=HOURLY;COUNT=168`,
+ending approximately 2026-10-24 02:31 JST). If evidence is still absent
+at the conclusion, do not perpetuate indefinite purely synthetic
+development. Provide a negative continuation recommendation and identify
+what new independent evidence would justify reopening research.
+
+## Important 2025–2026 boundary
+
+The already-frozen 2025–2026 holdout must NOT be read, replayed,
+rebuilt, mined for retrospective evidence, or used for feature
+selection. JRA-VAN realtime historical snapshots generally expire
+rapidly and historical final odds are insufficient to reconstruct
+purchase-time trio/trifecta quotes. Under the current freeze, recording
+new 2026 odds as research data **cannot be assumed authorized**.
+A new future prospective cohort would require a separately established
+and reviewed data/split policy; the task may not silently redefine
+the protected final holdout.
+
+
+## 2026-10-19 independent provider check: no approved no-cost acquisition path
+
+- **Official JRA-VAN terms** (Article 7) restrict use of obtained data to
+  personal/private purposes absent provider authorization. Article 9 requires
+  the official JV-Link path for Data Lab server access. Neither a visible
+  webpage nor a free software client independently grants automated collection,
+  external AI transfer, retention or bulk-archive permission:
+  https://jra-van.jp/info/rule.html
+- **2026-10-18 developer-staff clarification:** a public support response
+  explicitly identifies *bulk acquisition and accumulation during the free
+  trial* among prohibited-use examples, and does not provide a blanket
+  authorization for external-cloud/AI training workflows. This materially
+  strengthens the no-go evidence for using a free trial to rebuild a bulk
+  archive. Do **not** launch trial bulk acquisition, even with a bounded
+  historical date range, without separate affirmative provider approval:
+  https://developer.jra-van.jp/t/topic/964
+- **Official 2026-08-25 staff response:** realtime odds supplied through
+  JVRTOpen are available for only one week. Historical final odds cannot
+  reconstruct an executable pre-purchase trio/trifecta quote:
+  https://developer.jra-van.jp/t/topic/979
+- **Cost:** standard Data Lab subscription is JPY 2,090/month, not a free
+  continuing feed. Current PC2 trial entitlement has **not** been independently
+  verified. Do not inspect keys or perform authentication probes:
+  https://jra-van.jp/dlb/
+- **Single-win alternative:** existing Paper infrastructure and historical
+  win-odds fields make it simpler technically, but do not establish an
+  authorized, timestamped, pre-cutoff executable price source or a profitable
+  settled OOS cohort. Treat the win market as **MEASUREMENT_BLOCKED** too.
+
+**Evidence snapshot at this check:** authorized decision-time quote count,
+prospective eligible race count, nonfills, actual net ROI/EV, independent
+market delta, day-cluster uncertainty and settled Paper sample are all
+**UNVERIFIED**, not zero. The historical -1.90% research ROI is a separate
+retrospective baseline and is not a current executable ROI estimate.
+
+**Decision:** `MEASUREMENT_BLOCKED` / `NO_GO_CANDIDATE`. Unless a new,
+independently verified no-cost rights/provenance path and sufficient genuine
+forward evidence become available by the existing one-week deadline, recommend
+freezing further model/software development. Preserve repo, Draft PR, raw local
+files, final holdout, and automation until the user directs otherwise.
+
+## Independent source references
+
+- Official JRA-VAN Data Lab current standard subscription:
+  https://jra-van.jp/dlb/ (JPY 2,090/month).
+- JRA-VAN free-trial FAQ:
+  https://support.jra-van.jp/jravan/detail?category=2&id=431&site=SVKNEGBV
+  (a trial is conditional; do not infer it remains valid at PC2).
+- JRA public website usage terms:
+  https://www.jra.go.jp/use/index.html
+- Existing repository source review:
+  `docs/PHASE11_FREE_PREBET_RIGHTS_DECISION_20261010_CYCLE49.md`
+  and `docs/EXOTIC_PREBET_ODDS_EVIDENCE_GATES_20261010.md`.
+- PC2 RACE offline failure:
+  `docs/JRAVAN_RACE_FREE_TRIAL_HANDOFF.md`.
+- Existing 500/200 evidence criteria:
+  `src/horse_racing_predictions/residual_paper_evidence.py`.
+
+**At preparation:** `MEASUREMENT_BLOCKED` — no established
+purchase-executable positive EV and no approved free path with complete
+evidence. Recommendations are reversible upon new independent proof.
+
+## 2026-10-19 cycle 68: official final-odds caveat and executable ROI audit
+
+- JRA's own odds glossary states that *even the odds displayed after betting closes* can change after a subsequent scratch, and actual payouts can differ from announced final odds in cases such as dead heats. Therefore **neither an early displayed quote nor the announced final odds is a guaranteed executable/settled price**. Source: https://www.jra.go.jp/kouza/yougo/w406.html (official JRA glossary; independently reviewed 2026-10-19).
+- Source-code read-only audit at PR #141 head `5c9837be32995df09b75f5a408b89b499b62c065`: `residual_shadow_paper.py` computes settled Paper ROI from payout and settled stake, and checks `observed_at <= decision_time < scheduled_post_time`. `ledger.py` records `observed_at` but the inspected snapshot schema does not separately prove first collection time or purchase-channel cutoff. These are *limits of the inspected Paper path*, not a claim that no other modules perform stress or synthetic checks.
+- This means **a positive Paper ROI, if observed later, is not by itself executable net ROI**: independent evidence is still needed for lawful source rights, actual first-seen time, purchase cutoff, quote slippage, fees, refused/nonfilled opportunities and all abstentions. Do not weaken existing 500-race/200-settlement gate or retroactively fill timestamps.
+- This cycle's actual approved pre-purchase quotes, prospective races, attempted/nonfilled bets, settled economic net ROI, independent market comparison, day-cluster lower bound and SNS-on/off incremental net return are **UNVERIFIED, not zero**. No new live data was collected. Classification remains `MEASUREMENT_BLOCKED / NO_GO_CANDIDATE`; a technically public JRA odds webpage is not authorization for automated ingestion or machine-learning retention.

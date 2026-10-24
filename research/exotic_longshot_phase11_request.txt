@@ -1,0 +1,13 @@
+Phase 11 research-only proposal (2026-10-08)
+Hypothesis: Phase 10's 2024 probability-calibration deterioration arises from
+race-common residual offsets. Remove the mean predicted residual across
+eligible longshots within each race before adding it to the general Top-3
+baseline. This is an outcome-free, zero-sum relative correction.
+Keep Phase 10 annual walk-forward training, CatBoost hyperparameters,
+odds proxy, paired race bootstrap, and four-metric 80% gate frozen.
+Do not tune any hyperparameter or threshold using 2023/2024.
+Do not read or evaluate 2025-2026 final holdout.
+Do not modify Forward Paper or generate real tickets.
+Use only existing free tools and data. Historical final odds are not
+a valid live pre-race odds snapshot; results are research-only.
+request=2026-10-08-exotic-longshot-race-centered-phase11
