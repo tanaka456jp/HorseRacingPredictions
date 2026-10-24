@@ -1,6 +1,14 @@
 name: Sunday 2026-10-25 Local AI Readiness (No Publication)
 
 on:
+  push:
+    branches:
+      - "feature/weekly-odds-free-note-20261021"
+    paths:
+      - "src/horse_racing_predictions/sunday_auto_post_readiness.py"
+      - "scripts/inspect_sunday_auto_post_readiness.py"
+      - "tests/test_sunday_auto_post_readiness.py"
+      - ".github/workflows/sunday-20261025-readiness-self-hosted.yml"
   pull_request:
     branches: [main]
     paths:
