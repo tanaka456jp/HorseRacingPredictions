@@ -177,7 +177,7 @@ def attach_pedigree_history_features(
     # The latest snapshot is not a historical as-of snapshot. Fail before
     # feature generation if a later update could leak into an earlier race.
     created_text = pedigree["pedigree_created_date"].astype("string")
-    if not created_text.str.fullmatch(r"\\d{8}").fillna(False).all():
+    if not created_text.str.fullmatch(r"\d{8}").fillna(False).all():
         raise ValueError("pedigree snapshot has invalid created dates")
     created = pd.to_datetime(
         created_text, format="%Y%m%d", errors="raise",
