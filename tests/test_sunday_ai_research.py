@@ -22,9 +22,10 @@ class FakeFittedModel:
     def predict_win_probability(self, frame, race_col="race_id"):
         assert "distance_m" in frame
         assert frame["finish_position"].isna().all()
-        values = [0.4, 0.3, 0.2, 0.1]
-        assert len(frame) == len(values)
-        return pd.Series(values, index=frame.index)
+        n = len(frame)
+        values = list(range(n, 0, -1))
+        total = sum(values)
+        return pd.Series([w / total for w in values], index=frame.index)
 
 
 def _inputs():
@@ -132,7 +133,7 @@ def test_missing_unconfirmed_or_duplicate_race_entries_are_refused():
     bad.loc[1, "post_position"] = bad.loc[0, "post_position"]
     with pytest.raises(ValueError, match="numbers"):
         _run(entries=bad)
-    with pytest.raises(ValueError, match="manifest"):
+    with pytest.raises(ValueError, match="expected Sunday races"):
         _run(expected=("JRA-20261025-KYOTO-11", "JRA-20261025-TOKYO-01"))
 
 
@@ -140,7 +141,7 @@ def test_target_race_date_and_observation_boundary():
     _, _, entries = _inputs()
     bad = entries.copy()
     bad["race_date"] = "2026-10-24"
-    with pytest.raises(ValueError, match="Sunday"):
+    with pytest.raises(ValueError, match="historical/target race time boundary"):
         _run(entries=bad)
     with pytest.raises(ValueError, match="within two days"):
         _run(asof=datetime.fromisoformat("2026-10-20T12:00:00+09:00"))
@@ -166,5 +167,7 @@ def test_research_preview_never_ranks_an_unscored_horse():
     extra = deepcopy(entries.iloc[[0]])
     extra["horse_name"] = "追加の架空馬"
     extra["post_position"] = 5
-    with pytest.raises(ValueError):
-        _run(entries=pd.concat([entries, extra], ignore_index=True))
+    result = _run(entries=pd.concat([entries, extra], ignore_index=True))
+    assert result["runnerCount"] == 5
+    assert len(result["races"][0]["modelTopThree"]) == 3
+    assert result["publicationAuthorized"] is False
