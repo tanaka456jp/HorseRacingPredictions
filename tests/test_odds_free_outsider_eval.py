@@ -120,7 +120,7 @@ def test_outsider_rejects_inconsistent_validation_winner_label():
         _raw(), train_start="2022-06-01", train_end="2022-06-18"
     )
     changed = sample.frame.copy()
-    target = changed.index[changed["race_id"].eq("FICTION-014")][0]
+    target = changed.index[changed["race_id"].eq("FICTION-14")][0]
     changed.loc[target, "is_winner"] = 1 - int(changed.loc[target, "is_winner"])
     with pytest.raises(ValueError, match="inconsistent"):
         evaluate_independent_outsider_chronologically(
