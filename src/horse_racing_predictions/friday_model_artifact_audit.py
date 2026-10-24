@@ -5,12 +5,13 @@ independent probabilities or live data freshness. No CatBoost dependency.
 """
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from hashlib import sha256
 import json
 from pathlib import Path
 import re
 from typing import Any, Mapping
+from unicodedata import normalize
 
 _MARKET = re.compile(
     r"odds|popularity|market[_ -]?(?:rank|share|odds)|"
@@ -97,7 +98,7 @@ def inspect_frozen_model_bytes(
                 or not isinstance(cats, list)
                 or not set(cats).issubset(set(cols))):
             return refused("native CatBoost feature manifest malformed")
-        if any(_MARKET.search(name) for name in cols):
+        if any(_MARKET.search(normalize("NFKC", name).replace(" ", "")) for name in cols):
             return refused("native model contains market/popularity feature names")
         declared = candidate_model.get("featureNames")
         if cols != declared:
@@ -111,12 +112,25 @@ def inspect_frozen_model_bytes(
         if not (created <= freeze <= issue_end):
             return refused("model creation/freeze/issue chronology invalid")
         try:
-            train_end = datetime.strptime(native["train_end"], "%Y-%m-%d").date()
-            issue = datetime.strptime(issue_date, "%Y-%m-%d").date()
+            training_start = date.fromisoformat(native["train_start"])
+            train_end = date.fromisoformat(native["train_end"])
+            issue = date.fromisoformat(issue_date)
+            if (training_start.isoformat() != native["train_start"]
+                    or train_end.isoformat() != native["train_end"]
+                    or issue.isoformat() != issue_date):
+                return refused("training cutoff is malformed")
         except (KeyError, ValueError, TypeError):
             return refused("training cutoff is malformed")
+        if training_start > train_end:
+            return refused("training start follows training end")
+        # Never accept a model trained on protected 2025–2026 final holdout,
+        # even if that training predates the article's 2026 issue date.
+        if train_end > date(2024, 12, 31):
+            return refused("protected final holdout in training manifest")
         if train_end > issue:
             return refused("training includes post-issue races")
+        if created.date() < train_end:
+            return refused("model creation predates training cutoff")
         if forecast is not None:
             if (forecast.get("model_id") != candidate_model["modelId"]
                     or forecast.get("model_frozen_at") != candidate_model["frozenAt"]):
