@@ -226,7 +226,7 @@ def test_invalid_or_protected_training_dates_are_blocked():
     for invalid in ("2026-10-01", "2024-2-01", "2020-01-01"):
         case = replace(champion.manifest, train_end=invalid)
         # For 2020-01-01, the model is invalid because train_start=2021-01-01.
-        with pytest.raises(ValueError, match="training window|holdout"):
+        with pytest.raises(ValueError, match="training window|holdout|chronology"):
             _run(champion=LoadedChampion(model=FakeFittedModel(), manifest=case))
 
 
