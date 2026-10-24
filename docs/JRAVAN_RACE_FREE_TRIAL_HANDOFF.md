@@ -58,6 +58,27 @@ not evidence that an entitlement is valid today):
 archive, retry authentication in a loop, or change the provider Data Save
 setting automatically.
 
+## Bloodline point-in-time guard (2026-10-24)
+
+The local BLDN-derived snapshot contains a `pedigree_created_date`, but a
+latest-record snapshot is **not a historical point-in-time version history**.
+`pedigree_features.attach_pedigree_history_features` now rejects ambiguous
+duplicate registration keys, missing/malformed creation dates, and any
+matched horse whose available pedigree record was created **on or after**
+the target race day. The provider supplies only day-level creation dates;
+same-day records cannot prove the record preceded the start.
+
+This strict gate can legitimately prevent Phase 12 from starting on existing
+history; that is preferable to reporting falsely improved model accuracy.
+Even passing this structural gate does not independently prove that a record
+was never subsequently revised. Do not relax the gate or alter the original
+snapshot to obtain a test score. The true remedy is an independently approved,
+dated/versioned, race-time pedigree source and a proven exact blood-registration
+crosswalk. `RACE -301` and the absent RACE archive remain separate blockers.
+
+This change affects the Draft research PR only; it does not consume the
+one-shot evaluation receipts or open the protected final holdout.
+
 ## One-shot integrity rule
 
 The Phase 12 and 13 evaluators now use an atomic exclusive receipt claim
