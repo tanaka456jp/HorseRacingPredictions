@@ -37,7 +37,8 @@ class IndependentOutsiderResearchReport:
     candidateHitTopThreeRate: float
     baselineFourthRankHitTopThreeRate: float
     improvementOverFourthRank: float
-    modelSelectionIndependentOfOdds: bool
+    marketColumnsExcludedByResearchPipeline: bool
+    upstreamSampleSelectionIndependentlyVerified: bool
     independentModelPublicationProven: bool
     publicationAuthorized: bool
     positiveExpectedValueDemonstrated: bool
@@ -153,7 +154,8 @@ def evaluate_independent_outsider_chronologically(
         candidateHitTopThreeRate=selected_rate,
         baselineFourthRankHitTopThreeRate=baseline_rate,
         improvementOverFourthRank=selected_rate - baseline_rate,
-        modelSelectionIndependentOfOdds=True,
+        marketColumnsExcludedByResearchPipeline=True,
+        upstreamSampleSelectionIndependentlyVerified=False,
         independentModelPublicationProven=False,
         publicationAuthorized=False,
         positiveExpectedValueDemonstrated=False,
