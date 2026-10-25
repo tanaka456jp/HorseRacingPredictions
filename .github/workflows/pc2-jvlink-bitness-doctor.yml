@@ -75,8 +75,14 @@ jobs:
           $ErrorActionPreference = "Stop"
           & .\scripts\probe_jvlink_pc2_runner.ps1 `
             -OutputPath "artifacts/jvlink_runner_bitness.json"
-          if ($LASTEXITCODE -ne 0) {
-            throw "PC2_JVLINK_DOCTOR_DID_NOT_EXECUTE"
+          # The Windows PowerShell caller can inherit a stale
+          # LASTEXITCODE from earlier GitHub steps. Verify the actual report.
+          $report = Get-Content -LiteralPath "artifacts/jvlink_runner_bitness.json" -Raw |
+            ConvertFrom-Json
+          if ($report.physicalPC2Verified -ne $true -or
+              $report.bitness.bit32.childProcessStarted -ne $true -or
+              $report.bitness.bit64.childProcessStarted -ne $true) {
+            throw "PC2_JVLINK_CHILD_PROCESS_EVIDENCE_MISSING"
           }
       - name: Upload summary with return codes only (no key/data)
         if: always()
