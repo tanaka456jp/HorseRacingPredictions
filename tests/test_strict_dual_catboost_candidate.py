@@ -143,3 +143,82 @@ def test_prevent_unbounded_hyperparameter_or_fold_time_override():
             sample, fit_through="2022-06-15",
             validation_from="2022-06-11", validation_through="2022-06-18",
         )
+
+
+def _cli():
+    from importlib.util import module_from_spec, spec_from_file_location
+    from pathlib import Path
+    path = Path(__file__).resolve().parents[1] / "scripts" / "train_strict_dual_pre2025_local.py"
+    spec = spec_from_file_location("strict_dual_cli", path)
+    assert spec and spec.loader
+    module = module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _cli_args(source, dest):
+    return [
+        "train_strict_dual_pre2025_local.py",
+        "--approved-pre2025-csv", str(source),
+        "--source-ref", "synthetic-no-real-horses",
+        "--output-dir", str(dest),
+        "--train-start", "2022-06-01",
+        "--train-end", "2022-06-18",
+        "--fit-through", "2022-06-10",
+        "--validation-from", "2022-06-11",
+        "--validation-through", "2022-06-18",
+        "--iterations", "30",
+    ]
+
+
+def test_local_dual_cli_rejects_missing_csv_without_creating_artifact(
+    tmp_path, monkeypatch, capsys,
+):
+    import sys
+    cli = _cli()
+    destination = tmp_path / "unwritten"
+    monkeypatch.setattr(sys, "argv", _cli_args(tmp_path / "missing.csv", destination))
+    assert cli.main() == 2
+    assert not destination.exists()
+    output = json.loads(capsys.readouterr().out)
+    assert output["status"] == "BLOCKED"
+    assert output["publicationAuthorized"] is False
+
+
+def test_local_dual_cli_rejects_mixed_protected_rows(tmp_path, monkeypatch, capsys):
+    import sys
+    cli = _cli()
+    data = _history()
+    illegal = data.iloc[[0]].copy()
+    illegal["race_id"] = "HOLDOUT"
+    illegal["race_date"] = "2026-10-25"
+    source = tmp_path / "mixed.csv"
+    pd.concat([data, illegal], ignore_index=True).to_csv(source, index=False)
+    destination = tmp_path / "must-not-write"
+    monkeypatch.setattr(sys, "argv", _cli_args(source, destination))
+    assert cli.main() == 2
+    assert not destination.exists()
+    assert json.loads(capsys.readouterr().out)["status"] == "BLOCKED"
+
+
+def test_actual_dual_catboost_cli_saves_only_nonpublic_candidates(
+    tmp_path, monkeypatch, capsys,
+):
+    import sys
+    pytest.importorskip("catboost")
+    cli = _cli()
+    source = tmp_path / "fictional.csv"
+    _history().to_csv(source, index=False)
+    destination = tmp_path / "candidate"
+    monkeypatch.setattr(sys, "argv", _cli_args(source, destination))
+    assert cli.main() == 0
+    output = capsys.readouterr().out
+    report = json.loads(output)
+    assert report["status"] == "RESEARCH_ARTIFACT_SAVED_NOT_APPROVED"
+    assert report["publicationAuthorized"] is False
+    assert report["positiveExpectedValueDemonstrated"] is False
+    assert report["metrics"]["validationRaces"] == 8
+    assert "架空馬" not in output
+    assert (destination / "win.cbm").is_file()
+    assert (destination / "outsider.cbm").is_file()
+    assert (destination / "candidate_manifest.json").is_file()
