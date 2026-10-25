@@ -37,7 +37,11 @@ if ($pc2) {
             $slot.result = 'CHILD_SCRIPT_NOT_FOUND'
             continue
         }
-        $childOutput = Join-Path 'artifacts' ("jvlink_child_$bits.json")
+        # Fresh nonce prevents a prior run's JSON from being mistaken for a
+        # current diagnostic after a child crash.
+        $childOutput = Join-Path 'artifacts' (
+            "jvlink_child_{0}_{1}.json" -f $bits, [Guid]::NewGuid().ToString('N')
+        )
         $psi = New-Object System.Diagnostics.ProcessStartInfo
         $psi.FileName = $exe
         $psi.Arguments = ('-NoProfile -NonInteractive -File "{0}" -ExpectedBits {1} -OutputPath "{2}"' -f
