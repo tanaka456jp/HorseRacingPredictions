@@ -191,6 +191,7 @@ def test_dual_real_model_detection_path_is_still_publication_blocked(
     (model_dir / "win.cbm").write_bytes(b"fake-win")
     (model_dir / "outsider.cbm").write_bytes(b"fake-outsider")
     from horse_racing_predictions import dual_candidate_private_preview as dual
+    from horse_racing_predictions import friday_predraw_dual_preview as friday
     monkeypatch.setattr(dual, "load_dual_research_candidate", lambda _: object())
     monkeypatch.setattr(
         gate, "read_csv_flexible", lambda _: pd.DataFrame({"fake": [1]}),
@@ -203,16 +204,19 @@ def test_dual_real_model_detection_path_is_still_publication_blocked(
             "raceCount": 24, "runnerCount": 1,
             "winModelOutputSha256": "a" * 64,
             "outsiderSelectionSha256": "b" * 64,
-            "bothActualModelsExecuted": True,
+            "realWinAndOutsiderModelsComputed": True,
         }
 
-    monkeypatch.setattr(dual, "private_dual_sunday_preview", private_preview)
+    monkeypatch.setattr(
+        friday, "private_friday_predraw_dual_preview", private_preview
+    )
     report = gate.diagnose_future_sunday_bundle(
         tmp_path, race_date=TARGET, observed_at=FRI, model_mode="dual",
     )
     assert len(received) == 1 and len(received[0]) == 24
     assert report["modelComputed"] is True
     assert report["bothActualModelsExecuted"] is True
+    assert report["forecastStage"] == "FRIDAY_BEFORE_DRAW"
     assert report["modelOutputSha256"] == "a" * 64
     assert report["outsiderSelectionSha256"] == "b" * 64
     assert report["status"] == "BLOCKED"
