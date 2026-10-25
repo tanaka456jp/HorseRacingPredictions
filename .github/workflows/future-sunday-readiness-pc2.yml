@@ -7,6 +7,7 @@ on:
       - 'src/horse_racing_predictions/future_sunday_readiness.py'
       - 'tests/test_future_sunday_readiness.py'
       - 'scripts/inspect_future_sunday_local.py'
+      - 'scripts/inspect_pc2_approved_source_inventory_readonly.ps1'
       - '.github/workflows/future-sunday-readiness-pc2.yml'
   workflow_dispatch:
     inputs:
@@ -106,11 +107,20 @@ jobs:
             }
           }
           Get-Content -LiteralPath $out
+      - name: Inspect only explicit approved PC2 D-drive source paths
+        if: always()
+        shell: powershell
+        run: |
+          & .\scripts\inspect_pc2_approved_source_inventory_readonly.ps1 `
+            -OutputPath 'artifacts/approved_source_inventory.json'
+
       - name: Retain sanitized blocked/readiness reasons only
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: future-sunday-local-diagnostic-metadata
-          path: artifacts/future_sunday_readiness.json
+          path: |
+            artifacts/future_sunday_readiness.json
+            artifacts/approved_source_inventory.json
           retention-days: 7
           if-no-files-found: warn
