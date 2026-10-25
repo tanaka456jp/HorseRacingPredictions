@@ -171,6 +171,7 @@ def private_dual_sunday_preview(
         model=candidate.winner,
         manifest=SimpleNamespace(
             model_version="strict-oddsfree-dual-research-candidate",
+            experiment_id="dual-catboost-pre2025-private-research",
             model_kind="catboost",
             feature_columns=candidate.features,
             train_start=candidate.train_start,
