@@ -16,6 +16,9 @@ from horse_racing_predictions.data_sources import read_csv_flexible
 from horse_racing_predictions.odds_free_training import (
     prepare_strict_odds_free_training_sample,
 )
+from horse_racing_predictions.friday_predraw_features import (
+    select_friday_predraw_research_features,
+)
 from horse_racing_predictions.strict_dual_catboost_candidate import (
     fit_strict_dual_catboost_candidate, save_dual_candidate_for_research,
 )
@@ -34,6 +37,8 @@ def main() -> int:
     p.add_argument("--validation-from", required=True)
     p.add_argument("--validation-through", required=True)
     p.add_argument("--iterations", type=int, default=100)
+    p.add_argument("--friday-predraw", action="store_true",
+                   help="drop Saturday draw/day-of-race features before fitting")
     a = p.parse_args()
     try:
         csv = a.approved_pre2025_csv
@@ -47,6 +52,8 @@ def main() -> int:
             read_csv_flexible(csv),
             train_start=a.train_start, train_end=a.train_end,
         )
+        if a.friday_predraw:
+            sample = select_friday_predraw_research_features(sample)
         candidate = fit_strict_dual_catboost_candidate(
             sample, fit_through=a.fit_through,
             validation_from=a.validation_from,
