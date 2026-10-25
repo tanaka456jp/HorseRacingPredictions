@@ -103,3 +103,35 @@ py -3 scripts/train_strict_dual_pre2025_local.py `
 ```
 
 **重要：この研究用CBMはそのまま公開用モデルではない。** 学習原資そのものの適法性・サンプル抽出の完全なオッズ非依存、実馬に対する期間外検証、確率校正、2026年出馬表・近走情報、別個の凍結穴馬モデルの外部証明、JRA-VANの認証、noteへの公開許諾・署名済み検証を経る必要がある。
+
+## 2026-10-25: 実CatBoost２モデル読込と金曜「枠順発表前」モデル
+
+- `dual_candidate_private_preview.py` は新規フォルダの `candidate_manifest.json` と `win.cbm`、`outsider.cbm` を**SHA-256で個別照合**し、学習終了日<=2024-12-31、特徴量一致・結果リークなし・ステータス未公開を検査してから、実CatBoostを二つとも実行する。上位3頭を勝率モデルが選択し、その3頭を除外したあとに独立穴馬モデルで1頭を選択する。予想馬名はGitHub Actionsへ送らない。正規のデータ利用・公開承認や外部モデル検証は引き続き `false`。
+- `future_sunday_readiness.py` は上記の`model/candidate_manifest.json`＋２つのCBMがある場合に`dual`モードで**二モデルを実際に動かす**。通常の単モデル形式との取り違えは不可。Windows PC②の実機診断はこれをメタデータのみで確認する。
+- JRA公式[出馬表発表タイミング](https://jra.jp/faq/pop02/2_2.html)では、通常の**日曜出走馬は木曜16時すぎに馬番号・枠番号なしで公開**、馬番号・枠番号つき出馬表は原則**土曜10時すぎ**。一部GⅠ・重賞には例外がある。よって「日曜予想を金曜日に全レース投稿」を目標にする場合、金曜に馬番号があると仮定してはいけない。
+- `friday_predraw_features.py` は金曜時点で未確定の**馬番号・枠順相対値・当日馬体重・増減・天候・馬場状態**をモデル特徴量から排除する。`train_strict_dual_pre2025_local.py --friday-predraw` で、2024年以前だけの学習データから独立した金曜版モデルを作成可能。通常の枠順依存モデルを改名するだけでは受入不可。
+- `friday_predraw_dual_preview.py` は**金曜JSTのみ**馬番号を持たない実名出走馬を受け入れ、実際の独立二モデルでTop3＋穴馬1頭の**非公開研究予想**を出す。馬番号はダミーの0や予想値で埋めず、取り除いて特徴量を生成する。検証用レース単位頭数を提供すれば欠損馬と照合するが、自己申告された頭数が独立に正しいという証明にはならない。
+- 自動投稿は**金曜日に本物の出走馬一覧を受領できること**が条件。出走取消・馬番号確定後の変更が起こり得るため、下書きの状態と更新可能性を注記する必要がある。
+- 専用無料OSS CIでCatBoostバイナリ2本の生成→ハッシュ照合→24架空レースの土曜枠順無し金曜推論→Top3＋独立穴馬の割当を本当に実行する。**架空の競走馬の合成データであり、実馬の高精度・プラスEV・公開許諾は実証されない。**
+
+金曜版のローカル候補モデル生成コマンド（パスは実在の権利承認済みデータに置き換える。現時点でこれらの存在は未確認）：
+
+```powershell
+$env:PYTHONPATH = "src"
+py -3 scripts/train_strict_dual_pre2025_local.py `
+  --approved-pre2025-csv "D:\HorseRacingPredictions\approved-history\pre2025.csv" `
+  --source-ref "operator-reviewed-pre2025-source" `
+  --output-dir "D:\HorseRacingPredictions\research-candidates\friday-drawfree-v1" `
+  --train-start 2017-01-01 --train-end 2024-12-31 `
+  --fit-through 2023-12-31 `
+  --validation-from 2024-01-01 --validation-through 2024-12-31 `
+  --iterations 100 --friday-predraw
+```
+
+### PC②所定保存先の実測結果
+
+[Run #40187155529](https://github.com/tanaka456jp/HorseRacingPredictions/actions/runs/40187155529)では **PC②上で所定パス8個のファイル存在を確認**。2026-11-01用の承認済み前2025学習CSV、直近履歴、出走馬、マニフェスト、研究用モデル候補・本番候補CBMは**いずれも未配置**。アーカイブ全体を再帰検索した結果ではなく、明示した保存先だけの事実。キー・CSV本文・モデルバイナリ・2025–2026保護データを一切読まず、`publicationAuthorized:false` を維持。
+
+### データ公開許諾がなければ投稿不可
+
+[JRA-VAN公式投稿ガイドライン](https://jra-van.jp/info/post_guide.html)はJV-Link取得データの投稿不可を明記。[商業配信向け公式説明](https://developer.jra-van.jp/t/topic/899)も通常のData Lab契約による再配布・データ配信を認めない。ノートでの独自予想文章と、競馬データを転載することは分離して確認すること。JRA公式[利用条件](https://jra.jp/use/)も著作権・許諾条件を規定している。料金が発生する契約や商業許諾は承認なしに申し込まない。
