@@ -92,6 +92,30 @@ def _parse_local_manifest(root: Path, race_date: str) -> tuple[str, ...]:
     return tuple(ids)
 
 
+def _optional_manifest_runner_counts(
+    root: Path, expected_race_ids: tuple[str, ...],
+) -> dict[str, int] | None:
+    """Validate a local declared count per race; NOT independent source proof."""
+    path = _as_local(root, "race_manifest.json", max_bytes=200_000)
+    def unique(pairs):
+        value = {}
+        for key, val in pairs:
+            if key in value:
+                raise ValueError("duplicate race runner manifest key")
+            value[key] = val
+        return value
+    doc = json.loads(path.read_text(encoding="utf-8"), object_pairs_hook=unique)
+    counts = doc.get("expectedRunnerCounts")
+    if counts is None:
+        return None
+    if (not isinstance(counts, dict)
+            or set(counts) != set(expected_race_ids)
+            or any(type(v) is not int or not 4 <= v <= 18
+                   for v in counts.values())):
+        raise ValueError("invalid declared per-race entry totals")
+    return counts
+
+
 def diagnose_future_sunday_bundle(
     root: Path, *, race_date: str, observed_at: datetime,
     model_mode: str = "single",
@@ -180,6 +204,9 @@ def diagnose_future_sunday_bundle(
                     candidate, history=history, entries=entrants,
                     race_date=race_date, expected_race_ids=ids,
                     observed_at=observed_at,
+                    expected_runner_counts=_optional_manifest_runner_counts(
+                        root, ids,
+                    ),
                 )
                 independent_execution = preview.get(
                     "realWinAndOutsiderModelsComputed"
