@@ -170,14 +170,32 @@ def diagnose_future_sunday_bundle(
                 load_dual_research_candidate, private_dual_sunday_preview,
             )
             candidate = load_dual_research_candidate(root / "model")
-            preview = private_dual_sunday_preview(
-                candidate, history=history, entries=entrants,
-                race_date=race_date, expected_race_ids=ids,
-                observed_at=observed_at,
-            )
+            if now_jst.date() == day - timedelta(days=2):
+                # Normal Sunday runners lack their post numbers on Friday.
+                # Use ONLY a separately trained before-draw model.
+                from .friday_predraw_dual_preview import (
+                    private_friday_predraw_dual_preview,
+                )
+                preview = private_friday_predraw_dual_preview(
+                    candidate, history=history, entries=entrants,
+                    race_date=race_date, expected_race_ids=ids,
+                    observed_at=observed_at,
+                )
+                independent_execution = preview.get(
+                    "realWinAndOutsiderModelsComputed"
+                )
+                stage = "FRIDAY_BEFORE_DRAW"
+            else:
+                preview = private_dual_sunday_preview(
+                    candidate, history=history, entries=entrants,
+                    race_date=race_date, expected_race_ids=ids,
+                    observed_at=observed_at,
+                )
+                independent_execution = preview.get("bothActualModelsExecuted")
+                stage = "POST_DRAW_PRE_RACE"
             model_hash = preview.get("winModelOutputSha256")
             outsider_hash = preview.get("outsiderSelectionSha256")
-            if (preview.get("bothActualModelsExecuted") is not True
+            if (independent_execution is not True
                     or not SHA.fullmatch(str(outsider_hash))):
                 raise ValueError("both native model inferences not verified")
         else:
@@ -204,6 +222,7 @@ def diagnose_future_sunday_bundle(
         report["modelOutputSha256"] = model_hash
         if model_mode == "dual":
             report["bothActualModelsExecuted"] = True
+            report["forecastStage"] = stage
             report["outsiderSelectionSha256"] = outsider_hash
             report["independentOutsiderModelVerified"] = False
         return report
