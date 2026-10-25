@@ -6,12 +6,16 @@ on:
     paths:
       - "src/horse_racing_predictions/strict_dual_catboost_candidate.py"
       - "tests/test_strict_dual_catboost_candidate.py"
+      - "src/horse_racing_predictions/dual_candidate_private_preview.py"
+      - "tests/test_dual_candidate_private_preview.py"
       - ".github/workflows/ci-strict-dual-catboost.yml"
   pull_request:
     branches: [main]
     paths:
       - "src/horse_racing_predictions/strict_dual_catboost_candidate.py"
       - "tests/test_strict_dual_catboost_candidate.py"
+      - "src/horse_racing_predictions/dual_candidate_private_preview.py"
+      - "tests/test_dual_candidate_private_preview.py"
       - ".github/workflows/ci-strict-dual-catboost.yml"
 
 permissions:
@@ -40,4 +44,4 @@ jobs:
           python -m pip install --disable-pip-version-check -e ".[dev,research]"
       - name: Actually train and freeze independent CatBoost models on fictional pre-2025 races
         run: |
-          pytest -q tests/test_strict_dual_catboost_candidate.py -rs
+          pytest -q tests/test_strict_dual_catboost_candidate.py tests/test_dual_candidate_private_preview.py -rs
