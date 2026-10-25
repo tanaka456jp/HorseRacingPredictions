@@ -1,0 +1,133 @@
+name: PC2 Python x64 JVOpen Return Code (No Raw Records)
+
+on:
+  push:
+    branches: ["feature/weekly-odds-free-note-20261021"]
+    paths:
+      - "scripts/probe_pc2_python64_jvopen_auth_only.py"
+      - "tests/test_pc2_python64_jvopen_auth_only.py"
+      - ".github/workflows/pc2-jvlink-python64-auth.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pc2-python64-currentweek-auth
+  cancel-in-progress: false
+
+jobs:
+  synthetic-safety:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install -e ".[dev]"
+      - name: Simulated no-data x86 rejection and x64 JVOpen code
+        run: pytest -q tests/test_pc2_python64_jvopen_auth_only.py
+
+  pc2-python64-only:
+    name: PC2 native Python 64-bit JVOpen option2 once, no JVGets
+    needs: synthetic-safety
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          clean: false
+          persist-credentials: false
+      - name: Invoke genuine project's Python COM client with bounded watchdog
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Path artifacts -Force | Out-Null
+          $out = 'artifacts/pc2_python64_auth_summary.json'
+          $report = [ordered]@{
+            schemaVersion = 1
+            status = 'BLOCKED'
+            stage = 'NOT_RUN'
+            pythonBits = 0
+            verifiedPhysicalPC2 = ($env:COMPUTERNAME -eq 'DESKTOP-MVV1FD4')
+            jvInitSucceeded = $false
+            jvOpenAttempted = $false
+            jvOpenReturnCode = $null
+            jvCloseAttempted = $false
+            jvCloseSucceeded = $false
+            usageKeyRead = $false
+            rawRecordsRead = $false
+            protectedHoldoutOpened = $false
+            notePostAttempted = $false
+            publicationAuthorized = $false
+          }
+          if ($env:COMPUTERNAME -eq 'DESKTOP-MVV1FD4') {
+            $launcher = Get-Command py -ErrorAction SilentlyContinue
+            if ($null -eq $launcher) {
+              $report.stage = 'PYTHON_LAUNCHER_MISSING'
+            } else {
+              $program = Join-Path (Get-Location).Path 'scripts\probe_pc2_python64_jvopen_auth_only.py'
+              $childOutput = Join-Path (Get-Location).Path (
+                'artifacts\py64_status_' + [Guid]::NewGuid().ToString('N') + '.json'
+              )
+              # Inherit only repo PYTHONPATH; never inspect Windows registry or
+              # settings keys. No STDOUT/STDERR of a COM subprocess goes to CI.
+              $env:PYTHONPATH = Join-Path (Get-Location).Path 'src'
+              $proc = $null
+              try {
+                $psi = New-Object System.Diagnostics.ProcessStartInfo
+                $psi.FileName = [string]$launcher.Source
+                $psi.Arguments = ('-3 "{0}" --output "{1}"' -f $program, $childOutput)
+                $psi.UseShellExecute = $false
+                $psi.CreateNoWindow = $true
+                $psi.RedirectStandardOutput = $true
+                $psi.RedirectStandardError = $true
+                $proc = [System.Diagnostics.Process]::Start($psi)
+                if (-not $proc.WaitForExit(90000)) {
+                  $report.stage = 'PYTHON_JVLINK_WATCHDOG_TIMEOUT'
+                  try { $proc.Kill() } catch {}
+                } elseif (Test-Path -LiteralPath $childOutput -PathType Leaf) {
+                  $candidate = Get-Content -LiteralPath $childOutput -Raw |
+                    ConvertFrom-Json
+                  if ($candidate.verifiedPhysicalPC2 -eq $true -and
+                      $candidate.usageKeyRead -eq $false -and
+                      $candidate.rawRecordsRead -eq $false -and
+                      $candidate.notePostAttempted -eq $false -and
+                      $candidate.publicationAuthorized -eq $false -and
+                      $candidate.protectedHoldoutOpened -eq $false) {
+                    foreach ($key in @(
+                      'status','stage','pythonBits','jvInitSucceeded',
+                      'jvOpenAttempted','jvOpenReturnCode','jvCloseAttempted',
+                      'jvCloseSucceeded'
+                    )) { $report[$key] = $candidate.$key }
+                  } else {
+                    $report.stage = 'PYTHON_REPORT_PRIVACY_INVARIANT_VIOLATED'
+                  }
+                } else {
+                  $report.stage = 'PYTHON_PROBE_NO_SANITIZED_RESULT'
+                }
+              } catch {
+                $report.stage = 'PYTHON_PROBE_PROCESS_ERROR'
+              } finally {
+                if ($null -ne $proc) { $proc.Dispose() }
+              }
+            }
+          } else {
+            $report.stage = 'NOT_PHYSICAL_PC2'
+          }
+          $report | ConvertTo-Json -Depth 5 |
+            Set-Content -LiteralPath $out -Encoding UTF8
+          Get-Content -LiteralPath $out
+          # Diagnostic BLOCKED is not an authenticated success. Only the
+          # sanitized JSON supplies evidence; no bogus publish readiness.
+      - name: Preserve diagnostic status only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pc2-python64-currentweek-jvopen-diagnostic
+          path: artifacts/pc2_python64_auth_summary.json
+          retention-days: 7
+          if-no-files-found: error
