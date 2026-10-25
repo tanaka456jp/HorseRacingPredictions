@@ -113,7 +113,21 @@ def diagnose_future_sunday_bundle(
     early_race_day = (now_jst.date() == day
                       and now_jst.time() < time(8, 0))
     if not (allowed_date or early_race_day):
-        return blocked(["PRE_RACE_WINDOW_CLOSED_OR_NOT_YET_OPEN"])
+        if now_jst.date() < day - timedelta(days=2):
+            # Filename presence only. Never open private CSV/model bytes before
+            # the authorized forecast window, even when assets exist.
+            exists = not root.is_symlink() and root.is_dir()
+            missing = sorted(set(
+                role for role, relative in INPUTS
+                if not exists or (root / relative).is_symlink()
+                or not (root / relative).is_file()
+            ))
+            return blocked(
+                ["PRE_RACE_WINDOW_NOT_YET_OPEN"],
+                localCandidateBundlePresent=exists,
+                missingInputRoles=missing,
+            )
+        return blocked(["PRE_RACE_WINDOW_EXPIRED"])
     if root.is_symlink() or not root.is_dir():
         return blocked(["LOCAL_BUNDLE_MISSING"])
     missing = sorted(set(
