@@ -62,9 +62,17 @@ try {
       $report.blockers += "PYTHON_LAUNCHER_UNAVAILABLE"
     } else {
       $report.pythonLauncherAvailable = $true
-      $code = 'import struct,json,importlib.util;print(json.dumps({"bits":struct.calcsize("P")*8,"pywin32":importlib.util.find_spec("win32com") is not None}))'
       try {
-        $lines = @(& py -3 -c $code 2>$null)
+        # Dedicated script avoids Windows PowerShell native -c quote stripping.
+        # Do not print subprocess stderr, which can contain local paths.
+        $script = Join-Path $PSScriptRoot "inspect_pc2_python64_metadata.py"
+        if (-not (Test-Path -LiteralPath $script -PathType Leaf)) {
+          throw "SAFE_PYTHON_METADATA_SCRIPT_MISSING"
+        }
+        $lines = @(& py -3 $script 2>$null)
+        if ($LASTEXITCODE -ne 0 -or @($lines).Count -eq 0) {
+          throw "SAFE_PYTHON_METADATA_PROBE_NO_RESULT"
+        }
         $parsed = ($lines -join [Environment]::NewLine) | ConvertFrom-Json
         $report.python64Available = ($parsed.bits -eq 64)
         $report.pywin32Available64 = [bool]$parsed.pywin32
