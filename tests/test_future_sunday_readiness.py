@@ -96,7 +96,13 @@ def test_late_sunday_or_utc_equivalent_blocks_before_any_io(
             tmp_path, race_date=TARGET,
             observed_at=datetime.fromisoformat(time),
         )
-        assert result["blockers"] == ["PRE_RACE_WINDOW_CLOSED_OR_NOT_YET_OPEN"]
+        expected = (
+            "PRE_RACE_WINDOW_NOT_YET_OPEN"
+            if datetime.fromisoformat(time).astimezone(gate.JST).date()
+            < datetime.fromisoformat(TARGET).date() - __import__("datetime").timedelta(days=2)
+            else "PRE_RACE_WINDOW_EXPIRED"
+        )
+        assert result["blockers"] == [expected]
         assert result["modelComputed"] is False
         assert result["publicationAuthorized"] is False
 
