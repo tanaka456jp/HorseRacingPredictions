@@ -1,5 +1,5 @@
 """Synthetic-only future Sunday card validation and no-post regression."""
-from datetime import datetime
+from datetime import datetime, timedelta
 import json
 
 import pandas as pd
@@ -99,12 +99,33 @@ def test_late_sunday_or_utc_equivalent_blocks_before_any_io(
         expected = (
             "PRE_RACE_WINDOW_NOT_YET_OPEN"
             if datetime.fromisoformat(time).astimezone(gate.JST).date()
-            < datetime.fromisoformat(TARGET).date() - __import__("datetime").timedelta(days=2)
+            < datetime.fromisoformat(TARGET).date() - timedelta(days=2)
             else "PRE_RACE_WINDOW_EXPIRED"
         )
         assert result["blockers"] == [expected]
         assert result["modelComputed"] is False
         assert result["publicationAuthorized"] is False
+
+
+def test_before_friday_reports_missing_input_roles_without_opening_data(
+    tmp_path, monkeypatch,
+):
+    def forbidden(*a, **k):
+        raise AssertionError("Early metadata inspection must not load data/model")
+    monkeypatch.setattr(gate, "read_csv_flexible", forbidden)
+    monkeypatch.setattr(gate, "load_champion_artifact", forbidden)
+    result = gate.diagnose_future_sunday_bundle(
+        tmp_path / "not-yet-staged",
+        race_date=TARGET,
+        observed_at=datetime.fromisoformat("2026-10-25T16:00:00+09:00"),
+    )
+    assert result["blockers"] == ["PRE_RACE_WINDOW_NOT_YET_OPEN"]
+    assert result["localCandidateBundlePresent"] is False
+    assert result["missingInputRoles"] == [
+        "ENTRIES", "HISTORY", "MODEL", "RACE_MANIFEST"
+    ]
+    assert result["modelComputed"] is False
+    assert result["publicationAuthorized"] is False
 
 
 def test_missing_bundle_blocked_and_no_provider_calls(tmp_path, monkeypatch):
