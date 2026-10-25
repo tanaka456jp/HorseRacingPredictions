@@ -116,13 +116,6 @@ def load_dual_research_candidate(directory: Path) -> LoadedDualResearchCandidate
     metrics = manifest.get("researchMetrics")
     if (not isinstance(metrics, dict)
             or metrics.get("fitThrough") != manifest["trainEnd"]
-            or metrics.get("status") != "RESEARCH_ONLY_NOT_PUBLISHED"
-            or metrics.get("winnerModelTarget") is not None):
-        # The saved report intentionally uses winModelTarget, never assumes a
-        # synthetic file means independently authorized published predictions.
-        pass
-    if (not isinstance(metrics, dict)
-            or metrics.get("fitThrough") != manifest["trainEnd"]
             or metrics.get("winModelTarget") != "is_winner"
             or metrics.get("outsiderModelTarget")
             != "finish_position_le_3_train_only"
