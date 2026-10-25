@@ -61,6 +61,7 @@ class StrictDualCatboostCandidate:
     outsider: CatBoostProbabilityModel
     features: tuple[str, ...]
     metrics: StrictDualCatboostMetrics
+    train_start: str
 
 
 def _validate(sample: OddsFreeResearchSample, *, fit: date, start: date, end: date):
@@ -212,6 +213,7 @@ def fit_strict_dual_catboost_candidate(
     return StrictDualCatboostCandidate(
         winner=winner, outsider=outsider,
         features=tuple(sample.features), metrics=metrics,
+        train_start=train["race_date"].min().date().isoformat(),
     )
 
 
@@ -250,6 +252,8 @@ def save_dual_candidate_for_research(
         "sourceRef": source_ref,
         "generatedAt": datetime.now(timezone.utc).isoformat(),
         "featureColumns": list(candidate.features),
+        "trainStart": candidate.train_start,
+        "trainEnd": candidate.metrics.fitThrough,
         "artifactSha256": hashes,
         "researchMetrics": asdict(candidate.metrics),
         "publicationAuthorized": False,
