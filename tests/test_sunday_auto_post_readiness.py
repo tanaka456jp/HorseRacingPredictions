@@ -151,6 +151,30 @@ def test_never_contains_raw_filename_or_horse_name_in_report(tmp_path):
     assert "publicationAuthorized" in content
 
 
+@pytest.mark.parametrize("instant", [
+    "2026-10-25T08:00:00+09:00",
+    "2026-10-25T16:01:00+09:00",
+    "2026-10-24T23:00:00+00:00",
+    "2026-10-26T00:01:00+09:00",
+])
+def test_expired_pre_race_cutoff_blocks_before_model_or_private_data(
+    tmp_path, monkeypatch, instant,
+):
+    root = _make_bundle(tmp_path)
+    def forbidden(*_a, **_kw):
+        raise AssertionError("No input or model may be loaded after cutoff")
+    monkeypatch.setattr(gate, "load_champion_artifact", forbidden)
+    monkeypatch.setattr(gate, "read_csv_flexible", forbidden)
+    monkeypatch.setattr(gate, "private_sunday_ai_preview", forbidden)
+    report = gate.diagnose_sunday_auto_post(
+        root, observed_at=datetime.fromisoformat(instant),
+    )
+    assert report["blockers"] == ["HISTORIC_PRE_RACE_CUTOFF_EXPIRED"]
+    assert report["modelComputed"] is False
+    assert report["publicationAuthorized"] is False
+    assert report["notePostAttempted"] is False
+
+
 def test_requires_timezone_aware_evidence_timestamp(tmp_path):
     with pytest.raises(ValueError, match="timezone"):
         gate.diagnose_sunday_auto_post(
