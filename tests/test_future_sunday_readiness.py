@@ -252,3 +252,22 @@ def test_after_start_does_not_load_dual_private_artifact(tmp_path, monkeypatch):
     )
     assert report["blockers"] == ["PRE_RACE_WINDOW_EXPIRED"]
     assert report["publicationAuthorized"] is False
+
+
+def test_optional_friday_racewise_runner_counts_cannot_forge_missing_rows(tmp_path):
+    ids = _bundle(tmp_path)
+    path = tmp_path / "race_manifest.json"
+    doc = json.loads(path.read_text(encoding="utf-8"))
+    assert gate._optional_manifest_runner_counts(tmp_path, tuple(ids)) is None
+    doc["expectedRunnerCounts"] = {rid: 6 for rid in ids}
+    path.write_text(json.dumps(doc), encoding="utf-8")
+    counts = gate._optional_manifest_runner_counts(tmp_path, tuple(ids))
+    assert counts == {rid: 6 for rid in ids}
+    del doc["expectedRunnerCounts"][ids[0]]
+    path.write_text(json.dumps(doc), encoding="utf-8")
+    with pytest.raises(ValueError, match="entry totals"):
+        gate._optional_manifest_runner_counts(tmp_path, tuple(ids))
+    doc["expectedRunnerCounts"][ids[0]] = 0
+    path.write_text(json.dumps(doc), encoding="utf-8")
+    with pytest.raises(ValueError, match="entry totals"):
+        gate._optional_manifest_runner_counts(tmp_path, tuple(ids))
