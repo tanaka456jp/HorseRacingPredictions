@@ -178,3 +178,73 @@ def test_rejects_non_sunday_and_naive_timestamp(tmp_path):
         gate.diagnose_future_sunday_bundle(
             tmp_path, race_date=TARGET, observed_at=datetime(2026, 10, 30),
         )
+
+
+def test_dual_real_model_detection_path_is_still_publication_blocked(
+    tmp_path, monkeypatch,
+):
+    _bundle(tmp_path)
+    model_dir = tmp_path / "model"
+    (model_dir / "candidate_manifest.json").write_text(
+        '{"synthetic":true}', encoding="utf8",
+    )
+    (model_dir / "win.cbm").write_bytes(b"fake-win")
+    (model_dir / "outsider.cbm").write_bytes(b"fake-outsider")
+    from horse_racing_predictions import dual_candidate_private_preview as dual
+    monkeypatch.setattr(dual, "load_dual_research_candidate", lambda _: object())
+    monkeypatch.setattr(
+        gate, "read_csv_flexible", lambda _: pd.DataFrame({"fake": [1]}),
+    )
+    received = []
+
+    def private_preview(*args, **kwargs):
+        received.append(kwargs["expected_race_ids"])
+        return {
+            "raceCount": 24, "runnerCount": 1,
+            "winModelOutputSha256": "a" * 64,
+            "outsiderSelectionSha256": "b" * 64,
+            "bothActualModelsExecuted": True,
+        }
+
+    monkeypatch.setattr(dual, "private_dual_sunday_preview", private_preview)
+    report = gate.diagnose_future_sunday_bundle(
+        tmp_path, race_date=TARGET, observed_at=FRI, model_mode="dual",
+    )
+    assert len(received) == 1 and len(received[0]) == 24
+    assert report["modelComputed"] is True
+    assert report["bothActualModelsExecuted"] is True
+    assert report["modelOutputSha256"] == "a" * 64
+    assert report["outsiderSelectionSha256"] == "b" * 64
+    assert report["status"] == "BLOCKED"
+    assert report["independentOutsiderModelVerified"] is False
+    assert report["publicationAuthorized"] is False
+    assert report["notePostAttempted"] is False
+
+
+def test_incomplete_dual_model_must_not_be_treated_as_single_model(tmp_path):
+    _bundle(tmp_path)
+    (tmp_path / "model" / "candidate_manifest.json").write_text(
+        '{"synthetic":true}', encoding="utf8",
+    )
+    report = gate.diagnose_future_sunday_bundle(
+        tmp_path, race_date=TARGET, observed_at=FRI, model_mode="dual",
+    )
+    assert report["blockers"] == ["LOCAL_INPUTS_INCOMPLETE"]
+    assert report["missingInputRoles"] == ["MODEL"]
+    assert report["modelComputed"] is False
+    assert report["publicationAuthorized"] is False
+
+
+def test_after_start_does_not_load_dual_private_artifact(tmp_path, monkeypatch):
+    _bundle(tmp_path)
+    from horse_racing_predictions import dual_candidate_private_preview as dual
+    def forbidden(*_a, **_kw):
+        raise AssertionError("expired Sunday cannot open CBM files")
+    monkeypatch.setattr(dual, "load_dual_research_candidate", forbidden)
+    report = gate.diagnose_future_sunday_bundle(
+        tmp_path, race_date=TARGET,
+        observed_at=datetime.fromisoformat("2026-11-01T08:00:00+09:00"),
+        model_mode="dual",
+    )
+    assert report["blockers"] == ["PRE_RACE_WINDOW_EXPIRED"]
+    assert report["publicationAuthorized"] is False
