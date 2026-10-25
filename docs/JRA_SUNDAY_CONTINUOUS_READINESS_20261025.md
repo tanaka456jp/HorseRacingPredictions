@@ -79,3 +79,27 @@ py -3 scripts/inspect_future_sunday_local.py `
 Business Platform の通常金曜preflightとマガジン
 `m18cae5764be3` の `active:false` は変更せず、署名や権限が揃うまで
 **note投稿、main統合、runner設定変更、利用キー読取・再発行、課金しない**。
+
+## 非市場型 CatBoost 勝率モデル＋独立穴馬モデルの実学習（新規）
+
+- `strict_dual_catboost_candidate.fit_strict_dual_catboost_candidate` は無料OSS CatBoostを**2個独立にfit**する。勝率用の `is_winner` と、穴馬用の学習期間内 `finish_position<=3` は別目標。
+- **2024-12-31以前のみ** 学習・事後に区切った独立評価。評価期間の正解着順列をモデル入力から完全に取り除く。勝率モデルの上位3頭を除き、独立穴馬モデルの相対スコア最高馬を選ぶ。従来の勝率4位を比較対象にする。
+- 本物のCatBoostソフトをインストールする専用 **無料オープンソースCI** は架空馬・架空レースだけで `fit -> score -> 2つのCBM保存 -> SHA256照合` を実行する。これは実馬の性能や、+EVを証明しない。
+- `scripts/train_strict_dual_pre2025_local.py` は明示された**合法取得済み・2024年以前だけ**のCSVを開き、実モデル候補を新規のローカル絶対パスに凍結する。未存在CSV、2025–2026年混入、期間重複、既存ディレクトリ上書きは拒否。
+- 出力は `win.cbm`、`outsider.cbm`、`candidate_manifest.json`。
+  各モデルのSHA256、実測の日時分離指標、特徴量を記録する。権利・元データの市場独立性・モデル署名・note許可は**常にfalse**。
+- 以下は**パスの例示のみ**で、CSVやモデルがPC②に実在することを確認したものではない。PC②では承認済みCSVと作成済みの親フォルダを用意してから実行する。既存JRA-VANアーカイブや保護済みholdoutへは触れない。
+
+```powershell
+$env:PYTHONPATH = "src"
+py -3 scripts/train_strict_dual_pre2025_local.py `
+  --approved-pre2025-csv "D:\HorseRacingPredictions\approved-history\pre2025.csv" `
+  --source-ref "operator-reviewed-pre2025-source" `
+  --output-dir "D:\HorseRacingPredictions\research-candidates\dual-20261025" `
+  --train-start 2017-01-01 --train-end 2024-12-31 `
+  --fit-through 2023-12-31 `
+  --validation-from 2024-01-01 --validation-through 2024-12-31 `
+  --iterations 100
+```
+
+**重要：この研究用CBMはそのまま公開用モデルではない。** 学習原資そのものの適法性・サンプル抽出の完全なオッズ非依存、実馬に対する期間外検証、確率校正、2026年出馬表・近走情報、別個の凍結穴馬モデルの外部証明、JRA-VANの認証、noteへの公開許諾・署名済み検証を経る必要がある。
