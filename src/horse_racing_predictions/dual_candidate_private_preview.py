@@ -243,7 +243,12 @@ def private_dual_sunday_preview(
             ascending=[False, True], kind="stable",
         ).iloc[0]
         # Hash only a private commitment to the actual selected identity.
-        anonymous.append([str(rid), str(pick["horse_name"])])
+        # Commit to the native model's unrounded private numeric score as
+        # well as identity; don't publish a trivially enumerable name-only hash.
+        anonymous.append([
+            str(rid), str(pick["horse_name"]),
+            format(float(pick["outsider_score"]), ".17g"),
+        ])
     digest = sha256(json.dumps(
         sorted(anonymous), ensure_ascii=False, separators=(",", ":"),
     ).encode("utf-8")).hexdigest()
