@@ -9,7 +9,7 @@ training/source verification and a separately frozen outsider model.
 """
 from __future__ import annotations
 
-from datetime import date, datetime, timezone, timedelta
+from datetime import date, datetime, time, timezone, timedelta
 from hashlib import sha256
 import json
 from pathlib import Path
@@ -79,6 +79,21 @@ def diagnose_sunday_auto_post(
         raise ValueError("timezone-aware inspection timestamp required")
     if not isinstance(root, Path):
         raise ValueError("local root must be Path")
+    # This historic one-day run is impossible to certify as a pre-race
+    # forecast after the research cutoff, even if local data later appears.
+    # Check time BEFORE attempting to inspect a local model or snapshot.
+    now_jst = observed_at.astimezone(_JST)
+    if now_jst.date() > date(2026, 10, 25) or (
+        now_jst.date() == date(2026, 10, 25)
+        and now_jst.time() >= time(8, 0)
+    ):
+        return {
+            "status": "BLOCKED", "raceDate": _DAY,
+            "blockers": ["HISTORIC_PRE_RACE_CUTOFF_EXPIRED"],
+            "modelComputed": False, "publicationAuthorized": False,
+            "notePostAttempted": False, "providerAccessAttempted": False,
+            "rawDataUploaded": False,
+        }
     if root.is_symlink() or not root.is_dir():
         return {
             "status": "BLOCKED", "raceDate": _DAY,
