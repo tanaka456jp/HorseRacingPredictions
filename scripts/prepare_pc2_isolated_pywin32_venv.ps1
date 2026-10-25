@@ -65,6 +65,9 @@ try {
     $arch = ($metadata -join [Environment]::NewLine) | ConvertFrom-Json
     $report.selectedPythonBits = [int]$arch.bits
     if ($arch.bits -ne 64) { throw 'ONLY_64BIT_PYTHON_ALLOWED' }
+    if ($arch.pythonMajor -ne 3 -or $arch.pythonMinor -ne 14) {
+        throw 'PINNED_WHEEL_REQUIRES_PYTHON314'
+    }
     if (-not $arch.pywin32) {
         $report.dependencyInstallAttempted = $true
         # Official PyPI wheel only, exact SHA256 pinned, and no dependencies.
@@ -96,6 +99,7 @@ try {
         'UNTRUSTED_VENV_PROVENANCE',
         'D_VENV_CREATION_FAILED','D_VENV_PYTHON_MISSING',
         'VENV_ARCHITECTURE_PROBE_FAILED','ONLY_64BIT_PYTHON_ALLOWED',
+        'PINNED_WHEEL_REQUIRES_PYTHON314',
         'HASHED_FREE_PYWIN32_INSTALL_FAILED',
         'PYWIN32_POSTINSTALL_PROBE_FAILED',
         'VENV_PYWIN32_IMPORT_UNAVAILABLE'
