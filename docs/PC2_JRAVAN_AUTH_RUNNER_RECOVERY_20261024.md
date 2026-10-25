@@ -63,3 +63,23 @@ JRA-VAN公式の[エラー -301/-303](https://support.jra-van.jp/jravan/detail?h
 - 【RACE】公式検証で `-301` の原因が判明し、無課金・指定期間内・適法な研究利用だけが可能だと確認できる。
 - 【予測】別途、2026-10-25時点の全36レース出走馬・直近履歴・厳密にオッズ非依存で学習した**本物の**モデルが必要。2017～2024年のRACEが回復してもこれらは自動的にはそろわない。
 - 【公開】本人の無料noteマガジン掲載と、元データを再配布しない独立した公開利用権限を確認する。検証できなければ投稿しない。
+
+## 2026-10-26 runnerで実証したPC② Python 64bit復旧（正式な引継ぎ）
+
+**旧来の `JVOpen -301` がすべて解消されたと断定しないこと。** 2026-10-25の二種類の実機診断結果を厳密に区別する。
+
+1. [32/64初期化ジョブ #40204873519](https://github.com/tanaka456jp/HorseRacingPredictions/actions/runs/40204873519)：32bit版・64bit版ともCOM生成成功、`JVInit("UNKNOWN")=0`。**JVOpenは未実行**。
+2. [32/64今週のRACE認証ジョブ #40204953445](https://github.com/tanaka456jp/HorseRacingPredictions/actions/runs/40204953445)：**64bit** `JVOpen("RACE", "00000000000000", option=2)=0`、`JVClose`成功。**32bit**は45秒タイムアウト、返却コードは得られず、`-301`と同一視できない。
+3. [Agent／Python環境ジョブ #40241907419](https://github.com/tanaka456jp/HorseRacingPredictions/actions/runs/40241907419)：JV-Link関連プロセス2件・実行中の関連サービス2件・停止中0件。一般の`py -3`は**64bit**だが、`pywin32`未導入。これがPythonからCOMを初期化できなかった具体的な障害。
+4. [専用Dドライブ復旧・認証ジョブ #40242482654](https://github.com/tanaka456jp/HorseRacingPredictions/actions/runs/40242482654)：PC②のみを対象に、システムPythonを変更せず、**新規D仮想環境** `D:\HorseRacingPredictions\runtime\pc2-jvlink64-py314-312` を作成。公式PyPIの**無料** `pywin32==312` CPython3.14 x64バイナリを**SHA256固定**で導入。結果 `dependencyVerified=true`・`pythonBits=64`、研究プログラムが使う**実Python JvLinkClient**で `JVInit=0`、`JVOpen(RACE,option=2)=0`、`JVClose`成功。
+
+すべて**既存のself-hosted runnerを利用しGitHub Draft PR内のみ**を変更した。Pythonシステム全体の置換・32/64bit JV-Linkアンインストール・利用キー閲覧／再発行・エージェント停止／再設定・有料契約は行っていない。JVOpen自身の標準キャッシュ処理は発生し得るが、JVGet/JVRead・2025–2026保護holdoutのレコード取得・馬名アップロード・note投稿は実施していない。
+
+### これから守る起動経路
+
+- **PC②でのHorse研究用JV-Linkは64bit専用**。32bit版は正常初期化まで確認されているが認証応答待ちの原因は**未解決**。無理に32bit版を再試行せず、既存Agentを強制停止しない。
+- 64bit研究時は、systemの`py -3`と混同せず、`D:\HorseRacingPredictions\runtime\pc2-jvlink64-py314-312\Scripts\python.exe`を明示する。既存の`run_jravan_trial.ps1`等は一般Pythonへ依存パッケージを導入し得るため、新環境に適用する前に研究依存関係を確認する。
+- 既に導入済みの`pywin32`を**毎回インストールし直さない**。更新する場合も公式ハッシュ照合した無料版を選び、既存アーカイブや一般Pythonに干渉しない。専用環境の所有マーカーが存在しない場合は既存フォルダを上書きしない。
+- **今週分RACE `option=2`の認証成功≠過去2017～2024年 `option=3/4` セットアップ成功**。RACE履歴はDの承認済みCSVとして未確認。過去セットアップを無断で開始しない。将来実施する場合、取得契約・利用可能期間・利用目的・キャッシュ容量と転用許可の確認が必要。
+- 予想公開については[JRA-VAN公式](https://jra-van.jp/info/post_guide.html)に従い、生JV-Linkデータの投稿を禁止。独立した適法なデータソースと予想文章の公開許諾、研究用モデルの正確性が別に必要。AIモデルの実馬期待値や11月1日の記事投稿は**まだ実証・実行されていない**。
+
