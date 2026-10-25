@@ -32,6 +32,7 @@ def private_friday_predraw_dual_preview(
     history: pd.DataFrame, entries: pd.DataFrame,
     expected_race_ids: tuple[str, ...], race_date: str,
     observed_at: datetime,
+    expected_runner_counts: dict[str, int] | None = None,
 ) -> dict:
     """True train-only candidate inference, NOT an authorized forecast."""
     if not isinstance(candidate, LoadedDualResearchCandidate):
@@ -97,6 +98,17 @@ def private_friday_predraw_dual_preview(
     counts = entries.groupby("race_id")["horse_name"].transform("size")
     if counts.lt(4).any() or counts.gt(18).any():
         raise ValueError("incomplete or implausible official Friday starter list")
+    if expected_runner_counts is not None:
+        # A source-independent reviewer must confirm these are genuine
+        # per-race counts; unverified JSON never proves publication rights.
+        if (not isinstance(expected_runner_counts, dict)
+                or set(expected_runner_counts) != set(expected_race_ids)
+                or any(type(n) is not int or not 4 <= n <= 18
+                       for n in expected_runner_counts.values())):
+            raise ValueError("invalid full race-by-race runner count evidence")
+        observed_counts = entries.groupby("race_id").size().to_dict()
+        if observed_counts != expected_runner_counts:
+            raise ValueError("incomplete Friday roster against supplied runner counts")
     # Remove any pre-announced exceptional-GI draw numbers as well, preserving
     # one uniform, strictly draw-free model across all races. Never fill -1
     # or invent a numbered order.
@@ -178,6 +190,8 @@ def private_friday_predraw_dual_preview(
         "winModelOutputSha256": _canonical_model_output_sha256(win_preds),
         "outsiderSelectionSha256": digest,
         "raceNumbersKnownOrInvented": False,
+        "officialRosterCountIndependentlyVerified": False,
+        "callerDeclaredRunnerCountsChecked": expected_runner_counts is not None,
         "sourceRightsIndependentlyVerified": False,
         "upstreamOddsIndependentSourceProven": False,
         "published": False,
