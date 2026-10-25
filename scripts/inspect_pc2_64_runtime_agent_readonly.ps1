@@ -95,3 +95,7 @@ if ($folder) { New-Item -ItemType Directory -Force -Path $folder | Out-Null }
 $report | ConvertTo-Json -Depth 6 |
   Set-Content -LiteralPath $OutputPath -Encoding UTF8
 Get-Content -LiteralPath $OutputPath -Encoding UTF8
+# GitHub's Windows PowerShell wrapper propagates stale native exit codes
+# after a caught py-launch failure. JSON status (not process exit) is the
+# authoritative diagnostic outcome; do not pretend Python was available.
+$global:LASTEXITCODE = 0
