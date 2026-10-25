@@ -72,6 +72,21 @@ def test_true_friday_predraw_top3_outsider_without_horse_numbers(tmp_path):
     assert "races" not in result
 
 
+def test_friday_declared_runner_counts_must_match_entire_card(tmp_path):
+    loaded = _trained_predraw(tmp_path)
+    history, entries, ids = _fake_recent_and_entries()
+    entries = entries.drop(columns=["post_position"])
+    exact_counts = {rid: 6 for rid in ids}
+    result = private_friday_predraw_dual_preview(
+        loaded, history=history, entries=entries,
+        expected_race_ids=ids, race_date="2026-11-01",
+        observed_at=FRIDAY, expected_runner_counts=exact_counts,
+    )
+    assert result["callerDeclaredRunnerCountsChecked"] is True
+    assert result["officialRosterCountIndependentlyVerified"] is False
+    assert result["publicationAuthorized"] is False
+
+
 def test_friday_model_explicitly_rejects_unavailable_draw_features(tmp_path):
     from test_dual_candidate_private_preview import _artifact
     default_loaded = load_dual_research_candidate(_artifact(tmp_path))
@@ -109,11 +124,12 @@ def test_friday_cannot_assume_early_announced_roster_complete(tmp_path):
     history, entries, ids = _fake_recent_and_entries()
     entries = entries.drop(columns=["post_position"])
     removed = entries.iloc[:-1].copy()
-    with pytest.raises(ValueError, match="incomplete or implausible"):
+    counts = {rid: 6 for rid in ids}
+    with pytest.raises(ValueError, match="incomplete Friday roster"):
         private_friday_predraw_dual_preview(
             loaded, history=history, entries=removed,
             expected_race_ids=ids, race_date="2026-11-01",
-            observed_at=FRIDAY,
+            observed_at=FRIDAY, expected_runner_counts=counts,
         )
 
 
