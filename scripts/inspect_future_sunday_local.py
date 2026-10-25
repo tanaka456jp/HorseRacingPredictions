@@ -23,9 +23,23 @@ def main() -> int:
                    help="existing approved local model, history and full card")
     args = p.parse_args()
     try:
+        # Prefer the independent dual candidate only when its distinct
+        # native artifacts are present; never silently downgrade a partial
+        # dual bundle to the legacy single-model inference path.
+        dual_names = (
+            "model/candidate_manifest.json",
+            "model/win.cbm",
+            "model/outsider.cbm",
+        )
+        dual_mode = any(
+            (args.bundle_dir / filename).exists()
+            or (args.bundle_dir / filename).is_symlink()
+            for filename in dual_names
+        )
         result = diagnose_future_sunday_bundle(
             args.bundle_dir, race_date=args.race_date,
             observed_at=datetime.now(timezone.utc),
+            model_mode="dual" if dual_mode else "single",
         )
     except (ValueError, OSError, TypeError, UnicodeError):
         result = {
