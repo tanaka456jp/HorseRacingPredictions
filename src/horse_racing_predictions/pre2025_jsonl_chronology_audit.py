@@ -101,14 +101,16 @@ def audit_pre2025_ra_se_jsonl(path: Path) -> HistoricalJsonlAudit:
             except (ValueError, UnicodeError, TypeError, OverflowError) as exc:
                 # Raw JSON or record information must not leak via errors.
                 raise UnsafeTrainingSource("JSONL_RECORD_INVALID_OR_UNVERIFIED") from None
-    if n < 1 or ra == 0 or se == 0:
-        # A single JSONL shard may contain only one record type; this is
-        # not independently a complete historical research dataset.
-        raise UnsafeTrainingSource("COMPLETE_RA_SE_SOURCE_NOT_PROVEN")
+    if n < 1 or ra + se == 0:
+        raise UnsafeTrainingSource("NO_RA_OR_SE_IN_SOURCE")
+    # Archive shards can legitimately hold only RA or only SE. Report the
+    # partial role while forbidding conversion to a trainable model.
+    partial = ra == 0 or se == 0
     if path.stat().st_size != original_size:
         raise UnsafeTrainingSource("JSONL_SOURCE_CHANGED_DURING_AUDIT")
     return HistoricalJsonlAudit(
-        status="FULL_RA_SE_CHRONOLOGY_VERIFIED_RESEARCH_RIGHTS_PENDING",
+        status=("PARTIAL_RA_SE_SHARD_RIGHTS_PENDING" if partial else
+                "FULL_RA_SE_CHRONOLOGY_VERIFIED_RESEARCH_RIGHTS_PENDING"),
         scanned_records=n, ra_records=ra, se_records=se,
         other_record_types=others,
         earliest_ra_se_year=low_year, latest_ra_se_year=high_year,
