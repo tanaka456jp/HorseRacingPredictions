@@ -337,3 +337,32 @@ def test_unnumbered_horses_without_blood_registration_are_not_collapsed(tmp_path
     assert set(frame["horse_name"]) == {"架空乙", "架空丙"}
     assert frame["post_position"].isna().all()
     assert frame["win_odds"].isna().all()
+
+
+def test_same_horse_early_unnumbered_and_final_update_merge_once(tmp_path):
+    # Early pre-draw SE has no blood number/post number. Its later final
+    # update must supersede the prior entry, not count as an extra starter.
+    early = bytearray(_se(
+        1, "架空同一馬", 0, 0, data_division="3", blood_no="",
+    ).encode("cp932"))
+    early[28:30] = b"  "
+    finalized = _se(
+        4, "架空同一馬", 1, 0, data_division="7",
+        blood_no="2023101111",
+    )
+    path = tmp_path / "two_update_stages.jsonl"
+    path.write_text(
+        "\n".join(json.dumps(row, ensure_ascii=False) for row in [
+            {"record_type": "RA", "text": _ra()},
+            {"record_type": "SE", "text": bytes(early).decode("cp932")},
+            {"record_type": "SE", "text": finalized},
+        ]) + "\n", encoding="utf-8",
+    )
+    frame, report = parse_raw_jsonl(path)
+    assert report.se_records_seen == 2
+    assert report.selected_se_records == 1
+    assert len(frame) == 1
+    assert frame.iloc[0]["horse_name"] == "架空同一馬"
+    assert frame.iloc[0]["finish_position"] == 1
+    assert frame.iloc[0]["post_position"] == 4
+    assert frame.iloc[0]["win_odds"] is None or frame["win_odds"].isna().all()
