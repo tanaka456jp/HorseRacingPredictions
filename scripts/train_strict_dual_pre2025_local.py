@@ -13,6 +13,9 @@ import json
 from pathlib import Path
 
 from horse_racing_predictions.data_sources import read_csv_flexible
+from horse_racing_predictions.pre2025_training_csv_audit import (
+    audit_pre2025_training_csv,
+)
 from horse_racing_predictions.odds_free_training import (
     prepare_strict_odds_free_training_sample,
 )
@@ -48,6 +51,10 @@ def main() -> int:
             raise ValueError("local pre2025 CSV missing or untrusted")
         if not a.output_dir.is_absolute() or a.output_dir.exists():
             raise ValueError("new absolute output candidate directory required")
+        # Full chronological and schema scan BEFORE materializing the
+        # entire source in pandas. A filename/pre2025 folder is not proof.
+        # This structural audit does not imply independent source rights.
+        audit_pre2025_training_csv(csv)
         sample = prepare_strict_odds_free_training_sample(
             read_csv_flexible(csv),
             train_start=a.train_start, train_end=a.train_end,
