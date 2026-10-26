@@ -541,12 +541,17 @@ def parse_raw_jsonl(
                     # Distinguish a missing post position from a real
                     # number, and retain actual horse identity instead.
                     registration = record.blood_registration_number.strip()
-                    if registration:
+                    # Horse name is known before Saturday's post draw and
+                    # remains stable across JRA-VAN update stages. Prefer
+                    # it over optional registration/post numbers: otherwise
+                    # an early incomplete SE and its later finalized SE
+                    # could be silently treated as two different horses.
+                    if record.horse_name.strip():
+                        stable_horse_key = "name:" + record.horse_name.strip()
+                    elif registration:
                         stable_horse_key = "blood:" + registration
                     elif record.post_position is not None:
                         stable_horse_key = "post:" + str(record.post_position)
-                    elif record.horse_name.strip():
-                        stable_horse_key = "name:" + record.horse_name.strip()
                     else:
                         raise ValueError("SE has no stable horse identity")
                     horse_key = (record.race_id, stable_horse_key)
