@@ -135,3 +135,27 @@ py -3 scripts/train_strict_dual_pre2025_local.py `
 ### データ公開許諾がなければ投稿不可
 
 [JRA-VAN公式投稿ガイドライン](https://jra-van.jp/info/post_guide.html)はJV-Link取得データの投稿不可を明記。[商業配信向け公式説明](https://developer.jra-van.jp/t/topic/899)も通常のData Lab契約による再配布・データ配信を認めない。ノートでの独自予想文章と、競馬データを転載することは分離して確認すること。JRA公式[利用条件](https://jra.jp/use/)も著作権・許諾条件を規定している。料金が発生する契約や商業許諾は承認なしに申し込まない。
+
+## 2026-10-26 PC②実機: JV-Link RACE の本物のRA/SEをローカル隔離保存
+
+- **正常な64bit Windows runnerを使用**。過去の認証成功は[Run #40242482654](https://github.com/tanaka456jp/HorseRacingPredictions/actions/runs/40242482654)で確認済み。
+- [Run #40324238247](https://github.com/tanaka456jp/HorseRacingPredictions/actions/runs/40324238247)：`JVOpen(option=2)`→`JVGets`→`JVClose`。最初の12件はJG12。
+- [Run #40325086713](https://github.com/tanaka456jp/HorseRacingPredictions/actions/runs/40325086713)：最大8192件、RAとSEの両方を検出次第停止。1705件中、**RA72、SE1、JG984、その他**。
+- [Run #40325671573](https://github.com/tanaka456jp/HorseRacingPredictions/actions/runs/40325671573)：固定長のRA72件・SE1件、全件レイアウト整合。元データ本文・馬名はGitHubに送らない。
+- [Run #40326145209](https://github.com/tanaka456jp/HorseRacingPredictions/actions/runs/40326145209)：本物の`parse_ra`72件・`parse_se`1件、**解析失敗0件**。pandas依存をCSV生成時まで遅延し、既存のDドライブ専用pywin32環境で解析可能にした。
+- [Run #40327376426](https://github.com/tanaka456jp/HorseRacingPredictions/actions/runs/40327376426)：実機で**RA72件＋SE935件＝1007件**を、既存データ上書きなしで新規Dドライブのプライベートスナップショットへ保管。
+  - 親ディレクトリ：`D:\HorseRacingPredictions\jravan-private-quarantine\`
+  - 子フォルダ：`RACE_CURRENTWEEK_QUARANTINE_<random>`（実機内に作成した名前はログに非公開）。PC②のファイルエクスプローラーで親ディレクトリを開いて確認できる。
+  - 完了済みの子には`race_raw.jsonl`、`private_manifest.json`、`DO_NOT_TRAIN_OR_REPOST`。
+  - 処理異常時は`INCOMPLETE_DO_NOT_TRAIN`および`race_raw.pending`が残る。勝手に削除したり、正規学習入力に昇格させたりしない。
+  - `private_manifest.json`にはローカルSHA256、RA/SE件数を保持。GitHubへアップロードしたのは件数と安全フラグのみ。**JV-Data原文・馬名・勝率・利用キーはアップロードしていない**。
+  - `rawRedistributionAllowed=false`、`trainOnThisFile=false`、`protected2025And2026Holdout=true`、`publicationAuthorized=false`。この2026年データは**2024-12-31以前の学習用原資ではない**。
+- 上記時点の全回帰 [#40327385860](https://github.com/tanaka456jp/HorseRacingPredictions/actions/runs/40327385860) は **543 passed / 27 skipped / 0 failed**、実CatBoost [#40327385702](https://github.com/tanaka456jp/HorseRacingPredictions/actions/runs/40327385702) は **17 passed**。
+
+### まだ必要な開発・証明
+
+1. **2024-12-31以前の正当に利用可能な履歴データ**：今週用`option=2`では2017–2024年の必要な学習原資を遡及取得できたことにはならない。セットアップ用3/4は別の操作であり、今回は自動実行していない。別の既存承認済みローカルCSV等で利用期間・ライセンス・完全性を確認する。
+2. 学習用履歴・2025～2026年の保護済み最終holdout・直近の未確定出走馬を**別フォルダ・別検証ゲート**で隔離する。今回の1007件はモデル学習へ渡さない。
+3. 前走特徴量の鮮度、2026年11月1日など各日の公式開催場・出走予定馬の真正性、凍結済み実モデル2本、期待値の時系列検証、公開出典の権利証明は未確認。
+4. [JRA-VAN公式投稿ガイド](https://jra-van.jp/info/post_guide.html)でJV-Link原文の投稿は不可。**noteマガジン`active:false`維持**。許諾・独立証拠が揃うまで出版禁止。
+
