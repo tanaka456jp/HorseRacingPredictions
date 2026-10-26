@@ -32,7 +32,7 @@ jobs:
         run: pytest -q tests/test_pc2_bounded_jvgets_record_types.py
 
   real-pc2-readonly-record-count:
-    name: PC2 x64 JVOpen option2 then stop on RA+SE or at 1024 types
+    name: PC2 x64 JVOpen option2 then stop on RA+SE or at 8192 types
     needs: synthetic-guards
     runs-on: [self-hosted, Windows]
     timeout-minutes: 6
@@ -81,7 +81,7 @@ jobs:
             try {
               $psi = New-Object System.Diagnostics.ProcessStartInfo
               $psi.FileName = $python
-              $psi.Arguments = ('"{0}" --output "{1}" --max-records 1024' -f $program, $child)
+              $psi.Arguments = ('"{0}" --output "{1}" --max-records 8192' -f $program, $child)
               $psi.UseShellExecute = $false
               $psi.CreateNoWindow = $true
               $psi.RedirectStandardOutput = $true
@@ -109,8 +109,8 @@ jobs:
                     $proof.protectedHoldoutTrainingAttempted -eq $false -and
                     $proof.publicationAuthorized -eq $false -and
                     $proof.notePostAttempted -eq $false -and
-                    $proof.maxRecords -eq 1024 -and
-                    $proof.sampleRecordCount -le 1024 -and
+                    $proof.maxRecords -eq 8192 -and
+                    $proof.sampleRecordCount -le 8192 -and
                     $proof.sampleRecordCount -ge 0 -and
                     $total -eq $proof.sampleRecordCount -and $validCounts) {
                   foreach ($key in @(
