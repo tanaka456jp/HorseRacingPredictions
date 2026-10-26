@@ -561,11 +561,13 @@ def parse_raw_jsonl(
             unmatched_se += 1
             continue
 
-        if completed_only and (
-            horse.finish_position is None
-            or horse.win_odds is None
-            or horse.win_odds <= 1.0
-        ):
+        # Race/horse inclusion must NEVER depend on win_odds.  JRA-VAN may
+        # omit or publish odds at a different update stage; discarding such
+        # horses would create odds-dependent sampling bias in training and
+        # inflate/alter held-out accuracy.  Only a known finishing position
+        # establishes a completed result here. Downstream research validates
+        # that a full 4-18 runner roster with exactly one winner is present.
+        if completed_only and horse.finish_position is None:
             skipped_incomplete_se += 1
             continue
 
