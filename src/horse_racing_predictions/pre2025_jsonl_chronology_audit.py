@@ -59,7 +59,11 @@ def audit_pre2025_ra_se_jsonl(path: Path) -> HistoricalJsonlAudit:
     ra = se = others = n = 0
     low_year, high_year = 9999, 0
     with path.open("rb") as handle:
-        for raw_line in handle:
+        while True:
+            # Bound memory even for a corrupt file with no newlines.
+            raw_line = handle.readline(MAX_LINE_BYTES + 1)
+            if not raw_line:
+                break
             n += 1
             if n > MAX_ROWS:
                 raise UnsafeTrainingSource("JSONL_ROW_CAP_EXCEEDED")
