@@ -112,3 +112,43 @@ def test_option_two_accepted_without_records_does_not_claim_real_data(tmp_path):
     assert r["sampleRecordCount"] == 0
     assert r["status"] == "SAMPLE_METADATA_ONLY"
     assert r["publicationAuthorized"] is False
+
+
+def test_extended_in_memory_scan_stops_immediately_when_ra_and_se_found(tmp_path):
+    class Mixed(FakeClient):
+        def iter_records(self, **_):
+            self.calls.append("JVGets")
+            for _ in range(28):
+                yield JvRawRecord("JG", "private one")
+            yield JvRawRecord("RA", "private two")
+            yield JvRawRecord("SE", "private three")
+            raise AssertionError("must stop once both record types are found")
+
+    report = mod.probe_bounded_race_types(
+        output=tmp_path / "summary.json", client_factory=Mixed,
+        computer="DESKTOP-MVV1FD4", bits=64, windows=True,
+        max_records=1024,
+    )
+    assert report["status"] == "SAMPLE_METADATA_ONLY"
+    assert report["sampleRecordCount"] == 30
+    assert report["recordTypeCounts"] == {"JG": 28, "RA": 1, "SE": 1}
+    assert report["maxRecords"] == 1024
+    assert report["rawRecordsUploaded"] is False
+    assert "private" not in (tmp_path / "summary.json").read_text()
+
+
+def test_invalid_unbounded_data_request_rejected_before_com(tmp_path):
+    for n in (0, 13, 2048, True, -1):
+        try:
+            mod.probe_bounded_race_types(
+                output=tmp_path / "summary.json",
+                client_factory=lambda **_: (_ for _ in ()).throw(
+                    AssertionError("cannot open COM with unsupported cap")
+                ),
+                computer="DESKTOP-MVV1FD4", bits=64, windows=True,
+                max_records=n,
+            )
+        except ValueError as exc:
+            assert "bounded read" in str(exc)
+        else:
+            raise AssertionError("unsafe record cap accepted")
