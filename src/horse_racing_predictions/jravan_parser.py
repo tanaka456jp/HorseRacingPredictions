@@ -4,7 +4,6 @@ from dataclasses import asdict, dataclass
 import json
 from pathlib import Path
 
-import pandas as pd
 
 
 JV_DATA_SPEC_VERSION = "4.9.0.1"
@@ -480,6 +479,11 @@ def parse_raw_jsonl(
     jra_only: bool = True,
     completed_only: bool = True,
 ) -> tuple[pd.DataFrame, JraVanParseReport]:
+    # The fixed-width RA/SE decoders need only the Python stdlib and must
+    # work inside the PC2's isolated 64-bit pywin32-only JV-Link runtime.
+    # Pandas is required only when constructing a saved research DataFrame.
+    import pandas as pd
+
     path = Path(path)
     races: dict[str, RaceRecord] = {}
     horses: dict[tuple[str, str], HorseRaceRecord] = {}
