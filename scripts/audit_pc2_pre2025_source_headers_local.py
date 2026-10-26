@@ -136,8 +136,10 @@ def _inspect_csv(data: bytes, report: SampleSummary) -> None:
 
 def _inspect_jsonl(data: bytes, report: SampleSummary) -> None:
     lines = data.splitlines()
-    # Discard last line: it might end mid-object due to read bound.
-    for line in lines[:-1][:64]:
+    # Keep the final line only if the bounded sample ends at a real newline.
+    # Otherwise a 256KiB read might have cut a private JSON object in half.
+    complete = lines if data.endswith((b"\n", b"\r")) else lines[:-1]
+    for line in complete[:64]:
         if report.sampledRecordRows >= 1000:
             break
         try:
