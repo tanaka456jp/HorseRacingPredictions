@@ -22,7 +22,7 @@ from horse_racing_predictions.jravan import JvLinkClient
 
 _VALID_TYPE = re.compile(r"[A-Z0-9]{2}\Z")
 MAX_RECORDS = 12
-MAX_DIAGNOSTIC_RECORDS = 1024
+MAX_DIAGNOSTIC_RECORDS = 8192
 
 
 @dataclass
@@ -68,8 +68,8 @@ def probe_bounded_race_types(
     max_records: int = MAX_RECORDS,
     windows: bool | None = None,
 ) -> dict:
-    if type(max_records) is not int or max_records not in (12, 256, 1024):
-        raise ValueError("bounded read permits only 12, 256, or 1024 records")
+    if type(max_records) is not int or max_records not in (12, 256, 1024, 8192):
+        raise ValueError("bounded read permits only 12, 256, 1024, or 8192 records")
     if computer is None:
         computer = os.environ.get("COMPUTERNAME", "")
     if bits is None:
@@ -167,7 +167,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument(
-        "--max-records", type=int, choices=(12, 256, 1024), default=12,
+        "--max-records", type=int, choices=(12, 256, 1024, 8192), default=12,
     )
     args = parser.parse_args()
     probe_bounded_race_types(output=args.output, max_records=args.max_records)
