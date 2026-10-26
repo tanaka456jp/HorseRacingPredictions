@@ -55,7 +55,7 @@ Outputs:
 By default:
 
 - only JRA central course codes 01-10 are retained
-- incomplete/non-starter rows without final finish and valid win odds are excluded
+- completed-result selection is based on confirmed finish positions, **not odds availability or odds level**; missing odds must not bias roster selection
 - multiple update stages are collapsed to the most final data division
 
 The generated CSV uses the same canonical columns expected by Current History
@@ -71,3 +71,22 @@ silently hiding it.
 
 Raw JV-Data and raw JSONL must remain local and must not be committed or
 redistributed.
+
+
+## Odds-independent sampling and protected data
+
+- Every race/horse is selected independently from market odds, including when
+  `win_odds` is blank or exactly 1.0. Betting-odds values can remain in a
+  private raw export for compatibility, but the strict modeling adapter
+  rejects their use as features and drops them before row selection.
+- The RA/SE parser is a structural decoder, **not** a licence attestation or
+  a guarantee of a complete race roster. Final training validation must
+  confirm a full eligible field, exactly one winner per race, valid finish
+  positions, and independent data-use authorization.
+- Output derived from 2025 or 2026 current-week JV-Data is quarantined and
+  **not permitted for pre2025 model fitting**. The local strict trainer and
+  local outsider evaluator both run a full-date CSV audit before importing
+  any data into a model. A successful partial-source inspection does not
+  override this protection.
+- Raw JV-Data or copyrighted source text must not be uploaded to GitHub or
+  published in note articles without separate documented permissions.
