@@ -1,0 +1,139 @@
+name: PC2 JV-Link RACE 12-Record Metadata Smoke (No Data Export)
+
+on:
+  push:
+    branches: ["feature/weekly-odds-free-note-20261021"]
+    paths:
+      - "scripts/probe_pc2_bounded_jvgets_record_types.py"
+      - "tests/test_pc2_bounded_jvgets_record_types.py"
+      - ".github/workflows/pc2-jvlink-bounded-record-smoke.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: horse-pc2-currentweek-metadata-smoke
+  cancel-in-progress: false
+
+jobs:
+  synthetic-guards:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install -e ".[dev]"
+      - name: Fake COM records; prove private bytes not exported
+        run: pytest -q tests/test_pc2_bounded_jvgets_record_types.py
+
+  real-pc2-readonly-record-count:
+    name: PC2 x64 JVOpen option2 then max12 type-only JVGets
+    needs: synthetic-guards
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          clean: false
+          persist-credentials: false
+      - name: Isolated x64 client returns only counts/metadata
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Path artifacts -Force | Out-Null
+          $output = 'artifacts/pc2_jvgets_types_only.json'
+          $result = [ordered]@{
+            schemaVersion = 1
+            status = 'BLOCKED'
+            stage = 'NO_SAFE_RUNTIME'
+            verifiedPhysicalPC2 = ($env:COMPUTERNAME -eq 'DESKTOP-MVV1FD4')
+            selectedPythonBits = 0
+            sampleRecordCount = 0
+            recordTypeCounts = @{}
+            jvOpenAttempted = $false
+            jvOpenReturnCode = $null
+            jvCloseSucceeded = $false
+            rawRecordsSaved = $false
+            rawRecordsUploaded = $false
+            protectedHoldoutTrainingAttempted = $false
+            usageKeyRead = $false
+            publicationAuthorized = $false
+            notePostAttempted = $false
+          }
+          $python = 'D:\HorseRacingPredictions\runtime\pc2-jvlink64-py314-312\Scripts\python.exe'
+          $marker = 'D:\HorseRacingPredictions\runtime\pc2-jvlink64-py314-312\.horse-jvlink64-diagnostic-owned.txt'
+          if ($result.verifiedPhysicalPC2 -and
+              (Test-Path -LiteralPath $python -PathType Leaf) -and
+              (Test-Path -LiteralPath $marker -PathType Leaf) -and
+              ((Get-Content -LiteralPath $marker -Raw).Trim() -eq
+                'HorseRacingPredictions PC2 isolated pywin32 only')) {
+            $env:PYTHONPATH = Join-Path (Get-Location).Path 'src'
+            $program = Join-Path (Get-Location).Path 'scripts\probe_pc2_bounded_jvgets_record_types.py'
+            $child = Join-Path (Get-Location).Path (
+              'artifacts\jvgets_private_' + [Guid]::NewGuid().ToString('N') + '.json'
+            )
+            $proc = $null
+            try {
+              $psi = New-Object System.Diagnostics.ProcessStartInfo
+              $psi.FileName = $python
+              $psi.Arguments = ('"{0}" --output "{1}"' -f $program, $child)
+              $psi.UseShellExecute = $false
+              $psi.CreateNoWindow = $true
+              $psi.RedirectStandardOutput = $true
+              $psi.RedirectStandardError = $true
+              $proc = [System.Diagnostics.Process]::Start($psi)
+              if (-not $proc.WaitForExit(90000)) {
+                $result.stage = 'JVGETS_PRIVATE_CHILD_TIMEOUT'
+                try { $proc.Kill() } catch {}
+              } elseif (Test-Path -LiteralPath $child -PathType Leaf) {
+                $proof = Get-Content -LiteralPath $child -Raw -Encoding UTF8 |
+                  ConvertFrom-Json
+                $validCounts = $true
+                $total = 0
+                foreach ($prop in $proof.recordTypeCounts.PSObject.Properties) {
+                  if ($prop.Name -notmatch '^(?:[A-Z0-9]{2}|OTHER)$' -or
+                      $prop.Value -isnot [int] -or $prop.Value -lt 0) {
+                    $validCounts = $false
+                  } else { $total += [int]$prop.Value }
+                }
+                if ($proof.verifiedPhysicalPC2 -eq $true -and
+                    $proof.selectedPythonBits -eq 64 -and
+                    $proof.usageKeyRead -eq $false -and
+                    $proof.rawRecordsSaved -eq $false -and
+                    $proof.rawRecordsUploaded -eq $false -and
+                    $proof.protectedHoldoutTrainingAttempted -eq $false -and
+                    $proof.publicationAuthorized -eq $false -and
+                    $proof.notePostAttempted -eq $false -and
+                    $proof.maxRecords -eq 12 -and
+                    $proof.sampleRecordCount -le 12 -and
+                    $proof.sampleRecordCount -ge 0 -and
+                    $total -eq $proof.sampleRecordCount -and $validCounts) {
+                  foreach ($key in @(
+                    'status','stage','selectedPythonBits','sampleRecordCount',
+                    'recordTypeCounts','jvOpenAttempted','jvOpenReturnCode',
+                    'jvCloseSucceeded'
+                  )) { $result[$key] = $proof.$key }
+                } else { $result.stage = 'PRIVATE_METADATA_INVARIANT_FAILED' }
+              } else { $result.stage = 'PRIVATE_PROBE_NO_OUTPUT' }
+            } catch {
+              $result.stage = 'PRIVATE_JVLINK_PROCESS_FAILED'
+            } finally {
+              if ($null -ne $proc) { $proc.Dispose() }
+            }
+          }
+          $result | ConvertTo-Json -Depth 6 |
+            Set-Content -LiteralPath $output -Encoding UTF8
+          Get-Content -LiteralPath $output -Encoding UTF8
+      - name: Upload counts and record types only, never raw data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pc2-jvgets-record-type-counts-no-content
+          path: artifacts/pc2_jvgets_types_only.json
+          if-no-files-found: error
+          retention-days: 7
