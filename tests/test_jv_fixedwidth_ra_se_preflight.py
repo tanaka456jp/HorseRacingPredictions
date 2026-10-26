@@ -43,3 +43,13 @@ def test_unknown_record_types_cannot_be_reinterpreted_as_ra():
         assert "RA/SE" in str(exc)
     else:
         raise AssertionError("non-RA/SE layout accepted")
+
+
+def test_actual_production_ra_se_parser_imports_without_pandas_side_effect():
+    from horse_racing_predictions.jravan_parser import parse_ra, parse_se
+    ra = parse_ra(fictional_record("RA"))
+    se = parse_se(fictional_record("SE"))
+    assert ra.race_id == se.race_id
+    assert ra.race_date == "2026-11-01"
+    assert se.finish_position is None
+    assert ra.racecourse_code == "05"
