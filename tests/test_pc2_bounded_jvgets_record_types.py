@@ -138,7 +138,7 @@ def test_extended_in_memory_scan_stops_immediately_when_ra_and_se_found(tmp_path
 
 
 def test_invalid_unbounded_data_request_rejected_before_com(tmp_path):
-    for n in (0, 13, 2048, True, -1):
+    for n in (0, 13, 2048, 8193, 1000000, True, -1):
         try:
             mod.probe_bounded_race_types(
                 output=tmp_path / "summary.json",
