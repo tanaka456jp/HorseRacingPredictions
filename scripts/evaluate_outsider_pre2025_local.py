@@ -13,6 +13,9 @@ import json
 from pathlib import Path
 
 from horse_racing_predictions.data_sources import read_csv_flexible
+from horse_racing_predictions.pre2025_training_csv_audit import (
+    audit_pre2025_training_csv,
+)
 from horse_racing_predictions.odds_free_training import (
     prepare_strict_odds_free_training_sample,
 )
@@ -33,7 +36,7 @@ def main() -> int:
     path = args.history_csv
     # Only an explicitly nominated local file may be inspected. Never scan
     # private folders or cross into redirected symbolic-link targets.
-    if (path.is_symlink() or not path.is_file()
+    if (not path.is_absolute() or path.is_symlink() or not path.is_file()
             or not 0 < path.stat().st_size <= 400_000_000
             or path.suffix.lower() != ".csv"):
         print(json.dumps({
@@ -42,6 +45,9 @@ def main() -> int:
         }, ensure_ascii=False))
         return 2
     try:
+        # The outsider baseline must uphold exactly the same full-file
+        # protected-holdout exclusion as the CatBoost training CLI.
+        audit_pre2025_training_csv(path)
         raw = read_csv_flexible(path)
         sample = prepare_strict_odds_free_training_sample(
             raw, train_start=args.train_start, train_end=args.train_end,
