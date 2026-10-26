@@ -41,7 +41,7 @@ jobs:
           import re
           upload_paths = re.findall(r"(?m)^          path: (.*)$", workflow)
           assert upload_paths == ["artifacts/pc2_private_jvdata_metadata.json"]
-          assert "artifacts/**" not in workflow
+          assert ("artifacts/" + "**") not in workflow
           code = Path("scripts/quarantine_pc2_jvlink_currentweek_local.py").read_text()
           assert 'from_time="00000000000000", option=2' in code
           assert "protectedHoldoutTrainingAllowed" in code
