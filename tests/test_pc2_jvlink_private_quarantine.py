@@ -94,7 +94,7 @@ def test_no_x86_no_wrong_pc_no_local_file_creation(tmp_path):
 
 def test_low_free_space_never_calls_provider(tmp_path):
     report = _run(tmp_path, space=100)
-    assert report["stage"] == "QUARANTINE_UNFINISHED"
+    assert report["stage"] == "D_QUARANTINE_PRECONDITION_FAILED"
     assert report["jvOpenAttempted"] is False
 
 
