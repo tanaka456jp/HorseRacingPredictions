@@ -310,3 +310,30 @@ def test_unknown_result_remains_excluded_regardless_of_known_odds(tmp_path):
     frame, report = parse_raw_jsonl(path, completed_only=True)
     assert frame.empty
     assert report.skipped_incomplete_se == 1
+
+
+def test_unnumbered_horses_without_blood_registration_are_not_collapsed(tmp_path):
+    def before_draw(name, finish):
+        buf = bytearray(_se(
+            1, name, finish, 0, blood_no="",
+        ).encode("cp932"))
+        buf[28:30] = b"  "  # Post position bytes 29-30: officially unknown
+        return bytes(buf).decode("cp932")
+
+    path = tmp_path / "unnumbered.jsonl"
+    rows = [{"record_type": "RA", "text": _ra()}]
+    for horse_name, finish in (("架空乙", 1), ("架空丙", 2)):
+        rows.append({
+            "record_type": "SE",
+            "text": before_draw(horse_name, finish),
+        })
+    path.write_text(
+        "\n".join(json.dumps(row, ensure_ascii=False) for row in rows)
+        + "\n", encoding="utf-8",
+    )
+    frame, report = parse_raw_jsonl(path, completed_only=True)
+    assert len(frame) == 2
+    assert report.selected_se_records == 2
+    assert set(frame["horse_name"]) == {"架空乙", "架空丙"}
+    assert frame["post_position"].isna().all()
+    assert frame["win_odds"].isna().all()
