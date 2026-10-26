@@ -86,9 +86,9 @@ def quarantine_currentweek_ra_se(
     try:
         # Production does NOT allow a caller-controlled root; only tests
         # inject one. The CLI below deliberately exposes no --root argument.
-        root = root.resolve(strict=False)
         if root.is_symlink():
             raise ValueError("UNTRUSTED_D_ROOT_LINK")
+        root = root.resolve(strict=False)
         if quota_bytes is None:
             parent = root if root.is_dir() else root.parent
             quota_bytes = shutil.disk_usage(parent).free
@@ -126,6 +126,7 @@ def quarantine_currentweek_ra_se(
         )
         count: Counter[str] = Counter()
         total_bytes = 0
+        scanned_records = 0
         report["stage"] = "SAVE_PRIVATE_RA_SE_ONLY"
         _store_sanitized(report, output)
         # Exclusive create. A partial file is NEVER a trainable dataset.
@@ -133,6 +134,9 @@ def quarantine_currentweek_ra_se(
             for record in client.iter_records(
                 buffer_size=150_000, wait_retries=3, wait_seconds=0.1
             ):
+                scanned_records += 1
+                if scanned_records > 30_000:
+                    raise ValueError("CURRENT_WEEK_PROVIDER_SCAN_CAP")
                 if record.record_type not in ("RA", "SE"):
                     continue
                 # Ensure production parser accepts real RA/SE before storage.
@@ -183,6 +187,7 @@ def quarantine_currentweek_ra_se(
         with (snapshot / "private_manifest.json").open("x", encoding="utf-8") as handle:
             json.dump(manifest, handle, ensure_ascii=False, sort_keys=True)
         raw_path.rename(snapshot / "race_raw.jsonl")
+        marker.rename(snapshot / "DO_NOT_TRAIN_OR_REPOST")
         report["status"] = "QUARANTINED_PRIVATE_RECORDS_NOT_TRAINABLE"
         report["stage"] = "COMPLETED_PRIVATE_QUARANTINE"
         report["savedLocally"] = True
