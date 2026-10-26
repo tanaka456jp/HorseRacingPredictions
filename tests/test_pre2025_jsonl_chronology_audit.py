@@ -86,3 +86,11 @@ def test_unknown_only_dataset_cannot_claim_ra_se(tmp_path):
     p = _write(tmp_path / "other.jsonl", [("JG", "JGSENSITIVE")])
     with pytest.raises(UnsafeTrainingSource, match="NO_RA_OR_SE_IN_SOURCE"):
         audit_pre2025_ra_se_jsonl(p)
+
+
+def test_extremely_long_jsonl_line_fails_before_full_line_memory_use(tmp_path):
+    from horse_racing_predictions.pre2025_jsonl_chronology_audit import MAX_LINE_BYTES
+    p = tmp_path / "huge.jsonl"
+    p.write_bytes(b"X" * (MAX_LINE_BYTES + 100) + b"\\n")
+    with pytest.raises(UnsafeTrainingSource, match="JSONL_LINE_TOO_LARGE"):
+        audit_pre2025_ra_se_jsonl(p)
