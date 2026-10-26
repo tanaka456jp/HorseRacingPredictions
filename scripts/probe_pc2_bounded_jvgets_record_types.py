@@ -19,6 +19,9 @@ import struct
 from typing import Callable
 
 from horse_racing_predictions.jravan import JvLinkClient
+from horse_racing_predictions.jv_fixedwidth_ra_se_preflight import (
+    verify_ra_se_fixed_width,
+)
 
 _VALID_TYPE = re.compile(r"[A-Z0-9]{2}\Z")
 MAX_RECORDS = 12
@@ -43,6 +46,9 @@ class BoundedJvReadReport:
     maxRecords: int = MAX_RECORDS
     sampleRecordCount: int = 0
     recordTypeCounts: dict[str, int] | None = None
+    raSeFixedWidthCheckCounts: dict[str, int] | None = None
+    raSeMalformedShapeCounts: dict[str, int] | None = None
+    raSeValuesExposed: bool = False
     jvCloseSucceeded: bool = False
     summaryMetadataOnly: bool = True
     rawRecordsSaved: bool = False
@@ -66,6 +72,7 @@ def probe_bounded_race_types(
     client_factory: Callable[..., JvLinkClient] = JvLinkClient,
     computer: str | None = None, bits: int | None = None,
     max_records: int = MAX_RECORDS,
+    validate_ra_se_layout: bool = False,
     windows: bool | None = None,
 ) -> dict:
     if type(max_records) is not int or max_records not in (12, 256, 1024, 8192):
@@ -87,6 +94,8 @@ def probe_bounded_race_types(
         return asdict(report)
     client = None
     counts: Counter[str] = Counter()
+    layout_ok: Counter[str] = Counter()
+    layout_failed: Counter[str] = Counter()
     try:
         report.stage = "COM_DISPATCH"
         _store(report, output)
@@ -122,6 +131,19 @@ def probe_bounded_race_types(
             if not _VALID_TYPE.fullmatch(type_id):
                 type_id = "OTHER"
             counts[type_id] += 1
+            if validate_ra_se_layout and type_id in ("RA", "SE"):
+                try:
+                    check = verify_ra_se_fixed_width(type_id, raw.text)
+                    if (
+                        check.length_valid and check.header_valid
+                        and check.jra_course_code_valid and check.date_shape_valid
+                        and check.codepage_roundtrip_valid
+                    ):
+                        layout_ok[type_id] += 1
+                    else:
+                        layout_failed[type_id] += 1
+                except (ValueError, UnicodeError, TypeError):
+                    layout_failed[type_id] += 1
             if sum(counts.values()) >= max_records:
                 break
             # Once both essential schema types are seen after the original
@@ -131,6 +153,8 @@ def probe_bounded_race_types(
                 break
         report.sampleRecordCount = sum(counts.values())
         report.recordTypeCounts = dict(sorted(counts.items()))
+        report.raSeFixedWidthCheckCounts = dict(sorted(layout_ok.items()))
+        report.raSeMalformedShapeCounts = dict(sorted(layout_failed.items()))
         report.status = "SAMPLE_METADATA_ONLY"
         report.stage = (
             "CURRENT_WEEK_SAMPLE_READ"
@@ -169,8 +193,12 @@ def main() -> None:
     parser.add_argument(
         "--max-records", type=int, choices=(12, 256, 1024, 8192), default=12,
     )
+    parser.add_argument("--validate-ra-se-layout", action="store_true")
     args = parser.parse_args()
-    probe_bounded_race_types(output=args.output, max_records=args.max_records)
+    probe_bounded_race_types(
+        output=args.output, max_records=args.max_records,
+        validate_ra_se_layout=args.validate_ra_se_layout,
+    )
 
 
 if __name__ == "__main__":
