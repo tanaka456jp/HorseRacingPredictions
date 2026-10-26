@@ -22,6 +22,7 @@ from horse_racing_predictions.jravan import JvLinkClient
 
 _VALID_TYPE = re.compile(r"[A-Z0-9]{2}\Z")
 MAX_RECORDS = 12
+MAX_DIAGNOSTIC_RECORDS = 1024
 
 
 @dataclass
@@ -64,8 +65,11 @@ def probe_bounded_race_types(
     *, output: Path,
     client_factory: Callable[..., JvLinkClient] = JvLinkClient,
     computer: str | None = None, bits: int | None = None,
+    max_records: int = MAX_RECORDS,
     windows: bool | None = None,
 ) -> dict:
+    if type(max_records) is not int or max_records not in (12, 256, 1024):
+        raise ValueError("bounded read permits only 12, 256, or 1024 records")
     if computer is None:
         computer = os.environ.get("COMPUTERNAME", "")
     if bits is None:
@@ -75,6 +79,7 @@ def probe_bounded_race_types(
     report = BoundedJvReadReport(
         verifiedPhysicalPC2=computer == "DESKTOP-MVV1FD4",
         selectedPythonBits=bits, recordTypeCounts={},
+        maxRecords=max_records,
     )
     if not (windows and computer == "DESKTOP-MVV1FD4" and bits == 64):
         report.stage = "PC2_WINDOWS_X64_REQUIRED"
@@ -117,7 +122,12 @@ def probe_bounded_race_types(
             if not _VALID_TYPE.fullmatch(type_id):
                 type_id = "OTHER"
             counts[type_id] += 1
-            if sum(counts.values()) >= MAX_RECORDS:
+            if sum(counts.values()) >= max_records:
+                break
+            # Once both essential schema types are seen after the original
+            # 12-record smoke, stop; do not examine more private JV-Data.
+            if (max_records > MAX_RECORDS
+                    and counts["RA"] > 0 and counts["SE"] > 0):
                 break
         report.sampleRecordCount = sum(counts.values())
         report.recordTypeCounts = dict(sorted(counts.items()))
@@ -156,8 +166,11 @@ def probe_bounded_race_types(
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument(
+        "--max-records", type=int, choices=(12, 256, 1024), default=12,
+    )
     args = parser.parse_args()
-    probe_bounded_race_types(output=args.output)
+    probe_bounded_race_types(output=args.output, max_records=args.max_records)
 
 
 if __name__ == "__main__":
