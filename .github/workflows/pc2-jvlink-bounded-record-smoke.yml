@@ -7,6 +7,7 @@ on:
       - "scripts/probe_pc2_bounded_jvgets_record_types.py"
       - "tests/test_pc2_bounded_jvgets_record_types.py"
       - "src/horse_racing_predictions/jv_fixedwidth_ra_se_preflight.py"
+      - "src/horse_racing_predictions/jravan_parser.py"
       - "tests/test_jv_fixedwidth_ra_se_preflight.py"
       - ".github/workflows/pc2-jvlink-bounded-record-smoke.yml"
   workflow_dispatch:
@@ -83,7 +84,7 @@ jobs:
             try {
               $psi = New-Object System.Diagnostics.ProcessStartInfo
               $psi.FileName = $python
-              $psi.Arguments = ('"{0}" --output "{1}" --max-records 8192 --validate-ra-se-layout' -f $program, $child)
+              $psi.Arguments = ('"{0}" --output "{1}" --max-records 8192 --validate-ra-se-layout --validate-official-parser' -f $program, $child)
               $psi.UseShellExecute = $false
               $psi.CreateNoWindow = $true
               $psi.RedirectStandardOutput = $true
@@ -119,7 +120,10 @@ jobs:
                   foreach ($key in @(
                     'status','stage','selectedPythonBits','sampleRecordCount',
                     'recordTypeCounts','raSeFixedWidthCheckCounts',
-                    'raSeMalformedShapeCounts','jvOpenAttempted','jvOpenReturnCode',
+                    'raSeMalformedShapeCounts',
+                    'raSeOfficialParserSuccessCounts',
+                    'raSeOfficialParserErrorCounts',
+                    'jvOpenAttempted','jvOpenReturnCode',
                     'jvCloseSucceeded'
                   )) { $result[$key] = $proof.$key }
                 } else { $result.stage = 'PRIVATE_METADATA_INVARIANT_FAILED' }
