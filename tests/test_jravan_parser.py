@@ -259,3 +259,53 @@ def test_incomplete_current_week_records_can_be_parsed_for_smoke(tmp_path):
     assert len(smoke_frame) == 1
     assert smoke_report.output_races == 1
     assert smoke_frame.iloc[0]["horse_name"] == "未確定馬"
+
+
+def test_completed_history_selection_is_strictly_independent_of_market_odds(
+    tmp_path,
+):
+    # Identical four completed runners with betting odds missing, very low,
+    # or arbitrarily large must yield the same field and finishing labels.
+    results = []
+    for market_odds in ((0, 0, 0, 0), (10, 10, 10, 10),
+                        (250, 340, 700, 120)):
+        path = tmp_path / "fictional.jsonl"
+        records = [{"record_type": "RA", "text": _ra()}]
+        for i, value in enumerate(market_odds, start=1):
+            records.append({
+                "record_type": "SE",
+                "text": _se(
+                    i, f"架空競走馬{i}", i, value,
+                    blood_no=f"20231000{i:02d}",
+                ),
+            })
+        path.write_text(
+            "\n".join(json.dumps(d, ensure_ascii=False) for d in records)
+            + "\n", encoding="utf-8",
+        )
+        frame, report = parse_raw_jsonl(path, completed_only=True)
+        assert report.skipped_incomplete_se == 0
+        assert len(frame) == 4
+        results.append(
+            frame.sort_values("horse_name")[
+                ["race_id", "horse_name", "finish_position"]
+            ].to_dict("records")
+        )
+    assert results[0] == results[1] == results[2]
+
+
+def test_unknown_result_remains_excluded_regardless_of_known_odds(tmp_path):
+    path = tmp_path / "no_result.jsonl"
+    rows = [
+        {"record_type": "RA", "text": _ra()},
+        {"record_type": "SE", "text": _se(
+            1, "架空未確定", 0, 850, blood_no="2023100999",
+        )},
+    ]
+    path.write_text(
+        "\n".join(json.dumps(row, ensure_ascii=False) for row in rows)
+        + "\n", encoding="utf8",
+    )
+    frame, report = parse_raw_jsonl(path, completed_only=True)
+    assert frame.empty
+    assert report.skipped_incomplete_se == 1
