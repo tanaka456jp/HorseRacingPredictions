@@ -193,10 +193,11 @@ def test_raw_jsonl_prefers_final_records_and_outputs_canonical_history(
 def test_non_jra_and_incomplete_rows_are_fail_safe_filtered(tmp_path):
     path = tmp_path / "raw.jsonl"
     local_ra = _ra(course="44")
+    # Missing finishing position, not missing odds, makes it incomplete.
     incomplete = _se(
         1,
         "取消馬",
-        1,
+        0,
         0,
     )
     rows = [
