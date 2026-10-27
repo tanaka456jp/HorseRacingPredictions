@@ -218,3 +218,46 @@ def test_forecast_day_feature_independent_of_its_own_finished_result():
         list(sample.features),
     ].reset_index(drop=True)
     pd.testing.assert_frame_equal(pre, post)
+
+@pytest.mark.parametrize("attack_feature", [
+    "horse_past_future_finish",
+    "horse_recent_podium_leaked",
+    "jockey_past_2026_results",
+    "trainer_days_since_race_outcome",
+    "horse_surface_past_payout",
+    "horse_recent_last_3f_today",
+    "horse_past_is_winner_by_track",
+])
+def test_open_ended_historical_feature_prefix_does_not_authorize_leakage(
+    attack_feature,
+):
+    # Regression: the former startswith-based historical feature policy
+    # trusted ANY feature under a legitimate prefix, including perfect
+    # target-label predictors injected by an untrusted research caller.
+    sample = _sample()
+    amended = sample.frame.copy()
+    amended[attack_feature] = amended["is_winner"].astype(int)
+    forged = replace(
+        sample, frame=amended,
+        features=sample.features + (attack_feature,),
+    )
+    with pytest.raises(ValueError, match="unrecognized|leakage"):
+        _eval(forged)
+
+
+def test_only_actual_generated_history_columns_are_allowlisted():
+    from horse_racing_predictions.odds_free_chronological_eval import (
+        _validate_research_features,
+    )
+    sample = _sample()
+    _validate_research_features(sample.features)
+    allowed = (
+        "horse_past_starts",
+        "horse_past_avg_finish_percentile",
+        "horse_recent_finish_trend_3_vs_5",
+        "horse_recent_early_ratio_mean_3",
+        "horse_recent_finish_percentile_mean_5",
+        "trainer_distance_past_avg_finish_percentile",
+        "horse_jockey_days_since_seen",
+    )
+    _validate_research_features(allowed)
