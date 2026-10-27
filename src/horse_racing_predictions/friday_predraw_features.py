@@ -1,42 +1,35 @@
-"""Friday before-draw training feature gate for Sunday JRA forecasts.
+"""Strict Friday-before-Sunday-draw research feature gate.
 
-JRA's ordinary Sunday horse numbers are assigned Saturday morning, after
-Friday publication. Such fields must not be guessed, forward-filled from
-results, or treated as known Friday. All research stays offline and private.
+Reuses a single conservative source-time policy, not two drifting lists.
+No official roster/rights evidence or note publication is implied.
 """
 from __future__ import annotations
 
-from dataclasses import replace
-
 from .odds_free_training import OddsFreeResearchSample
 from .odds_free_chronological_eval import _validate_research_features
-
-# Undecided at ordinary Friday issue time, including course condition and
-# race-day horse weights. Retain only actual known entrants and prior-race
-# form. Changing this list requires new rigorous source-time audit.
-_FRIDAY_UNAVAILABLE_CURRENT_FEATURES = frozenset({
-    "post_position", "relative_post_position",
-    "horse_weight", "horse_weight_delta", "horse_weight_vs_race_mean",
-    "weather", "track_condition",
-})
+from .friday_feature_projection import (
+    _FRIDAY_CURRENT, _FRIDAY_PRIOR_HISTORY, _FORBIDDEN_NAME,
+    project_friday_research_features,
+)
 
 
 def assert_friday_predraw_feature_list(features: tuple[str, ...]) -> None:
     _validate_research_features(features)
-    forbidden = _FRIDAY_UNAVAILABLE_CURRENT_FEATURES & set(features)
-    if forbidden:
-        raise ValueError("Friday model uses draw/day-of-race information")
+    if any(
+        _FORBIDDEN_NAME.search(name)
+        or not (name in _FRIDAY_CURRENT
+                or name.startswith(_FRIDAY_PRIOR_HISTORY))
+        for name in features
+    ):
+        raise ValueError(
+            "Friday model uses draw/day-of-race or unverified source-time information"
+        )
 
 
 def select_friday_predraw_research_features(
     sample: OddsFreeResearchSample,
 ) -> OddsFreeResearchSample:
-    """Remove Friday-unknown current features before any model fitting."""
-    if not isinstance(sample, OddsFreeResearchSample):
-        raise ValueError("approved odds-free research sample required")
-    filtered = tuple(
-        f for f in sample.features
-        if f not in _FRIDAY_UNAVAILABLE_CURRENT_FEATURES
-    )
-    assert_friday_predraw_feature_list(filtered)
-    return replace(sample, features=filtered)
+    """Project genuinely prior-race/static features before CatBoost fitting."""
+    projected, _receipt = project_friday_research_features(sample)
+    assert_friday_predraw_feature_list(projected.features)
+    return projected
