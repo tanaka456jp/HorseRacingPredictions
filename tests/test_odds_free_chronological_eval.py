@@ -261,3 +261,14 @@ def test_only_actual_generated_history_columns_are_allowlisted():
         "horse_jockey_days_since_seen",
     )
     _validate_research_features(allowed)
+
+def test_valid_historical_feature_name_forged_values_fail_even_baseline():
+    sample = _sample()
+    forged_frame = sample.frame.copy()
+    forged_frame["horse_past_starts"] = (
+        forged_frame["is_winner"].astype(float) * 1000
+    )
+    with pytest.raises(
+        ValueError, match="RESEARCH_HISTORICAL_FEATURE_NOT_REPRODUCIBLE"
+    ):
+        _eval(replace(sample, frame=forged_frame))
