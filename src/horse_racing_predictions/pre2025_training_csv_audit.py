@@ -115,7 +115,7 @@ def audit_pre2025_training_csv(path: Path) -> TrainingCsvAudit:
     """
     if not isinstance(path, Path) or not path.is_absolute():
         raise UnsafeTrainingSource("ABSOLUTE_LOCAL_SOURCE_REQUIRED")
-    if (path.is_symlink() or path.parent.is_symlink()
+    if (path.is_symlink() or any(parent.is_symlink() for parent in path.parents)
             or not path.is_file() or path.suffix.lower() != ".csv"):
         raise UnsafeTrainingSource("UNTRUSTED_SOURCE_PATH")
     # CSVs in a completed *research-only* conversion must not silently
@@ -128,13 +128,16 @@ def audit_pre2025_training_csv(path: Path) -> TrainingCsvAudit:
     }
     if any(part.lower() in forbidden_parts for part in path.parts):
         raise UnsafeTrainingSource("PROTECTED_RESEARCH_CSV_FOLDER")
-    for marker in (
-        "REVIEW_ONLY_NOT_APPROVED_FOR_TRAINING",
-        "INCOMPLETE_DO_NOT_USE",
-        "DO_NOT_TRAIN_OR_REPOST",
-        "INCOMPLETE_DO_NOT_TRAIN",
-    ):
-        if (path.parent / marker).exists():
+    # A marked research-staging directory must not become a training
+    # source merely by nesting the candidate CSV one level deeper.
+    # Refuse every marked ancestor, not just the file's immediate parent.
+    for parent in path.parents:
+        if any((parent / marker).exists() for marker in (
+            "REVIEW_ONLY_NOT_APPROVED_FOR_TRAINING",
+            "INCOMPLETE_DO_NOT_USE",
+            "DO_NOT_TRAIN_OR_REPOST",
+            "INCOMPLETE_DO_NOT_TRAIN",
+        )):
             raise UnsafeTrainingSource("UNAPPROVED_PRIVATE_STAGING_SOURCE")
     size = path.stat().st_size
     if not 0 < size <= MAX_BYTES:
