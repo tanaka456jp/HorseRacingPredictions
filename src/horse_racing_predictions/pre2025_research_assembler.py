@@ -74,20 +74,34 @@ def _priority(division: str) -> int:
 
 def _upsert(conn: sqlite3.Connection, table: str, race_id: str,
             horse_key: str | None, payload: dict, division: str) -> None:
+    if table not in ("races", "horses"):
+        raise UnsafeTrainingSource("INVALID_PRIVATE_STAGING_TABLE")
     key = horse_key or ""
-    # Cannot model source ordering from a fabricated race identity. Each
-    # race/horse key is stable through sequential data-division updates.
+    # Never put market odds or popularity into the staging database, even
+    # temporarily. They must not influence source merge/deduplication.
+    normalized = dict(payload)
+    normalized.pop("win_odds", None)
+    normalized.pop("popularity", None)
     stored = conn.execute(
-        "SELECT priority FROM " + table + " WHERE race_id=? AND horse_key=?",
+        "SELECT priority, body FROM " + table
+        + " WHERE race_id=? AND horse_key=?",
         (race_id, key),
     ).fetchone()
     rank = _priority(division)
-    if stored is not None and rank < stored[0]:
-        return
+    if stored is not None:
+        if rank < stored[0]:
+            return
+        if rank == stored[0]:
+            if json.loads(stored[1]) != normalized:
+                # Same data division but different *non-market* fields:
+                # blindly letting whichever shard is last win would make
+                # labels/features dependent on filesystem/source order.
+                raise UnsafeTrainingSource("CONFLICTING_SAME_STAGE_RACE_OR_HORSE")
+            return
     conn.execute(
         "INSERT OR REPLACE INTO " + table
         + " (race_id, horse_key, priority, body) VALUES (?,?,?,?)",
-        (race_id, key, rank, json.dumps(payload, ensure_ascii=False)),
+        (race_id, key, rank, json.dumps(normalized, ensure_ascii=False)),
     )
 
 
@@ -233,7 +247,10 @@ def stage_pre2025_ra_se_shards(
             if (not 4 <= len(group) <= 18
                     or any(type(p) is not int or p < 1 or p > len(group)
                            for p in finishes)
-                    or finishes.count(1) != 1
+                    # Ambiguous dead-heats and duplicated finish labels
+                    # require a separately audited settlement mechanism;
+                    # otherwise they can bias win/podium/ROI statistics.
+                    or set(finishes) != set(range(1, len(group) + 1))
                     or len(set(names)) != len(names)
                     or year > 2024):
                 excluded += 1
