@@ -21,6 +21,7 @@ class FrozenOddsFreeForecast:
     post_time_utc: datetime
     predicted_at_utc: datetime
     model_ref: str
+    model_fit_through_day: str
     winner_scores: Mapping[str, float]
     outsider_scores: Mapping[str, float]
     odds_used_in_selection: bool = False
@@ -58,8 +59,11 @@ class OddsFreeEconomicResearch:
     combined_stake_yen: int
     combined_return_yen: int
     combined_realized_roi: float
-    combined_bootstrap_95_lower_roi: float
-    combined_bootstrap_95_upper_roi: float
+    combined_bootstrap_95_lower_roi: float | None
+    combined_bootstrap_95_upper_roi: float | None
+    independent_race_days: int
+    bootstrap_unit: str
+    bootstrap_interval_available: bool
     podium_overlap_rate: float
     outsider_podium_hit_rate: float
     positive_expected_value_demonstrated: bool = False
@@ -84,6 +88,12 @@ def select_top3_and_outsider(forecast: FrozenOddsFreeForecast) -> FrozenFour:
         raise ValueError("RESEARCH_DAY_REQUIRED") from exc
     if day.isoformat() != forecast.race_day or day >= date(2025, 1, 1):
         raise ValueError("PROTECTED_FINAL_HOLDOUT_FORBIDDEN")
+    try:
+        last_fit = date.fromisoformat(forecast.model_fit_through_day)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("FROZEN_MODEL_FIT_DATE_REQUIRED") from exc
+    if last_fit.isoformat() != forecast.model_fit_through_day or last_fit >= day:
+        raise ValueError("MODEL_MUST_BE_FROZEN_BEFORE_TARGET_RACE")
     if (not isinstance(forecast.race_id, str) or not forecast.race_id
             or not isinstance(forecast.model_ref, str)
             or not forecast.model_ref.strip()
@@ -195,13 +205,29 @@ def evaluate_frozen_oddsfree_economics(
     n = len(results)
     win = sum(r[0] for r in results)
     place = sum(r[1] for r in results)
-    payouts = [r[0] + r[1] for r in results]
-    rng = random.Random(20241027)
-    sampled_roi: list[float] = []
-    for _ in range(bootstrap_samples):
-        sampled_returns = sum(payouts[rng.randrange(n)] for _ in range(n))
-        sampled_roi.append(sampled_returns / (200 * n) - 1)
-    sampled_roi.sort()
+    # Avoid treating multiple races on the same calendar day as
+    # statistically independent. Resample WHOLE racing DAYS (block
+    # bootstrap), and refuse to display a bogus narrow interval if fewer
+    # than ten genuinely distinct held-out days exist.
+    by_day: dict[str, list[int]] = {}
+    for forecast, outcome in zip(forecasts, results, strict=True):
+        by_day.setdefault(forecast.race_day, []).append(outcome[0] + outcome[1])
+    distinct_days = len(by_day)
+    lower = upper = None
+    if distinct_days >= 10:
+        blocks = [(sum(v), len(v)) for _, v in sorted(by_day.items())]
+        rng = random.Random(20241027)
+        sampled_roi: list[float] = []
+        for _ in range(bootstrap_samples):
+            gross = stakes_in_hundreds = 0
+            for _ in range(distinct_days):
+                daily_gross, races_on_day = blocks[rng.randrange(distinct_days)]
+                gross += daily_gross
+                stakes_in_hundreds += 2 * races_on_day
+            sampled_roi.append(gross / (100 * stakes_in_hundreds) - 1)
+        sampled_roi.sort()
+        lower = _quantile(sampled_roi, .025)
+        upper = _quantile(sampled_roi, .975)
     return OddsFreeEconomicResearch(
         status="RESEARCH_ONLY_REALIZED_RETURNS_NOT_EXPECTED_VALUE",
         races=n, wagers_per_race=2,
@@ -214,8 +240,11 @@ def evaluate_frozen_oddsfree_economics(
         combined_stake_yen=200 * n,
         combined_return_yen=win + place,
         combined_realized_roi=(win + place) / (200 * n) - 1,
-        combined_bootstrap_95_lower_roi=_quantile(sampled_roi, .025),
-        combined_bootstrap_95_upper_roi=_quantile(sampled_roi, .975),
+        combined_bootstrap_95_lower_roi=lower,
+        combined_bootstrap_95_upper_roi=upper,
+        independent_race_days=distinct_days,
+        bootstrap_unit="race_day",
+        bootstrap_interval_available=distinct_days >= 10,
         podium_overlap_rate=sum(r[2] for r in results) / n,
         outsider_podium_hit_rate=sum(r[3] for r in results) / n,
     )
