@@ -146,3 +146,65 @@ def test_incomplete_race_kept_out_of_yearly_training_partitions(tmp_path):
     assert res.saved_races == 1
     assert res.saved_runners == 4
     assert res.excluded_incomplete_races == 1
+
+
+def test_file_modified_after_first_full_audit_is_refused(tmp_path, monkeypatch):
+    from horse_racing_predictions import pre2025_research_assembler as assembler
+
+    sources = _fictional_sources(tmp_path)
+    output = tmp_path / "snapshot-not-approved"
+    original = assembler.audit_pre2025_ra_se_jsonl
+    did_change = False
+
+    def tamper_after_successful_full_audit(path):
+        nonlocal did_change
+        receipt = original(path)
+        if not did_change:
+            did_change = True
+            content = path.read_text(encoding="utf-8")
+            # A same-sized alteration is not detected by size; hash must
+            # catch it during second pass before any success manifest.
+            path.write_text(content.replace('"RA"', '"RB"', 1),
+                            encoding="utf-8")
+        return receipt
+
+    monkeypatch.setattr(
+        assembler, "audit_pre2025_ra_se_jsonl",
+        tamper_after_successful_full_audit,
+    )
+    with pytest.raises(UnsafeTrainingSource, match="SOURCE_CHANGED_AFTER_FULL_AUDIT"):
+        stage_pre2025_ra_se_shards(sources, destination=output)
+    assert (output / "INCOMPLETE_DO_NOT_USE").exists()
+    assert not (output / "private_research_manifest.json").exists()
+    assert not (output / "REVIEW_ONLY_NOT_APPROVED_FOR_TRAINING").exists()
+
+
+def test_2025_row_mutated_after_full_audit_is_rejected_in_second_pass(
+    tmp_path, monkeypatch,
+):
+    from horse_racing_predictions import pre2025_research_assembler as assembler
+
+    sources = _fictional_sources(tmp_path)
+    output = tmp_path / "snapshot"
+    original = assembler.audit_pre2025_ra_se_jsonl
+    did_change = False
+
+    def insert_protected_after_audit(path):
+        nonlocal did_change
+        receipt = original(path)
+        if not did_change:
+            did_change = True
+            content = path.read_text(encoding="utf-8")
+            # Exactly same byte-length year replacement.
+            path.write_text(content.replace("2024", "2026", 1),
+                            encoding="utf-8")
+        return receipt
+
+    monkeypatch.setattr(
+        assembler, "audit_pre2025_ra_se_jsonl",
+        insert_protected_after_audit,
+    )
+    with pytest.raises(UnsafeTrainingSource):
+        stage_pre2025_ra_se_shards(sources, destination=output)
+    assert (output / "INCOMPLETE_DO_NOT_USE").exists()
+    assert not (output / "private_research_manifest.json").exists()
