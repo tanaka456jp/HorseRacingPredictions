@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from math import isfinite
 import random
+from types import MappingProxyType
 from typing import Mapping, Sequence
 
 
@@ -26,6 +27,17 @@ class FrozenOddsFreeForecast:
     outsider_scores: Mapping[str, float]
     odds_used_in_selection: bool = False
 
+    def __post_init__(self) -> None:
+        # frozen=True alone does NOT freeze a mutable dict attribute.
+        # Copy and seal the pre-race scores so result/price acquisition
+        # cannot change the originally selected Top3 and outsider.
+        object.__setattr__(
+            self, "winner_scores", MappingProxyType(dict(self.winner_scores)),
+        )
+        object.__setattr__(
+            self, "outsider_scores", MappingProxyType(dict(self.outsider_scores)),
+        )
+
 
 @dataclass(frozen=True)
 class FinalRaceSettlement:
@@ -35,6 +47,15 @@ class FinalRaceSettlement:
     # Zero is required for losing bets. No observed odds are accepted.
     win_return_per_100_yen: Mapping[str, int]
     place_return_per_100_yen: Mapping[str, int]
+
+    def __post_init__(self) -> None:
+        for name in (
+            "finishing_positions", "win_return_per_100_yen",
+            "place_return_per_100_yen",
+        ):
+            object.__setattr__(
+                self, name, MappingProxyType(dict(getattr(self, name))),
+            )
 
 
 @dataclass(frozen=True)
