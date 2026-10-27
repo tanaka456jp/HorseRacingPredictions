@@ -118,6 +118,24 @@ def audit_pre2025_training_csv(path: Path) -> TrainingCsvAudit:
     if (path.is_symlink() or path.parent.is_symlink()
             or not path.is_file() or path.suffix.lower() != ".csv"):
         raise UnsafeTrainingSource("UNTRUSTED_SOURCE_PATH")
+    # CSVs in a completed *research-only* conversion must not silently
+    # become approved for training just because their dates are pre2025.
+    # Require a separate legitimate, operator-reviewed approved source
+    # outside quarantined, holdout, or research-staging directories.
+    forbidden_parts = {
+        "jravan-private-quarantine", "holdout", "final-evaluation",
+        "2025-2026-holdout", "protected-holdout",
+    }
+    if any(part.lower() in forbidden_parts for part in path.parts):
+        raise UnsafeTrainingSource("PROTECTED_RESEARCH_CSV_FOLDER")
+    for marker in (
+        "REVIEW_ONLY_NOT_APPROVED_FOR_TRAINING",
+        "INCOMPLETE_DO_NOT_USE",
+        "DO_NOT_TRAIN_OR_REPOST",
+        "INCOMPLETE_DO_NOT_TRAIN",
+    ):
+        if (path.parent / marker).exists():
+            raise UnsafeTrainingSource("UNAPPROVED_PRIVATE_STAGING_SOURCE")
     size = path.stat().st_size
     if not 0 < size <= MAX_BYTES:
         raise UnsafeTrainingSource("UNSAFE_SOURCE_BYTE_SIZE")
