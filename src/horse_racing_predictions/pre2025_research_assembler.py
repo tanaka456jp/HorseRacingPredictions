@@ -284,7 +284,8 @@ def stage_pre2025_ra_se_shards(
             ):
                 raise UnsafeTrainingSource("STAGED_YEARLY_CSV_VERIFICATION_FAILED")
             with path.open("rb") as verified_file:
-                local_sha = sha256(verified_file.read()).hexdigest()
+                import hashlib
+                local_sha = hashlib.file_digest(verified_file, "sha256").hexdigest()
             files.append({
                 "year": year, "rows": rows_checked,
                 "sha256": local_sha,
