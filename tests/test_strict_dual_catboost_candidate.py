@@ -242,3 +242,33 @@ def test_legitimately_named_but_nonexistent_past_feature_cannot_drive_catboost(
     monkeypatch.setattr(mod.CatBoostProbabilityModel, "fit", must_not_fit)
     with pytest.raises(ValueError, match="unrecognized research feature"):
         _run(malicious)
+
+def test_legitimate_historical_feature_name_cannot_be_overwritten_with_winner(
+    monkeypatch,
+):
+    from horse_racing_predictions import strict_dual_catboost_candidate as mod
+    sample = _sample()
+    assert "horse_past_starts" in sample.features
+    altered = sample.frame.copy()
+    altered["horse_past_starts"] = altered["is_winner"].astype(float)
+    compromised = replace(sample, frame=altered)
+
+    def must_not_fit(*args, **kwargs):
+        raise AssertionError("training occurred before history-value validation")
+
+    monkeypatch.setattr(mod.CatBoostProbabilityModel, "fit", must_not_fit)
+    with pytest.raises(ValueError, match="RESEARCH_HISTORICAL_FEATURE_NOT_REPRODUCIBLE"):
+        _run(compromised)
+
+
+def test_existing_legitimate_past_only_features_recompute_before_two_real_fits():
+    pytest.importorskip("catboost")
+    sample = _sample()
+    from horse_racing_predictions.research_feature_integrity import (
+        assert_pre_race_engineering_reproducible,
+    )
+    assert_pre_race_engineering_reproducible(sample.frame, sample.features)
+    fitted = _run(sample)
+    assert fitted.metrics.trainingRaces == 10
+    assert fitted.metrics.validationRaces == 8
+    assert fitted.metrics.publicationAuthorized is False
