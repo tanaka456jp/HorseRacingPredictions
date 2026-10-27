@@ -215,3 +215,69 @@ def test_2025_row_mutated_after_full_audit_is_rejected_in_second_pass(
         stage_pre2025_ra_se_shards(sources, destination=output)
     assert (output / "INCOMPLETE_DO_NOT_USE").exists()
     assert not (output / "private_research_manifest.json").exists()
+
+def test_same_stage_market_only_updates_never_change_export_or_roster(tmp_path):
+    sources = _fictional_sources(tmp_path)
+    # A duplicate final update differs only in popularity/odds. Market
+    # data must NOT influence deduplication, features or finished starter
+    # roster; reversing shard order must yield identical CSV bytes.
+    updated_odds = _old(_se(
+        1, "架空11-1", 1, 987, data_division="7",
+        blood_no="2023000001",
+    ), race=11)
+    extra = _write(tmp_path / "same_stage_market_update.jsonl", [
+        ("SE", updated_odds),
+    ])
+    first = tmp_path / "first_private"
+    reversed_order = tmp_path / "second_private"
+    a = stage_pre2025_ra_se_shards([*sources, extra], destination=first)
+    b = stage_pre2025_ra_se_shards([extra, *sources], destination=reversed_order)
+    assert a.saved_races == b.saved_races == 2
+    assert a.saved_runners == b.saved_runners == 8
+    assert (first / "research_2024.csv").read_bytes() == (
+        reversed_order / "research_2024.csv"
+    ).read_bytes()
+    assert "win_odds" not in (first / "private_staging.sqlite").read_bytes().decode(
+        "utf-8", errors="ignore"
+    )
+    assert "popularity" not in (first / "private_staging.sqlite").read_bytes().decode(
+        "utf-8", errors="ignore"
+    )
+
+
+def test_conflicting_same_stage_finish_fails_closed_instead_of_last_file_wins(
+    tmp_path,
+):
+    sources = _fictional_sources(tmp_path)
+    # Exact same horse, race and update stage but finish differs.
+    conflict = _write(tmp_path / "conflict.jsonl", [
+        ("SE", _old(_se(
+            1, "架空11-1", 3, 101, data_division="7",
+            blood_no="2023000001",
+        ), race=11))
+    ])
+    out = tmp_path / "rejected_private"
+    with pytest.raises(UnsafeTrainingSource, match="CONFLICTING_SAME_STAGE_RACE_OR_HORSE"):
+        stage_pre2025_ra_se_shards([*sources, conflict], destination=out)
+    assert (out / "INCOMPLETE_DO_NOT_USE").exists()
+    assert not (out / "private_research_manifest.json").exists()
+    assert not (out / "research_2024.csv").exists()
+
+
+def test_duplicated_podium_ranks_disqualify_ambiguous_race(tmp_path):
+    sources = _fictional_sources(tmp_path)
+    changed = []
+    for line in sources[1].read_text(encoding="utf8").splitlines():
+        obj = json.loads(line)
+        if obj["record_type"] == "SE" and "架空12-3" in obj["text"]:
+            obj["text"] = _old(_se(
+                3, "架空12-3", 2, 0, data_division="7",
+                blood_no="2023000003",
+            ), race=12)
+        changed.append(json.dumps(obj, ensure_ascii=False))
+    sources[1].write_text("\n".join(changed) + "\n", encoding="utf8")
+    out = tmp_path / "staging"
+    report = stage_pre2025_ra_se_shards(sources, destination=out)
+    assert report.saved_races == 1
+    assert report.saved_runners == 4
+    assert report.excluded_incomplete_races == 1
