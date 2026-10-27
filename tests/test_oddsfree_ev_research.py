@@ -1,7 +1,7 @@
 """Fictional-only odds-independent race payoff research verification."""
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from dataclasses import replace
 
 import pytest
@@ -29,6 +29,7 @@ def fixture_race(*, race: int = 1, field: int = 8, outsider_places=False,
         race_id=f"MOCK_{race}", race_day=event_day,
         predicted_at_utc=when - timedelta(hours=2),
         post_time_utc=when, model_ref=model_ref,
+        model_fit_through_day="2024-08-31",
         winner_scores=winner_scores, outsider_scores=outsider_scores,
     )
     positions = {h: i for i, h in enumerate(horses, 1)}
@@ -91,18 +92,30 @@ def test_realized_yen_roi_and_independent_outsider_market_result():
     assert report.outsider_podium_hit_rate == 1.0
     assert report.status == "RESEARCH_ONLY_REALIZED_RETURNS_NOT_EXPECTED_VALUE"
     assert report.positive_expected_value_demonstrated is False
+    assert report.independent_race_days == 1
+    assert report.bootstrap_interval_available is False
+    assert report.combined_bootstrap_95_lower_roi is None
+    assert report.combined_bootstrap_95_upper_roi is None
     assert report.real_source_rights_verified is False
 
 
 def test_bootstrap_deterministic_and_stays_research_only():
-    data = [fixture_race(race=i, outsider_places=i % 2 == 0)
-            for i in range(1, 31)]
+    data = [
+        fixture_race(
+            race=i, outsider_places=i % 2 == 0,
+            event_day=(date(2024, 10, 1) + timedelta(days=i - 1)).isoformat(),
+        )
+        for i in range(1, 31)
+    ]
     preds, outcomes = zip(*data)
     first = evaluate_frozen_oddsfree_economics(list(preds), list(outcomes),
                                                bootstrap_samples=300)
     second = evaluate_frozen_oddsfree_economics(list(preds), list(outcomes),
                                                 bootstrap_samples=300)
     assert first == second
+    assert first.independent_race_days == 30
+    assert first.bootstrap_interval_available is True
+    assert first.bootstrap_unit == "race_day"
     assert (first.combined_bootstrap_95_lower_roi
             <= first.combined_realized_roi
             <= first.combined_bootstrap_95_upper_roi)
@@ -188,3 +201,28 @@ def test_bet_selection_is_independent_of_horse_finish_rank():
     with pytest.raises(ValueError, match="PAYOUT_CONTRADICTS_FINAL_FINISH"):
         evaluate_frozen_oddsfree_economics([f], [changed],
                                             bootstrap_samples=200)
+
+
+def test_model_fit_cutoff_must_precede_prediction_event_day():
+    f, _ = fixture_race()
+    with pytest.raises(ValueError, match="MODEL_MUST_BE_FROZEN_BEFORE_TARGET_RACE"):
+        select_top3_and_outsider(
+            replace(f, model_fit_through_day=f.race_day)
+        )
+    with pytest.raises(ValueError, match="MODEL_MUST_BE_FROZEN_BEFORE_TARGET_RACE"):
+        select_top3_and_outsider(
+            replace(f, model_fit_through_day="2024-12-31")
+        )
+
+
+def test_same_day_many_races_do_not_masquerade_as_many_independent_days():
+    data = [fixture_race(race=i, outsider_places=i % 2 == 0)
+            for i in range(1, 31)]
+    forecasts, final = zip(*data)
+    report = evaluate_frozen_oddsfree_economics(
+        list(forecasts), list(final), bootstrap_samples=200,
+    )
+    assert report.races == 30
+    assert report.independent_race_days == 1
+    assert report.bootstrap_interval_available is False
+    assert report.combined_bootstrap_95_lower_roi is None
