@@ -8,7 +8,7 @@ does NOT claim positive expected value, permit betting, train, or publish.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from math import isfinite
 import random
 from typing import Mapping, Sequence
@@ -91,7 +91,7 @@ def select_top3_and_outsider(forecast: FrozenOddsFreeForecast) -> FrozenFour:
         raise ValueError("UNFROZEN_OR_MARKET_DEPENDENT_FORECAST")
     issued = _utc(forecast.predicted_at_utc)
     off = _utc(forecast.post_time_utc)
-    if not issued < off or off.date() < day:
+    if not issued < off or off.astimezone(timezone(timedelta(hours=9))).date() != day:
         raise ValueError("FORECAST_MUST_PRECEDE_RACE_OFF")
     winner = forecast.winner_scores
     outsider = forecast.outsider_scores
@@ -126,7 +126,7 @@ def _race_result(pick: FrozenFour, final: FinalRaceSettlement) -> tuple[int, int
     if pick.race_id != final.race_id:
         raise ValueError("RACE_SETTLEMENT_ID_MISMATCH")
     ranks = final.finishing_positions
-    if (not isinstance(ranks, Mapping) or len(ranks) < 4
+    if (not isinstance(ranks, Mapping) or not 5 <= len(ranks) <= 18
             or any(type(i) is not int or i < 1 or i > len(ranks)
                    for i in ranks.values())
             or len(set(ranks.values())) != len(ranks)
@@ -139,9 +139,13 @@ def _race_result(pick: FrozenFour, final: FinalRaceSettlement) -> tuple[int, int
             raise ValueError("INVALID_YEN_PAYOUT")
     if not set(pick.top3 + (pick.outsider,)).issubset(ranks):
         raise ValueError("PREDICTED_HORSE_MISSING_FROM_RESULT")
+    # Official JRA rules: place tickets are not sold for <=4 starters;
+    # 5-7 starters pay first two; 8+ pay first three.
+    place_cutoff = 2 if len(ranks) <= 7 else 3
     if (any((ranks[h] != 1) != (final.win_return_per_100_yen[h] == 0)
             for h in ranks)
-            or any((ranks[h] > 3) != (final.place_return_per_100_yen[h] == 0)
+            or any((ranks[h] > place_cutoff) !=
+                   (final.place_return_per_100_yen[h] == 0)
                    for h in ranks)):
         raise ValueError("PAYOUT_CONTRADICTS_FINAL_FINISH")
     if (any(v < 100 for v in final.win_return_per_100_yen.values() if v)
@@ -173,6 +177,14 @@ def evaluate_frozen_oddsfree_economics(
         raise ValueError("MATCHING_BOUNDED_RESEARCH_RACE_SAMPLES_REQUIRED")
     choices = [select_top3_and_outsider(f) for f in forecasts]
     by_id = {s.race_id: s for s in settlements}
+    fields_by_id = {
+        f.race_id: set(f.winner_scores) for f in forecasts
+    }
+    if any(
+        set(settlement.finishing_positions) != fields_by_id.get(settlement.race_id)
+        for settlement in settlements
+    ):
+        raise ValueError("FROZEN_FORECAST_VS_FINAL_FIELD_MISMATCH")
     if (len({f.race_id for f in forecasts}) != len(forecasts)
             or len(by_id) != len(settlements)
             or set(by_id) != {p.race_id for p in choices}):
