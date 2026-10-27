@@ -12,9 +12,14 @@ from dataclasses import asdict
 import json
 from pathlib import Path
 
+import pandas as pd
+
 from horse_racing_predictions.data_sources import read_csv_flexible
 from horse_racing_predictions.pre2025_training_csv_audit import (
     audit_pre2025_training_csv,
+)
+from horse_racing_predictions.pre2025_multiyear_csv_audit import (
+    audit_multiyear_pre2025_csvs,
 )
 from horse_racing_predictions.odds_free_training import (
     prepare_strict_odds_free_training_sample,
@@ -29,7 +34,8 @@ from horse_racing_predictions.strict_dual_catboost_candidate import (
 
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--approved-pre2025-csv", type=Path, required=True)
+    p.add_argument("--approved-pre2025-csv", type=Path, nargs="+", required=True,
+                   help="explicit local CSVs only, no directory discovery")
     p.add_argument("--source-ref", required=True,
                    help="nonsecret operator-reviewed source evidence ID")
     p.add_argument("--output-dir", type=Path, required=True,
@@ -44,19 +50,34 @@ def main() -> int:
                    help="drop Saturday draw/day-of-race features before fitting")
     a = p.parse_args()
     try:
-        csv = a.approved_pre2025_csv
-        if (not csv.is_absolute() or csv.is_symlink()
-                or not csv.is_file() or csv.suffix.lower() != ".csv"
-                or not 0 < csv.stat().st_size <= 400_000_000):
-            raise ValueError("local pre2025 CSV missing or untrusted")
+        csvs = a.approved_pre2025_csv
+        if (not 1 <= len(csvs) <= 12 or len(set(csvs)) != len(csvs)
+                or any(not source.is_absolute() or source.is_symlink()
+                       or not source.is_file() or source.suffix.lower() != ".csv"
+                       or not 0 < source.stat().st_size <= 400_000_000
+                       for source in csvs)):
+            raise ValueError("explicit approved local pre2025 CSVs required")
         if not a.output_dir.is_absolute() or a.output_dir.exists():
             raise ValueError("new absolute output candidate directory required")
-        # Full chronological and schema scan BEFORE materializing the
-        # entire source in pandas. A filename/pre2025 folder is not proof.
-        # This structural audit does not imply independent source rights.
-        audit_pre2025_training_csv(csv)
+        # Audit every full input BEFORE pandas materializes training rows.
+        # This audit is technical only: it cannot grant research rights.
+        if len(csvs) == 1:
+            audit_pre2025_training_csv(csvs[0])
+        else:
+            audit_multiyear_pre2025_csvs(csvs)
+        frames = []
+        expected_columns = None
+        for source in csvs:
+            frame = read_csv_flexible(source)
+            cols = tuple(frame.columns)
+            if (frame.columns.duplicated().any()
+                    or (expected_columns is not None
+                        and cols != expected_columns)):
+                raise ValueError("annual training CSV schema mismatch")
+            expected_columns = cols
+            frames.append(frame)
         sample = prepare_strict_odds_free_training_sample(
-            read_csv_flexible(csv),
+            pd.concat(frames, ignore_index=True),
             train_start=a.train_start, train_end=a.train_end,
         )
         if a.friday_predraw:
