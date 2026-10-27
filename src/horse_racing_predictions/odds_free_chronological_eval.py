@@ -185,6 +185,12 @@ def evaluate_strict_odds_free_chronologically(
     if (finish.isna().any() or winners.isna().any()
             or not winners.eq(finish.eq(1).astype(int)).all()):
         raise ValueError("research winner labels inconsistent with finish positions")
+    # Import lazily to avoid circular dependence with this module's feature
+    # name allowlist. Confirm legitimate names are also legitimate values.
+    from .research_feature_integrity import (
+        assert_pre_race_engineering_reproducible,
+    )
+    assert_pre_race_engineering_reproducible(frame, sample.features)
     train = frame.loc[frame["race_date"].dt.date.le(fit)].copy()
     valid = frame.loc[frame["race_date"].dt.date.between(start, end)].copy()
     if train.empty or valid.empty:
