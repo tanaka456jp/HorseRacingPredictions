@@ -78,6 +78,13 @@ def test_fictional_separate_ra_and_se_shards_become_year_partition(tmp_path):
     assert result.publication_authorized is False
     assert (destination / "REVIEW_ONLY_NOT_APPROVED_FOR_TRAINING").exists()
     assert not (destination / "INCOMPLETE_DO_NOT_USE").exists()
+    # A real CatBoost training CLI must refuse staged material even if its
+    # year/date/schema is otherwise valid. License review is separate.
+    from horse_racing_predictions.pre2025_training_csv_audit import (
+        audit_pre2025_training_csv,
+    )
+    with pytest.raises(UnsafeTrainingSource, match="UNAPPROVED_PRIVATE_STAGING_SOURCE"):
+        audit_pre2025_training_csv(destination / "research_2024.csv")
     with (destination / "research_2024.csv").open(newline="", encoding="utf8") as f:
         values = list(csv.DictReader(f))
     assert len(values) == 8
