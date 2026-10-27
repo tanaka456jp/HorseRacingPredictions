@@ -226,3 +226,21 @@ def test_same_day_many_races_do_not_masquerade_as_many_independent_days():
     assert report.independent_race_days == 1
     assert report.bootstrap_interval_available is False
     assert report.combined_bootstrap_95_lower_roi is None
+
+
+def test_score_and_settlement_maps_cannot_change_after_freeze():
+    f, settlement = fixture_race()
+    from_first = dict(f.winner_scores)
+    with pytest.raises(TypeError):
+        f.winner_scores["MOCK_HORSE_1"] = -1
+    with pytest.raises(TypeError):
+        settlement.finishing_positions["MOCK_HORSE_1"] = 8
+    with pytest.raises(TypeError):
+        settlement.place_return_per_100_yen["MOCK_HORSE_2"] = 10000
+    assert dict(f.winner_scores) == from_first
+    # External caller's own mutable dict is independently copied.
+    mutable_scores = dict(from_first)
+    mutated = replace(f, winner_scores=mutable_scores)
+    mutable_scores["MOCK_HORSE_1"] = -500
+    assert mutated.winner_scores["MOCK_HORSE_1"] > 0
+    assert select_top3_and_outsider(mutated).top3[0] == "MOCK_HORSE_1"
