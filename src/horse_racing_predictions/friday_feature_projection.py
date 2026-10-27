@@ -85,8 +85,8 @@ def project_friday_research_features(
             selected.append(name)
         else:
             excluded.append(name)
-    if not selected or len(selected) == len(sample.features):
-        raise ValueError("FRIDAY_PROJECTION_NO_SAFE_FEATURES_OR_NO_EXCLUSION")
+    if not selected:
+        raise ValueError("FRIDAY_PROJECTION_NO_SAFE_FEATURES")
     # Keep targets and historical raw columns solely for strict fit/validate.
     # CatBoost receives *only* projected feature_columns. Source inputs
     # (including historic outcomes) are never part of the feature allowlist.
