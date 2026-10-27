@@ -23,6 +23,7 @@ from .odds_free_chronological_eval import (
     _MARKET, _check_race_groups, _strict_date, _validate_research_features,
 )
 from .odds_free_training import OddsFreeResearchSample
+from .research_feature_integrity import assert_pre_race_engineering_reproducible
 
 FINAL_START = date(2025, 1, 1)
 _ALLOWED_SOURCE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:/-]{2,160}\Z")
@@ -91,6 +92,9 @@ def _validate(sample: OddsFreeResearchSample, *, fit: date, start: date, end: da
     if (finish.isna().any() or win.isna().any()
             or not win.eq(finish.eq(1).astype(int)).all()):
         raise ValueError("inconsistent target results")
+    # Independently reconstruct derived features from source data before
+    # fitting either model; a legitimate feature name is not provenance.
+    assert_pre_race_engineering_reproducible(df, sample.features)
     train = df.loc[df["race_date"].dt.date.le(fit)].copy()
     valid = df.loc[df["race_date"].dt.date.between(start, end)].copy()
     if train.empty or valid.empty or set(train["race_id"]) & set(valid["race_id"]):
