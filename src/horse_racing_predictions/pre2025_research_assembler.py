@@ -22,8 +22,7 @@ from .jravan_parser import (
 )
 from .pre2025_jsonl_chronology_audit import audit_pre2025_ra_se_jsonl
 from .pre2025_training_csv_audit import (
-    MAX_BYTES as MAX_CSV_BYTES, UnsafeTrainingSource,
-    audit_pre2025_training_csv,
+    UnsafeTrainingSource, _scan_csv,
 )
 
 _MAX_SHARDS = 12
@@ -276,10 +275,19 @@ def stage_pre2025_ra_se_shards(
             raise UnsafeTrainingSource("NO_COMPLETE_TRAINING_RACES")
         files = []
         for year, (path, handle, _, _) in sorted(year_files.items()):
-            audit = audit_pre2025_training_csv(path)
+            # Inspect the just-created local CSV while the staging marker
+            # remains in place. The public trainer uses the guarded audit
+            # and MUST reject this same marked directory.
+            rows_checked, min_year, max_year = _scan_csv(path, "utf-8")
+            if rows_checked != year_files[year][3] or (
+                min_year != year or max_year != year
+            ):
+                raise UnsafeTrainingSource("STAGED_YEARLY_CSV_VERIFICATION_FAILED")
+            with path.open("rb") as verified_file:
+                local_sha = sha256(verified_file.read()).hexdigest()
             files.append({
-                "year": year, "rows": audit.checked_rows,
-                "sha256": audit.sha256,
+                "year": year, "rows": rows_checked,
+                "sha256": local_sha,
                 "bytes": path.stat().st_size,
             })
         receipt = {
