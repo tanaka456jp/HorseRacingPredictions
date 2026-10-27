@@ -9,7 +9,9 @@ from __future__ import annotations
 
 import csv
 from dataclasses import asdict, dataclass
+from datetime import date
 from hashlib import sha256
+import shutil
 import json
 from pathlib import Path
 import sqlite3
@@ -143,6 +145,12 @@ def stage_pre2025_ra_se_shards(
         if total_bytes > _MAX_TOTAL_SOURCE_BYTES:
             raise UnsafeTrainingSource("HISTORICAL_ARCHIVE_SIZE_LIMIT")
         audits.append(audit_pre2025_ra_se_jsonl(path))
+    # SQLite staging can be larger than the final CSV. Fail before creating
+    # any output if remaining disk space is clearly insufficient.
+    free = shutil.disk_usage(destination.parent).free
+    minimum = max(512_000_000, min(total_bytes * 2, 20_000_000_000))
+    if free < minimum:
+        raise UnsafeTrainingSource("INSUFFICIENT_PRIVATE_STAGING_DISK")
     if not any(a.ra_records for a in audits) or not any(
         a.se_records for a in audits
     ):
@@ -164,26 +172,42 @@ def stage_pre2025_ra_se_shards(
             "horse_key TEXT NOT NULL, priority INTEGER NOT NULL,"
             "body TEXT NOT NULL, PRIMARY KEY(race_id, horse_key))"
         )
-        for path in sources:
-            with path.open("r", encoding="utf-8-sig") as stream:
-                for line in stream:
-                    # Inputs were previously exhaustively verified.
-                    item = json.loads(line)
+        for path, audit in zip(sources, audits, strict=True):
+            digest_second_pass = sha256()
+            with path.open("rb") as stream:
+                while True:
+                    line = stream.readline(250_001)
+                    if not line:
+                        break
+                    if len(line) > 250_000:
+                        raise UnsafeTrainingSource("SOURCE_LINE_CHANGED_OR_OVERSIZED")
+                    digest_second_pass.update(line)
+                    # Read-only real-source processing is still operator-gated:
+                    # do not accept changes to a previously audited file.
+                    item = json.loads(line.decode("utf-8-sig"))
                     kind = item.get("record_type")
                     if kind not in ("RA", "SE"):
                         continue
                     if kind == "RA":
                         race = parse_ra(item["text"])
+                        if date.fromisoformat(race.race_date) > date(2024, 12, 31):
+                            raise UnsafeTrainingSource("PROTECTED_RACE_MUTATION")
                         if race.racecourse_code in CENTRAL_RACECOURSES:
                             _upsert(conn, "races", race.race_id, "",
                                     asdict(race), race.data_division)
                     else:
                         horse = parse_se(item["text"])
+                        race_day = horse.race_id[:8]
+                        if date(int(race_day[:4]), int(race_day[4:6]),
+                                int(race_day[6:8])) > date(2024, 12, 31):
+                            raise UnsafeTrainingSource("PROTECTED_HORSE_MUTATION")
                         if not horse.horse_name.strip():
                             raise UnsafeTrainingSource("HORSE_IDENTITY_MISSING")
                         _upsert(conn, "horses", horse.race_id,
                                 horse.horse_name.strip(),
                                 asdict(horse), horse.data_division)
+            if digest_second_pass.hexdigest() != audit.sha256:
+                raise UnsafeTrainingSource("SOURCE_CHANGED_AFTER_FULL_AUDIT")
             conn.commit()
         # Staged research export is year-partitioned for the existing
         # <=400MB strict trainer; no market/popularity fields are exported.
