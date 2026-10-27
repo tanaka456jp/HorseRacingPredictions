@@ -222,3 +222,23 @@ def test_actual_dual_catboost_cli_saves_only_nonpublic_candidates(
     assert (destination / "win.cbm").is_file()
     assert (destination / "outsider.cbm").is_file()
     assert (destination / "candidate_manifest.json").is_file()
+
+def test_legitimately_named_but_nonexistent_past_feature_cannot_drive_catboost(
+    monkeypatch,
+):
+    from horse_racing_predictions import strict_dual_catboost_candidate as mod
+    sample = _sample()
+    frame = sample.frame.copy()
+    # Former prefix-based allowlist admitted these untrusted columns.
+    frame["horse_past_future_winner"] = frame["is_winner"].astype(float)
+    malicious = replace(
+        sample, frame=frame,
+        features=sample.features + ("horse_past_future_winner",),
+    )
+
+    def must_not_fit(*_args, **_kwargs):
+        raise AssertionError("model training ran before label-leakage gate")
+
+    monkeypatch.setattr(mod.CatBoostProbabilityModel, "fit", must_not_fit)
+    with pytest.raises(ValueError, match="unrecognized research feature"):
+        _run(malicious)
