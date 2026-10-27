@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Sequence
 import csv
+import hashlib
 
 from .pre2025_training_csv_audit import (
     REQUIRED_ALIASES,
@@ -84,6 +85,12 @@ def audit_multiyear_pre2025_csvs(
                     continue
             else:
                 raise UnsafeTrainingSource("COHORT_CSV_ENCODING_UNSUPPORTED") from None
+        # Keep the second read bound to the exact original audited bytes.
+        # Private source digests stay local; never return them in a report.
+        with source.open("rb") as raw:
+            digest = hashlib.file_digest(raw, "sha256").hexdigest()
+        if digest != audited.sha256:
+            raise UnsafeTrainingSource("COHORT_SOURCE_CHANGED_AFTER_FULL_AUDIT")
 
     return ResearchCohortAudit(
         status="STRUCTURAL_COHORT_ONLY_RIGHTS_AND_TRAINING_PENDING",
