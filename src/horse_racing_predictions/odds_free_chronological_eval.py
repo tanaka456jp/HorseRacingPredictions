@@ -185,12 +185,6 @@ def evaluate_strict_odds_free_chronologically(
     if (finish.isna().any() or winners.isna().any()
             or not winners.eq(finish.eq(1).astype(int)).all()):
         raise ValueError("research winner labels inconsistent with finish positions")
-    # Import lazily to avoid circular dependence with this module's feature
-    # name allowlist. Confirm legitimate names are also legitimate values.
-    from .research_feature_integrity import (
-        assert_pre_race_engineering_reproducible,
-    )
-    assert_pre_race_engineering_reproducible(frame, sample.features)
     train = frame.loc[frame["race_date"].dt.date.le(fit)].copy()
     valid = frame.loc[frame["race_date"].dt.date.between(start, end)].copy()
     if train.empty or valid.empty:
@@ -201,6 +195,13 @@ def evaluate_strict_odds_free_chronologically(
     nvalid = _check_race_groups(valid, require_podium=True)
     if ntrain < minimum_training_races or nvalid < minimum_validation_races:
         raise ValueError("insufficient independent train/validation races")
+    # Check known malformed race outcomes first, then recompute legitimate
+    # pre-race engineered features before any fit. This preserves precise
+    # rank/podium rejection instead of masking it as feature corruption.
+    from .research_feature_integrity import (
+        assert_pre_race_engineering_reproducible,
+    )
+    assert_pre_race_engineering_reproducible(frame, sample.features)
     # The existing sklearn baseline is used as a new experimental candidate,
     # not a rebranded champion; all metrics are measured on unseen dates.
     model = BaselineProbabilityModel(list(sample.features))
