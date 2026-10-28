@@ -55,9 +55,9 @@ Stop or redesign rather than repeated synthetic-only iteration when rights, RA+S
 
 ## 4. Exact next authorized handoff
 
-1. Resolve archive **research** rights and the previously refused source-byte-read execution authorization; do not bypass the refusal.
+1. **Personal-use AI permission clarified:** User provided a 2026-10-28 JRA-VAN support reply permitting external AI input for personal use with privacy/opt-out precautions. See [scoped evidence memo](JRAVAN_SUPPORT_PERSONAL_USE_20261028.md). Confirm this specific archive's **research** rights, acquisition lineage and retention terms separately, and obtain proper authorization for the previously refused source-byte-read execution path; do not bypass that refusal.
 2. Only after those conditions pass, execute a local bounded/full-file inspection that emits **aggregate private review evidence**. Record true RA/SE counts, eligible years and whether payout records exist. No source bytes to GitHub.
 3. If and only if admitted, run the existing offline full-file converter/staging flow, retain its `REVIEW_ONLY_NOT_APPROVED_FOR_TRAINING` marker, then independently approve modeling before lifting any training gate.
 4. Execute the frozen chronological protocol once with legal pre-2025 records, independent outsider target and real payout history. Keep 2025–2026 sealed and Friday note magazine inactive until independent source and publisher evidence are supplied.
 
-**Progress counter at freeze:** metadata inventory PASS; synthetic CI PASS; source-use rights UNKNOWN; full RA/SE archive scan NOT RUN; pre-2025 legally eligible rows UNKNOWN; real CatBoost fit NOT RUN; real payout ROI NOT CALCULATED; note publication BLOCKED.
+**Progress counter (updated 2026-10-28, without changing frozen folds or metrics):** metadata inventory PASS; synthetic CI PASS; generic JRA-VAN personal-use external-AI input permission CLARIFIED BY SUPPORT; source-specific 5.71GB archive rights and retention UNKNOWN; previously rejected runner content-read still BLOCKED; full RA/SE archive scan NOT RUN; pre-2025 legally eligible rows UNKNOWN; real CatBoost fit NOT RUN; real payout ROI NOT CALCULATED; note publication BLOCKED.
