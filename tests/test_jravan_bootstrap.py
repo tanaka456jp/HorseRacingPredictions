@@ -64,7 +64,7 @@ def test_bootstrap_uses_script_for_runtime_check():
     assert 'Dispatch("JVDTLab.JVLink")' not in text
 
 
-def test_runtime_check_delegates_to_registration_doctor():
+def test_runtime_check_fails_closed_after_trial_expiry_without_dispatch():
     text = Path(
         "scripts/check_jravan_runtime.py"
     ).read_text(encoding="utf-8")
@@ -75,7 +75,9 @@ def test_runtime_check_delegates_to_registration_doctor():
     assert "inspect_jravan_runtime" in text
     assert "write_runtime_report" in text
     assert "struct.calcsize" in runtime
-    assert 'Dispatch(PROGID)' in runtime
+    assert 'status="disabled_trial_expired"' in runtime
+    assert "JRA_VAN_TRIAL_EXPIRED_LIVE_COM_DISABLED" in runtime
+    assert "Dispatch(PROGID)" not in runtime
 
 
 def test_bootstrap_resume_skips_jvlink_reacquisition():
