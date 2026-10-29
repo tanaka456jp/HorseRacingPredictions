@@ -83,3 +83,14 @@ py -3 scripts/inspect_nar_monthly_results_local.py `
 The example ZIP path is illustrative, not an actual downloaded file; no file was fetched in this development. The command reads only the **explicit local NAR ZIP** that the operator selected; do not point it to the historical protected JRA-VAN archive, and do not use the previously denied Windows runner workflow to bypass a refusal. Never save provider-private content in GitHub, logs or CI artifacts.
 
 **Research gates still closed:** an archive downloaded *after* a race generally contains final popularity, finishing positions and actual returns, so it cannot by itself establish historical pre-off feature availability. Prospective snapshot creation requires a separately permitted method; paper-model ROI requires irrevocably timestamped forecasts, later official settlements and a suitably large untouched sample. If NAR's approval is limited to personal use, nothing may be posted to note or sold.
+
+
+## 2026-10-29 whole-month survivor-bias prevention
+
+New pure `nar_monthly_coverage_audit.py` audits the complete union of race keys observed in **racelist, horselist, or payback**, rather than silently filtering to successes. It reuses the strict per-race parser and yields an aggregate exclusion ledger with one static code per rejected race (missing payout/entry/race rows, dead heat, scratched starter/incomplete rank, non-flat race, wrong winning/place amount, etc.).
+
+`nar_local_monthly_intake.read_nar_monthly_zip_local` now reports `observed_races`, `parsed_races`, `excluded_races`, and `exclusion_reasons` even when valid and invalid races coexist. It does not return runner identities, source rows, or private filenames. The local CLI prints the same counts and exits with code **3** if any exclusions exist. `load_nar_monthly_zip_local` remains **all-or-nothing**; it will not quietly return a clean subset for profitable historical ROI. Structurally malformed full-file rows remain a hard failure.
+
+**Research caution:** Even a month that passes every structural check does NOT establish official origin, permitted usage scope, a pre-race immutable forecast, eligibility fixed before the off, or unbiased economic ROI. Some settlement-based exclusion reasons can only be known *after* the race. Therefore **no economic ROI may be claimed from a retrospectively cleaned sample**: the evaluator must explicitly pre-register betting eligibility, record pre-event picks for *all* attempted races and resolve void/refund cases prospectively under the official rules. Until these are checked, all ROI/publication/training permission flags remain false.
+
+The user has reported an NAR usage approval, but the exact authorized acquisition rate/automation, retention, private versus commercial model applications and publication scope are not independently documented in GitHub. No automated download, no NAR/private-source GitHub artifact, no note posting, no new JRA-VAN connection.
