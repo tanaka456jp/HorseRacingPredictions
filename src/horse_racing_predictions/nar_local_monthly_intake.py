@@ -57,10 +57,13 @@ def _decoded_csv(raw: bytes) -> str:
     raise UnsafeNarSource("NAR_CSV_ENCODING_UNSUPPORTED")
 
 
-def read_nar_monthly_zip_local(
+def load_nar_monthly_zip_local(
     archive: Path, *, personal_private_permission_confirmed: bool,
-) -> NarLocalReadiness:
-    """Audit authorized local source; never use a remotely executed runner.
+) -> NarInMemoryResult:
+    """Load *private in-memory finalized races* for future offline studies.
+
+    No entry attributes, forecasts or future-event snapshots are derived.
+    """
 
     The operator independently obtained NAR's personal private permission.
     This human attestation does not grant automatic bulk-download permission.
@@ -106,10 +109,20 @@ def read_nar_monthly_zip_local(
         )
     except (BadZipFile, OSError, EOFError, RuntimeError, UnicodeError):
         raise UnsafeNarSource("NAR_LOCAL_ZIP_CONTENT_INVALID") from None
+    return result
 
+
+def read_nar_monthly_zip_local(
+    archive: Path, *, personal_private_permission_confirmed: bool,
+) -> NarLocalReadiness:
+    """Print-safe aggregate-only report for the operator's local ZIP."""
+    result = load_nar_monthly_zip_local(
+        archive,
+        personal_private_permission_confirmed=personal_private_permission_confirmed,
+    )
     return NarLocalReadiness(
         status="NAR_LOCAL_FINAL_RESULTS_VALIDATED_NO_PRE_EVENT_PROOF",
-        source_month=layout.source_month,
+        source_month=result.races[0].race_key[1][:6],
         parsed_races=result.audit.checked_races,
         parsed_starters=result.audit.checked_starters,
         min_year=result.audit.min_year,
