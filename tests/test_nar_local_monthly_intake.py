@@ -8,6 +8,7 @@ import pytest
 
 from horse_racing_predictions.nar_local_monthly_intake import (
     read_nar_monthly_zip_local,
+    load_nar_monthly_zip_local,
 )
 from horse_racing_predictions.nar_official_zip_probe import UnsafeNarSource
 from test_nar_published_result_normalizer import _fixture
@@ -110,3 +111,21 @@ def test_cli_has_explicit_local_opt_in_and_no_network():
     assert "network" not in source.lower() or "no network" in source.lower()
     assert "urlopen" not in source
     assert "requests.get" not in source
+
+
+def test_private_in_memory_normalized_result_not_exported(tmp_path):
+    archive = _make_zip(tmp_path, starters=8)
+    before = {p.name for p in tmp_path.iterdir()}
+    result = load_nar_monthly_zip_local(
+        archive, personal_private_permission_confirmed=True,
+    )
+    assert result.audit.checked_races == 1
+    assert result.audit.checked_starters == 8
+    assert result.audit.final_results_only
+    assert not result.audit.pre_event_snapshot_verified
+    assert not result.audit.authorized_for_model_training
+    assert not result.audit.positive_ev_demonstrated
+    assert not result.audit.publication_authorized
+    assert dict(result.races[0].win_return_by_number)[1] == 250
+    assert {p.name for p in tmp_path.iterdir()} == before
+    assert "架空競馬場" not in repr(result)
