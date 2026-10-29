@@ -30,7 +30,7 @@ def _make_pair(tmp_path, *, field=5, mismatch=False,
         hlines.append(f"MOCK,2020-02-01,FICTIONAL_{i:02d},{i}\n")
         if i == field and omit_payout:
             continue
-        h = f"FICTIONAL_{i:02d}" if not (mismatch and i == 2) else "NOT_THE_SAME"
+        h = f"FICTIONAL_{i:02d}" if not (mismatch and i == 2) else "FICTIONAL_02_ALT"
         win = 50 if bad_win and i == 1 else (280 if i == 1 else 0)
         cutoff = 2 if field <= 7 else 3
         place = 0 if bad_place and i == 2 else (130 if i <= cutoff else 0)
