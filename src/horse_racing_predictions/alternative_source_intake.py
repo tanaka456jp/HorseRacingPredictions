@@ -11,7 +11,7 @@ from __future__ import annotations
 import csv
 from dataclasses import asdict, dataclass
 from datetime import date
-from hashlib import sha256
+import hashlib
 import json
 from pathlib import Path
 import re
@@ -129,7 +129,6 @@ def _settlement_audit(csv_path: Path) -> tuple[int, int, int]:
         "race_id", "race_date", "horse_name",
         "win_return_per_100_yen", "place_return_per_100_yen",
     )
-    errors: list[str] = []
     for enc in ("utf-8-sig", "cp932", "euc_jp"):
         try:
             with csv_path.open("r", encoding=enc, newline="", errors="strict") as f:
@@ -146,6 +145,7 @@ def _settlement_audit(csv_path: Path) -> tuple[int, int, int]:
                 n = 0
                 min_year, max_year = 9999, 0
                 seen: set[tuple[str, str]] = set()
+                race_dates: dict[str, date] = {}
                 for row in reader:
                     n += 1
                     if n > _MAX_PAYOUT_ROWS or len(row) != len(header):
@@ -156,12 +156,15 @@ def _settlement_audit(csv_path: Path) -> tuple[int, int, int]:
                         raise UnsafeTrainingSource("PROTECTED_HOLDOUT_IN_SOURCE")
                     if not rid.strip() or not horse.strip():
                         raise UnsafeTrainingSource("SETTLEMENT_IDENTITY_MISSING")
+                    if rid in race_dates and race_dates[rid] != day:
+                        raise UnsafeTrainingSource("SETTLEMENT_RACE_DATE_CONFLICT")
+                    race_dates[rid] = day
                     key = (rid, horse)
                     if key in seen:
                         raise UnsafeTrainingSource("DUPLICATE_SETTLEMENT_ROW")
                     seen.add(key)
                     for amount in (win_raw, place_raw):
-                        if not amount.isdecimal() or int(amount) < 0:
+                        if not re.fullmatch(r"[0-9]{1,9}", amount):
                             raise UnsafeTrainingSource("SETTLEMENT_PAYOUT_INVALID")
                     min_year = min(min_year, day.year)
                     max_year = max(max_year, day.year)
@@ -169,7 +172,7 @@ def _settlement_audit(csv_path: Path) -> tuple[int, int, int]:
                     raise UnsafeTrainingSource("SETTLEMENT_EMPTY")
                 return n, min_year, max_year
         except UnicodeDecodeError:
-            errors.append("BAD_ENCODING")
+            continue
         except csv.Error:
             raise UnsafeTrainingSource("SETTLEMENT_ROW_INVALID") from None
     raise UnsafeTrainingSource("SETTLEMENT_ENCODING_INVALID") from None
@@ -205,7 +208,7 @@ def inspect_alternative_csv(
     else:
         n, min_year, max_year = _settlement_audit(source_csv)
         with source_csv.open("rb") as stream:
-            digest = sha256(stream.read()).hexdigest()
+            digest = hashlib.file_digest(stream, "sha256").hexdigest()
     if (source_csv.stat().st_size != size
             or digest != payload["source_sha256"]):
         raise UnsafeTrainingSource("ALTERNATIVE_SOURCE_DIGEST_MISMATCH")
