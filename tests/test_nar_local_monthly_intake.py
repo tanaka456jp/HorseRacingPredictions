@@ -37,6 +37,9 @@ def test_authorized_local_fictional_zip_full_integrity(tmp_path, starters):
     )
     assert result.parsed_races == 1
     assert result.parsed_starters == starters
+    assert result.observed_races == 1
+    assert result.excluded_races == 0
+    assert result.exclusion_reasons == ()
     assert result.min_year == result.max_year == 2024
     assert result.status == "NAR_LOCAL_FINAL_RESULTS_VALIDATED_NO_PRE_EVENT_PROOF"
     assert not result.source_rights_verified_by_software
@@ -69,8 +72,21 @@ def test_unsupported_race_requires_review_not_silent_omission(tmp_path):
     dest = StringIO(newline="")
     csv.writer(dest).writerows(raw)
     archive = _make_zip(tmp_path, override={"payback": dest.getvalue()})
+    report = read_nar_monthly_zip_local(
+        archive, personal_private_permission_confirmed=True,
+    )
+    assert report.status == "NAR_LOCAL_MONTH_HAS_EXCLUSIONS_ROI_BLOCKED"
+    assert report.observed_races == 1
+    assert report.parsed_races == 0
+    assert report.excluded_races == 1
+    assert report.exclusion_reasons == (
+        ("NAR_PAYOUT_CONTRADICTS_FINAL_RESULTS", 1),
+    )
+    # The separate data-loading API remains strict: NO selective subset.
     with pytest.raises(UnsafeNarSource, match="NAR_PAYOUT_CONTRADICTS_FINAL_RESULTS"):
-        read_nar_monthly_zip_local(archive, personal_private_permission_confirmed=True)
+        load_nar_monthly_zip_local(
+            archive, personal_private_permission_confirmed=True,
+        )
 
 
 def test_post2024_protected_month_is_refused_without_csv_read(tmp_path):
