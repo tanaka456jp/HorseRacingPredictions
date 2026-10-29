@@ -9,6 +9,7 @@
 | [JRA official historic results FAQ](https://www.jra.go.jp/faq/pop02/1_6.html) | Race results searchable from 1986; official result PDF from 2002 | Unrestricted bulk scraping, copying, machine-learning reuse, redistributing its pages or race sheets | MANUAL RIGHTS REVIEW; no automated fetch |
 | [JRA official website use notice](https://jra.jp/use/) | Official site and rights notice | Reuse of protected site articles/media beyond permitted conditions | PROVIDER TERMS REVIEW |
 | [NAR official local racing portal terms](https://www.keiba.go.jp/terms.html) | Local racing results / information | Unlicensed reproduction or automated database extraction | NAR RIGHTS REVIEW; no automated fetch |
+| [JBIS-Search terms §8](https://www.jbis.or.jp/terms/) | Browsable JRA/NAR historical racing records | Terms limit information to personal use, require as-is use and explicitly prohibit commercial activity or its preparation even if free; not a general ML/database extraction licence | **EXCLUDE** from this potentially commercialisable research unless separately licensed in writing |
 | Third-party CSV/API or open dataset | Possible alternative independent source | Assuming the publisher's GitHub/MIT/Kaggle *code* license covers third-party race records | ACCEPT ONLY WITH UPSTREAM PROVENANCE AND RESEARCH PERMISSION |
 | Independently compiled, legally obtained personal observations | Local data owner controls own entries | Assuming source-specific contractual conditions disappear when transcribed | SOURCE TERMS REVIEW |
 | PC②'s archived JV-Link data | Metadata inventory only; 5.71 GB / 1 CSV+7 JSONL | New subscription-free access, indefinite post-trial retention, using the previously denied source-byte runner workflow | EXISTING QUARANTINE AND AUTHORIZATION REQUIRED |
@@ -62,6 +63,14 @@ py -3 scripts/inspect_alternative_source_local.py `
 Illustrative paths: **no files were created there by this PR**. Do not use unknown-source JRA-VAN archive paths or protected holdouts here. An operator must precompute `source_sha256` locally and independently. Never commit the private manifest.
 
 The report deliberately says `PRIVATE_OPERATOR_REVIEW_ONLY_NOT_TRAINING_APPROVAL`: providing a manifest containing `true` is **not a verified legal permission**. Dataset-specific independent review, complete race/payout coverage, pre-Friday feature-timing validation, and a separate authorized approved-for-fit decision still stand between intake and historical model fitting.
+
+## 2026-10-29 independent history+settlement pairing gate
+
+`src/horse_racing_predictions/paired_source_readiness.py` now compares **two separately manifested, operator-supplied local CSVs** after both passed complete per-source admission. The pairing reads complete sorted race/horse records without uploading them and checks strict race/date/horse identity match, complete 5–18-starter standard-rank coverage, normal JRA win/place payout consistency (5–7 starters: 2 places; 8+: 3), duplicate/missing rows, and nonnegative full 100-JPY return semantics. It rejects races with dead heats, cancellations, refunds, coupled starters or incomplete/ambiguous payouts, which require a separate audited settlement protocol.
+
+This test is purely **STRUCTURAL_MATCH_ONLY_RIGHTS_AND_FRIDAY_EVIDENCE_PENDING**: a successful match is **not** a verified official source, immutable Friday-available prediction, legal right to use the records, or a real ROI result. It never attempts to read PC②'s previously disallowed archive, perform web scraping or enable note publishing.
+
+Source-market constraint: odds, popularity, betting prices and settled payouts are kept OUT of the Friday model feature pipeline. The settlement file is only for post-forecast, actual-payoff validation. The frozen 2017–2024 study calendar and sealed 2025–2026 holdout stay unchanged. JRA's own race history and annual PDF site constitute promising discoverable source *information*, not a permission to bulk-download: [official FAQ](https://www.jra.go.jp/faq/pop02/1_6.html), [JRA website use notice](https://www.jra.go.jp/use/). We have **not** acquired or parsed those files.
 
 ## Research prioritization / decision threshold
 
