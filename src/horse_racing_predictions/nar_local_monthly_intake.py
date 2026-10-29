@@ -60,14 +60,11 @@ def _decoded_csv(raw: bytes) -> str:
 def load_nar_monthly_zip_local(
     archive: Path, *, personal_private_permission_confirmed: bool,
 ) -> NarInMemoryResult:
-    """Load *private in-memory finalized races* for future offline studies.
+    """Load private, finalized-result races in memory without any writes.
 
-    No entry attributes, forecasts or future-event snapshots are derived.
-    """
-
-    The operator independently obtained NAR's personal private permission.
-    This human attestation does not grant automatic bulk-download permission.
-    All files remain at their original locations with no modifications.
+    NAR personal/private permission is operator-attested, not automatically
+    verified. It does not grant bulk retrieval or commercial publication.
+    No forecast-time snapshots are inferred from final results.
     """
     if personal_private_permission_confirmed is not True:
         raise UnsafeNarSource("NAR_PERSONAL_RESEARCH_PERMISSION_REQUIRED")
