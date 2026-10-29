@@ -93,10 +93,9 @@ def test_csv_member_zip_bomb_is_refused_by_size_cap(tmp_path):
 
 def test_bad_member_crc_is_not_silently_accepted(tmp_path):
     archive = _make_zip(tmp_path)
-    source = bytearray(archive.read_bytes())
-    # Damage the local ZIP structural trailer without exposing private cells.
-    source[-3:] = b"\x00\x00\x00"
-    archive.write_bytes(source)
+    source = archive.read_bytes()
+    # Truncation of end-of-central-directory always corrupts the ZIP.
+    archive.write_bytes(source[:-7])
     with pytest.raises(UnsafeNarSource):
         read_nar_monthly_zip_local(archive, personal_private_permission_confirmed=True)
 
