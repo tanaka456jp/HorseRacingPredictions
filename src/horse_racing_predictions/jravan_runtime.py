@@ -89,7 +89,23 @@ def _probe_registry_views() -> tuple[bool | None, bool | None]:
 
 
 def inspect_jravan_runtime() -> JraVanRuntimeReport:
-    python_bits = struct.calcsize("P") * 8
+    # The free Data Lab trial has expired. Even COM *construction* can open
+    # an authentication/expiry browser page. Never Dispatch JV-Link during
+    # runtime checks; only offline code and fictional tests may proceed.
+    return JraVanRuntimeReport(
+        status="disabled_trial_expired",
+        python_version=sys.version.split()[0],
+        python_bits=struct.calcsize("P") * 8,
+        progid=PROGID,
+        registered_64bit=None,
+        registered_32bit=None,
+        com_created=False,
+        error="JRA_VAN_TRIAL_EXPIRED_LIVE_COM_DISABLED",
+        guidance=(
+            "All new JRA-VAN/JV-Link connections are disabled.",
+            "Use approved non-JRA-VAN offline research instead.",
+        ),
+    )
     registered_64bit, registered_32bit = _probe_registry_views()
     guidance = list(
         classify_registration(
