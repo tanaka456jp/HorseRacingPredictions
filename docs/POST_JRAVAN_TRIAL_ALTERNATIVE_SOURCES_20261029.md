@@ -72,9 +72,22 @@ This test is purely **STRUCTURAL_MATCH_ONLY_RIGHTS_AND_FRIDAY_EVIDENCE_PENDING**
 
 Source-market constraint: odds, popularity, betting prices and settled payouts are kept OUT of the Friday model feature pipeline. The settlement file is only for post-forecast, actual-payoff validation. The frozen 2017–2024 study calendar and sealed 2025–2026 holdout stay unchanged. JRA's own race history and annual PDF site constitute promising discoverable source *information*, not a permission to bulk-download: [official FAQ](https://www.jra.go.jp/faq/pop02/1_6.html), [JRA website use notice](https://www.jra.go.jp/use/). We have **not** acquired or parsed those files.
 
+## 2026-10-29 discovery: NAR's own documented historical CSV download
+
+Priority has changed. The highest-potential **non-JRA-VAN** source is now the official NAR monthly download facility, not unlicensed JRA HTML scraping.
+
+- [Official NAR download manual, updated May 2026](https://www.keiba.go.jp/pdf/manual/data_pdf_manual.pdf): operator-downloadable ZIP of `racelist`, `horselist`, `payback`; **race data available from January 1998**, but historical omissions are explicitly possible. Betting odds only from March 2026, which does **not** prevent after-the-race payout ROI research if the older payback records are complete.
+- [NAR monthly calendar and download UI](https://www.keiba.go.jp/KeibaWeb/MonthlyConveneInfo/MonthlyConveneInfoTop)
+- [NAR terms](https://www.keiba.go.jp/terms.html) prohibit nonconsensual copying/republication and warn about abnormal request frequency; [FAQ on commercial secondary use](https://www.keiba.go.jp/qa.html) says permission or a data provision contract is required for commercial downstream use.
+- [Official NAR inquiry form](https://l-horse.net/anquete/goikengoyoubou), which notes that individualized replies are not guaranteed. Ask **explicitly** whether the offered user-downloadable historical ZIPs may be retained and processed for local, private, non-commercial model training/backtesting. No assumed answer.
+- [NAR separate preregistration](NAR_OFFICIAL_CSV_SEPARATE_STUDY_20261029.md) protects a distinct NAR study from contamination with JRA and maintains 2017–2024 conditional chronological folds.
+- `nar_official_zip_probe.py` and `scripts/inspect_nar_monthly_zip_local.py` add an **offline-only directory-structure checker** for a legal operator-provided monthly archive. It does not decompress/read the CSV records, and a matching ZIP **does not attest to source authenticity or license**.
+
+Important: the NAR `horselist` contains both entries and **post-event finishes/popularity**. A historical *post-event* monthly ZIP cannot on its own prove a saved pre-event forecast. An actual prospective snapshot is a separate, necessary input. NAR rules for odd race categories, ties, refunds and place payments must be verified independently; do not blindly reuse JRA payout assumptions or claim an NAR backtest based on metadata-only checks.
+
 ## Research prioritization / decision threshold
 
-1. **Do not spend on JRA-VAN, JRDB or other paid APIs.** Find one suitable, truly permitted source with legitimate *multi-year* JRA history, source chronology, early forecast snapshots and official payout data. If only NAR data can be licensed, create a separate source-specific, pre-registered NAR study instead of silently merging it with JRA.
+1. **Do not spend on JRA-VAN, JRDB or other paid APIs.** First confirm NAR's official user-downloadable CSV ZIPs may be retained and parsed for this specific non-public research use, and if so verify actual multi-year completeness and pre-event source history in an operator-authorized session. Continue investigating JRA independently; never merge NAR into the frozen JRA primary study.
 2. No automatic collection from a third-party site until its authorization for the exact collection method (including automated access and frequency) is independently established.
 3. When lawful data exist, run a separate permitted, operator-authorized offline intake and a distinct training approval. The existing frozen JRA window remains **2017–2021 training, 2022 model selection, 2023–2024 independent evaluation**, with 2025–2026 sealed.
 4. Keep winner and outsider models independent, use no odds/popularity in prediction, and add official payouts **only after** a frozen pre-race prediction. Assess same-day block bootstrap ROI and fixed benchmarks using the pre-registered gate.
