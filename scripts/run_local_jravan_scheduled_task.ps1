@@ -51,6 +51,13 @@ function Write-Heartbeat {
 }
 
 $startedAt = [DateTimeOffset]::UtcNow
+# The Data Lab trial is over. Historical scheduled tasks may still fire on
+# Windows. Block before spawning any Python or JV-Link/COM child process.
+# Keep local files and paper ledgers untouched. No override flag.
+Write-Heartbeat -Status "disabled_trial_expired" -StartedAt $startedAt -ExitCode 0 -Message "JRA_VAN_TRIAL_EXPIRED_NO_LIVE_CONNECTION"
+Write-Host "SKIPPED: JRA-VAN trial expired; no JV-Link, browser, or provider request attempted."
+exit 0
+
 $lockStream = $null
 
 try {
