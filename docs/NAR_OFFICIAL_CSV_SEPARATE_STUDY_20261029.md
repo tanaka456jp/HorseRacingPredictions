@@ -45,3 +45,17 @@ Before implementing a live reader or executing the operator-only CLI, separately
 The older [JRA primary protocol](REAL_DATA_EV_PREREGISTRATION_20261027.md) remains frozen. **NAR is the top alternative supplier candidate** because the operator-facing CSVs, 1998+ history, per-race returns and documented schema exist. Do not claim that the "1998 onward" statement proves complete every-race historical entries or payouts. If actual records or pre-event snapshots cannot be validated without rights concerns, report `NO_GO_SOURCE` instead of creating repeated synthetic-only model upgrades.
 
 Current rights gate remains `NAR_PRIVATE_ML_RIGHTS_PENDING` and actual real-data profitability is `EV_NOT_DEMONSTRATED`.
+
+
+## 2026-10-29 implementation: exact official positional results and settlements
+
+The 8-page official CSV manual (2026-05-21) lists **68 racelist columns, 36 horselist columns and 54 payback columns**. The NAR payback row is **race-based** with single-win horse/payoff in positions 5/6 (1-based), and place horse/payoff pairs in positions 8/9, 11/12 and 14/15. It is *not* keyed per horse. An ordinary dead heat can produce two payback lines per race.
+
+Added pure in-memory modules:
+- `nar_published_result_normalizer.py`: accepts explicit already-decoded *CSV text*, not paths, ZIPs or URLs; exact column widths, row date/track/race-number and entry-number keys, race-complete field size and ranks, 100-JPY win/place payout consistency. Refuses unsupported non-flat races, incomplete rosters, duplicates, tied outcomes, invalid payouts and any 2025+ input. No data ever written by this module.
+- `nar_economic_settlement_adapter.py`: converts reviewed post-result records into the existing `FinalRaceSettlement` model with **NAR-specific race IDs and horse numbers**, keeping all market/popularity fields out. The score model remains an independently frozen timestamped forecast (`FrozenOddsFreeForecast`); a post-race official ZIP is **not evidence of a real pre-race prediction**.
+- Fictional-only end-to-end tests prove the normalized settlement can be matched to frozen scores and produce arithmetic returns without falsely declaring positive expected value.
+
+**Limitations:** Source-specific right to parse/retain/use the NAR downloadable CSV for ML is still NOT VERIFIED; no actual private ZIP contents read. This is a finalized-result parser, *not* a pre-event feature builder. The official `horselist` contains both racing form and final result columns, which must remain unavailable as same-race prediction inputs. There are no verified 2017–2024 archival pre-event snapshots or actual ROI observations. No auto-download, JRA-VAN COM/JV-Link, note posting or live betting.
+
+A response explicitly permitting the proposed non-public local AI use and permitted acquisition method, plus a separate source provenance/chronology check, remains the gate to running real NAR data. Do not claim the 1998–2024 catalog guarantees every full race/settlement history.
