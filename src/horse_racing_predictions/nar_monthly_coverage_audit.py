@@ -36,6 +36,7 @@ class NarMonthlyCoverage:
     month: str
     observed_races: int
     structurally_accepted_races: int
+    structurally_accepted_starters: int
     excluded_races: int
     exclusion_reasons: tuple[tuple[str, int], ...]
     complete_month_for_research: bool
@@ -87,6 +88,7 @@ def audit_nar_monthly_coverage(
     reasons: Counter[str] = Counter()
     errors: list[NarRaceExclusion] = []
     accepted = 0
+    accepted_starters = 0
 
     for key in all_keys:
         if any(key not in groups[kind] for kind in _EXPECTED_WIDTH):
@@ -96,13 +98,14 @@ def audit_nar_monthly_coverage(
                 kind: _as_csv(groups[kind][key]) for kind in _EXPECTED_WIDTH
             }
             try:
-                normalize_nar_published_results(subset, month=month)
+                accepted_result = normalize_nar_published_results(subset, month=month)
             except UnsafeNarSource as exc:
                 # Our normalizer raises static error identifiers only.
                 # Never persist a raw CSV cell, name, or private race key.
                 code = str(exc)
             else:
                 accepted += 1
+                accepted_starters += accepted_result.audit.checked_starters
                 continue
         reasons[code] += 1
         errors.append(NarRaceExclusion(key=key, reason_code=code))
@@ -118,6 +121,7 @@ def audit_nar_monthly_coverage(
         month=month,
         observed_races=len(all_keys),
         structurally_accepted_races=accepted,
+        structurally_accepted_starters=accepted_starters,
         excluded_races=rejected,
         exclusion_reasons=tuple(sorted(reasons.items())),
         complete_month_for_research=complete,
