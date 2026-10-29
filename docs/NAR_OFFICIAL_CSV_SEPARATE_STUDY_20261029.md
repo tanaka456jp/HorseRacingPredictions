@@ -59,3 +59,27 @@ Added pure in-memory modules:
 **Limitations:** Source-specific right to parse/retain/use the NAR downloadable CSV for ML is still NOT VERIFIED; no actual private ZIP contents read. This is a finalized-result parser, *not* a pre-event feature builder. The official `horselist` contains both racing form and final result columns, which must remain unavailable as same-race prediction inputs. There are no verified 2017–2024 archival pre-event snapshots or actual ROI observations. No auto-download, JRA-VAN COM/JV-Link, note posting or live betting.
 
 A response explicitly permitting the proposed non-public local AI use and permitted acquisition method, plus a separate source provenance/chronology check, remains the gate to running real NAR data. Do not claim the 1998–2024 catalog guarantees every full race/settlement history.
+
+
+## 2026-10-29 user-reported NAR permission and local real-data entry
+
+The user explicitly reported obtaining NAR **permission to use the data**. That is meaningful operator-provided rights evidence for beginning a **local, private, non-public** validation path. The actual approval message, contract counterparty, allowed downloading mode, commercial scope, retention and rate limitations have **not** been independently inspected, so this document does not claim unrestricted automated downloads or permission to publish and monetize.
+
+New files:
+- `src/horse_racing_predictions/nar_local_monthly_intake.py` — opens an expressly nominated *local* monthly NAR ZIP only after an explicit personal/private-permission flag, validates structural ZIP metadata, streams each bounded CSV into memory, decodes UTF-8/CP932, runs complete finalized-result checks, and returns only aggregate statistics. It never calls a website or downloads a file.
+- `scripts/inspect_nar_monthly_results_local.py` — operator-only CLI. It is **not** added to Actions, PC② runner, automatic self-development task or note workflow. Its success means **post-race result shape checked**, not that pre-race snapshots, every race, permission scope, or positive ROI were independently established.
+- `tests/test_nar_local_monthly_intake.py` — only fictional local ZIP fixtures, including corruption, unapproved source, unexpected results and protected 2025+ month.
+
+**Operator PC procedure (only after downloading an official monthly ZIP in the manner authorized by NAR):**
+
+```powershell
+# In the HorseRacingPredictions repo worktree that contains the new scripts:
+$env:PYTHONPATH = "src"
+py -3 scripts/inspect_nar_monthly_results_local.py `
+  --local-monthly-race-zip "D:\HorseRacingPredictions\nar-personal\202402_1234567890_race.zip" `
+  --confirm-personal-private-nar-permission
+```
+
+The example ZIP path is illustrative, not an actual downloaded file; no file was fetched in this development. The command reads only the **explicit local NAR ZIP** that the operator selected; do not point it to the historical protected JRA-VAN archive, and do not use the previously denied Windows runner workflow to bypass a refusal. Never save provider-private content in GitHub, logs or CI artifacts.
+
+**Research gates still closed:** an archive downloaded *after* a race generally contains final popularity, finishing positions and actual returns, so it cannot by itself establish historical pre-off feature availability. Prospective snapshot creation requires a separately permitted method; paper-model ROI requires irrevocably timestamped forecasts, later official settlements and a suitably large untouched sample. If NAR's approval is limited to personal use, nothing may be posted to note or sold.
