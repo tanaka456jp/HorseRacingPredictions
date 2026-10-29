@@ -46,6 +46,11 @@ def main() -> int:
         "month": report.source_month,
         "parsedRaces": report.parsed_races,
         "parsedStarters": report.parsed_starters,
+        "observedRaces": report.observed_races,
+        "excludedRaces": report.excluded_races,
+        "exclusionReasons": dict(report.exclusion_reasons),
+        "completeMonth": report.excluded_races == 0,
+        "validEconomicRoiSample": False,
         "minYear": report.min_year,
         "maxYear": report.max_year,
         "preEventSnapshotProven": False,
@@ -55,7 +60,7 @@ def main() -> int:
         "notePublicationAuthorized": False,
         "newDataDownloaded": False,
     }, sort_keys=True))
-    return 0
+    return 0 if report.excluded_races == 0 else 3
 
 
 if __name__ == "__main__":
