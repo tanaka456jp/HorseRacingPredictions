@@ -20,6 +20,7 @@ from .nar_official_zip_probe import (
 from .nar_published_result_normalizer import (
     NarInMemoryResult, normalize_nar_published_results,
 )
+from .nar_monthly_coverage_audit import audit_nar_monthly_coverage
 
 # A small bounded local trial ZIP is safer than loading an entire giant month
 # into RAM. Too-large archives fail with a static error without leaking text.
@@ -34,6 +35,9 @@ class NarLocalReadiness:
     source_month: str
     parsed_races: int
     parsed_starters: int
+    observed_races: int
+    excluded_races: int
+    exclusion_reasons: tuple[tuple[str, int], ...]
     min_year: int
     max_year: int
     consent_source: str = "USER_REPORTED_PERSONAL_PRIVATE_PERMISSION"
@@ -57,15 +61,10 @@ def _decoded_csv(raw: bytes) -> str:
     raise UnsafeNarSource("NAR_CSV_ENCODING_UNSUPPORTED")
 
 
-def load_nar_monthly_zip_local(
+def _read_nar_local_csv_texts(
     archive: Path, *, personal_private_permission_confirmed: bool,
-) -> NarInMemoryResult:
-    """Load private, finalized-result races in memory without any writes.
-
-    NAR personal/private permission is operator-attested, not automatically
-    verified. It does not grant bulk retrieval or commercial publication.
-    No forecast-time snapshots are inferred from final results.
-    """
+) -> tuple[str, dict[str, str]]:
+    """Read explicitly selected monthly ZIP members with strict size/CRC caps."""
     if personal_private_permission_confirmed is not True:
         raise UnsafeNarSource("NAR_PERSONAL_RESEARCH_PERMISSION_REQUIRED")
     layout = inspect_nar_monthly_zip_structure(archive)
@@ -101,27 +100,46 @@ def load_nar_monthly_zip_local(
                 if len(raw) != info.file_size:
                     raise UnsafeNarSource("NAR_CSV_MEMBER_LENGTH_MISMATCH")
                 texts[kind] = _decoded_csv(raw)
-        result: NarInMemoryResult = normalize_nar_published_results(
-            texts, month=layout.source_month,
-        )
     except (BadZipFile, OSError, EOFError, RuntimeError, UnicodeError):
         raise UnsafeNarSource("NAR_LOCAL_ZIP_CONTENT_INVALID") from None
-    return result
+    return layout.source_month, texts
+
+
+def load_nar_monthly_zip_local(
+    archive: Path, *, personal_private_permission_confirmed: bool,
+) -> NarInMemoryResult:
+    """Strict private in-memory settlement loader (entire month must pass)."""
+    month, texts = _read_nar_local_csv_texts(
+        archive, personal_private_permission_confirmed=personal_private_permission_confirmed,
+    )
+    return normalize_nar_published_results(texts, month=month)
 
 
 def read_nar_monthly_zip_local(
     archive: Path, *, personal_private_permission_confirmed: bool,
 ) -> NarLocalReadiness:
-    """Print-safe aggregate-only report for the operator's local ZIP."""
-    result = load_nar_monthly_zip_local(
+    """Describe *every* observed race without exporting horse/race identities.
+
+    An excluded race remains in the denominator. A month with exclusions is
+    NOT silently reduced to a conveniently profitable sample.
+    """
+    month, texts = _read_nar_local_csv_texts(
         archive,
         personal_private_permission_confirmed=personal_private_permission_confirmed,
     )
+    coverage = audit_nar_monthly_coverage(texts, month=month).summary
     return NarLocalReadiness(
-        status="NAR_LOCAL_FINAL_RESULTS_VALIDATED_NO_PRE_EVENT_PROOF",
-        source_month=result.races[0].race_key[1][:6],
-        parsed_races=result.audit.checked_races,
-        parsed_starters=result.audit.checked_starters,
-        min_year=result.audit.min_year,
-        max_year=result.audit.max_year,
+        status=(
+            "NAR_LOCAL_FINAL_RESULTS_VALIDATED_NO_PRE_EVENT_PROOF"
+            if coverage.complete_month_for_research
+            else "NAR_LOCAL_MONTH_HAS_EXCLUSIONS_ROI_BLOCKED"
+        ),
+        source_month=month,
+        parsed_races=coverage.structurally_accepted_races,
+        parsed_starters=coverage.structurally_accepted_starters,
+        observed_races=coverage.observed_races,
+        excluded_races=coverage.excluded_races,
+        exclusion_reasons=coverage.exclusion_reasons,
+        min_year=int(month[:4]),
+        max_year=int(month[:4]),
     )
