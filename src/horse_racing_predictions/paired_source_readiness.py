@@ -125,8 +125,10 @@ def inspect_paired_sources(
     payout_iter = _rows(payout_csv, "settlement")
     total = races = 0
     active_race = None
+    active_day: date | None = None
     count = 0
     finishes: set[int] = set()
+    place_rows: list[tuple[int, int]] = []
     year_min = 9999
     year_max = 0
 
@@ -136,6 +138,13 @@ def inspect_paired_sources(
         if (not 5 <= count <= _MAX_RUNNERS
                 or finishes != set(range(1, count + 1))):
             raise UnsafeTrainingSource("PAIR_COMPLETE_STANDARD_RACE_REQUIRED")
+        place_cutoff = 2 if count <= 7 else 3
+        if any(
+            (amount > 0) != (finish <= place_cutoff)
+            or (amount > 0 and amount < 100)
+            for finish, amount in place_rows
+        ):
+            raise UnsafeTrainingSource("PAIR_PLACE_PAYOUT_CONTRADICTION")
 
     from itertools import zip_longest
     sentinel = object()
@@ -149,31 +158,26 @@ def inspect_paired_sources(
         if hrid != active_race:
             validate_race()
             active_race = hrid
+            active_day = hday
             count = 0
             finishes = set()
+            place_rows = []
             races += 1
+        if hday != active_day:
+            raise UnsafeTrainingSource("PAIR_RACE_DATE_CONFLICT")
         count += 1
         finishes.add(rank)
+        place_rows.append((rank, place))
         # Normal, non-dead-heat races only. Do not impute money from odds.
         # Eligibility excludes races with <5 entrants; the caller must keep
         # a rejection ledger rather than silently dropping them.
         if not 1 <= rank <= _MAX_RUNNERS:
             raise UnsafeTrainingSource("PAIR_FINISH_INVALID")
-        if (win != 0) != (rank == 1):
+        if (win != 0) != (rank == 1) or (win > 0 and win < 100):
             raise UnsafeTrainingSource("PAIR_WIN_PAYOUT_CONTRADICTION")
-        # Place rule depends on final starter count, so check it after race
-        # size is known using one bounded list (<= 18 entries).
         total += 1
         year_min = min(year_min, hday.year)
         year_max = max(year_max, hday.year)
-        # Validate places when the race concludes; maintain local amounts.
-        if count == 1:
-            place_rows = []
-        place_rows.append((rank, place, win))
-        nxt_is_last = False
-        # Defer place checks until the next race, or end-of-input.
-        # Flushed below by helper only after final count is known.
-        # (Kept below in outer scope to avoid exposing identities.)
         if total > 3_000_000:
             raise UnsafeTrainingSource("PAIR_TOO_MANY_ROWS")
     validate_race()
