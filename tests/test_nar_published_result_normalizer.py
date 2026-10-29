@@ -185,7 +185,7 @@ def test_banei_not_mixed_with_flat_nar_sample():
     src = list(csv.reader(StringIO(sample["racelist"])))
     src[0][0] = "帯広"
     sample["racelist"] = _encode(src)
-    with pytest.raises(UnsafeNarSource, match="NAR_RACE_COVERAGE_MISMATCH"):
+    with pytest.raises(UnsafeNarSource, match="NAR_NONSTANDARD_RACE_TYPE"):
         normalize_nar_published_results(sample, month="202402")
 
 
