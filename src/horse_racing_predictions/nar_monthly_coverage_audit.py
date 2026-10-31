@@ -1,8 +1,9 @@
 """Privacy-safe complete-month NAR exclusion ledger; no source data export.
 
 A finalized monthly NAR ZIP can contain ordinary races, ties, scratches,
-short fields and unavailable settlement. Do NOT filter that month down to
-winning/clean bets and report its ROI. This module accounts for EVERY race
+short fields and unavailable settlement. Only the *predeclared*
+non-flat Obihiro/banei venue is out of study scope before outcomes.
+Do NOT filter based on results and report a biased ROI. This module accounts for EVERY race
 key found in ANY of the three published CSV members, with a static failure
 reason and a hard fail-closed ROI gate when any race is ineligible.
 
@@ -38,6 +39,8 @@ class NarMonthlyCoverage:
     structurally_accepted_races: int
     structurally_accepted_starters: int
     excluded_races: int
+    predeclared_out_of_scope_races: int
+    unresolved_in_scope_races: int
     exclusion_reasons: tuple[tuple[str, int], ...]
     complete_month_for_research: bool
     actual_source_rights_verified: bool = False
@@ -52,6 +55,16 @@ class NarMonthlyCoverage:
 class NarMonthlyCoverageDetail:
     summary: NarMonthlyCoverage
     exclusions: tuple[NarRaceExclusion, ...] = field(repr=False)
+
+
+# Official NAR describes Obihiro's ban'ei races as a different discipline.
+# Exclusion is fixed by venue, before *any* finish/payback is inspected.
+_PREDECLARED_BANEI_VENUE = "帯広"
+_SCOPE_REASON = "NAR_PREDECLARED_BANEI_OUT_OF_SCOPE"
+
+
+def _outside_flat_study_scope(key: RaceKey) -> bool:
+    return key[0].strip() == _PREDECLARED_BANEI_VENUE
 
 
 def _as_csv(rows: list[list[str]]) -> str:
@@ -89,8 +102,17 @@ def audit_nar_monthly_coverage(
     errors: list[NarRaceExclusion] = []
     accepted = 0
     accepted_starters = 0
+    scope_excluded = 0
 
     for key in all_keys:
+        if _outside_flat_study_scope(key):
+            # Venue is independent of outcomes. Count it in the original
+            # complete source denominator but keep it out of the NAR-flat
+            # research population; even missing payback cannot affect scope.
+            scope_excluded += 1
+            reasons[_SCOPE_REASON] += 1
+            errors.append(NarRaceExclusion(key=key, reason_code=_SCOPE_REASON))
+            continue
         if any(key not in groups[kind] for kind in _EXPECTED_WIDTH):
             code = "NAR_RACE_COVERAGE_MISMATCH"
         else:
@@ -111,10 +133,12 @@ def audit_nar_monthly_coverage(
         errors.append(NarRaceExclusion(key=key, reason_code=code))
 
     rejected = len(errors)
-    complete = rejected == 0
+    unresolved = rejected - scope_excluded
+    complete = unresolved == 0 and accepted > 0
     report = NarMonthlyCoverage(
         status=(
-            "NAR_MONTH_STRUCTURE_COMPLETE_PRE_EVENT_UNVERIFIED"
+            ("NAR_MONTH_PREDECLARED_SCOPE_ONLY_PRE_EVENT_UNVERIFIED"
+             if scope_excluded else "NAR_MONTH_STRUCTURE_COMPLETE_PRE_EVENT_UNVERIFIED")
             if complete
             else "NAR_MONTH_HAS_EXCLUSIONS_RESEARCH_ROI_BLOCKED"
         ),
@@ -123,6 +147,8 @@ def audit_nar_monthly_coverage(
         structurally_accepted_races=accepted,
         structurally_accepted_starters=accepted_starters,
         excluded_races=rejected,
+        predeclared_out_of_scope_races=scope_excluded,
+        unresolved_in_scope_races=unresolved,
         exclusion_reasons=tuple(sorted(reasons.items())),
         complete_month_for_research=complete,
     )
@@ -131,3 +157,25 @@ def audit_nar_monthly_coverage(
     return NarMonthlyCoverageDetail(
         summary=report, exclusions=tuple(errors),
     )
+
+
+def select_predeclared_flat_races(
+    csv_texts: Mapping[str, str], *, month: str,
+) -> dict[str, str]:
+    """Restrict to a FIXED venue-level flat-racing scope before training.
+
+    The exclusion ledger must be complete first. No post-outcome-based
+    filtering; every in-scope missing/ambiguous result blocks the entire
+    batch. Return data are private in-memory CSV strings only.
+    """
+    report = audit_nar_monthly_coverage(csv_texts, month=month).summary
+    if not report.complete_month_for_research:
+        raise UnsafeNarSource("NAR_FLAT_SCOPE_HAS_UNRESOLVED_RESULTS")
+    result: dict[str, str] = {}
+    for kind in _EXPECTED_WIDTH:
+        parsed = _parse(csv_texts[kind], kind, month)
+        rows = [row for key, row in parsed if not _outside_flat_study_scope(key)]
+        if not rows:
+            raise UnsafeNarSource("NAR_FLAT_SCOPE_EMPTY")
+        result[kind] = _as_csv(rows)
+    return result
