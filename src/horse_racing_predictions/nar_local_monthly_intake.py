@@ -20,7 +20,9 @@ from .nar_official_zip_probe import (
 from .nar_published_result_normalizer import (
     NarInMemoryResult, normalize_nar_published_results,
 )
-from .nar_monthly_coverage_audit import audit_nar_monthly_coverage
+from .nar_monthly_coverage_audit import (
+    audit_nar_monthly_coverage, select_predeclared_flat_races,
+)
 
 # A small bounded local trial ZIP is safer than loading an entire giant month
 # into RAM. Too-large archives fail with a static error without leaking text.
@@ -37,6 +39,8 @@ class NarLocalReadiness:
     parsed_starters: int
     observed_races: int
     excluded_races: int
+    predeclared_out_of_scope_races: int
+    unresolved_in_scope_races: int
     exclusion_reasons: tuple[tuple[str, int], ...]
     min_year: int
     max_year: int
@@ -112,7 +116,18 @@ def load_nar_monthly_zip_local(
     month, texts = _read_nar_local_csv_texts(
         archive, personal_private_permission_confirmed=personal_private_permission_confirmed,
     )
-    return normalize_nar_published_results(texts, month=month)
+    report = audit_nar_monthly_coverage(texts, month=month)
+    if not report.summary.complete_month_for_research:
+        # Keep the original static error identifier for operator diagnosis;
+        # never return incomplete results for retrospective selection.
+        error = next(
+            (e.reason_code for e in report.exclusions
+             if e.reason_code != "NAR_PREDECLARED_BANEI_OUT_OF_SCOPE"),
+            "NAR_FLAT_SCOPE_HAS_UNRESOLVED_RESULTS",
+        )
+        raise UnsafeNarSource(error)
+    filtered = select_predeclared_flat_races(texts, month=month)
+    return normalize_nar_published_results(filtered, month=month)
 
 
 def read_nar_monthly_zip_local(
@@ -139,6 +154,8 @@ def read_nar_monthly_zip_local(
         parsed_starters=coverage.structurally_accepted_starters,
         observed_races=coverage.observed_races,
         excluded_races=coverage.excluded_races,
+        predeclared_out_of_scope_races=coverage.predeclared_out_of_scope_races,
+        unresolved_in_scope_races=coverage.unresolved_in_scope_races,
         exclusion_reasons=coverage.exclusion_reasons,
         min_year=int(month[:4]),
         max_year=int(month[:4]),
