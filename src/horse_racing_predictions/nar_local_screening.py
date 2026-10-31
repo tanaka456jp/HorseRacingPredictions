@@ -15,7 +15,9 @@ from pathlib import Path
 from typing import Sequence
 
 from .nar_local_monthly_intake import _read_nar_local_csv_texts
-from .nar_monthly_coverage_audit import audit_nar_monthly_coverage
+from .nar_monthly_coverage_audit import (
+    audit_nar_monthly_coverage, select_predeclared_flat_races,
+)
 from .nar_official_zip_probe import UnsafeNarSource, _ZIP_RE
 from .nar_prior_day_features import build_prior_day_features
 from .nar_private_catboost_screening import (
@@ -34,6 +36,7 @@ class NarLocalScreeningReport:
     status: str
     months_checked: int
     races_checked: int
+    predeclared_out_of_scope_races: int
     metrics: NarCatBoostScreeningMetrics
     local_data_only: bool = True
     real_economic_return_verified: bool = False
@@ -72,6 +75,7 @@ def screen_nar_local_2017_2022(
     texts: dict[str, dict[str, str]] = {}
     total_chars = 0
     observed_races = 0
+    excluded_banei = 0
     for source in archives:
         month, data = _read_nar_local_csv_texts(
             source, personal_private_permission_confirmed=True,
@@ -82,13 +86,15 @@ def screen_nar_local_2017_2022(
         if total_chars > _MAX_DECODED_CHARS:
             raise UnsafeNarSource("NAR_LOCAL_MEMORY_BUDGET_EXCEEDED")
         coverage = audit_nar_monthly_coverage(data, month=month).summary
-        if coverage.excluded_races:
+        if not coverage.complete_month_for_research:
             raise UnsafeNarSource("NAR_TRAINING_REQUIRES_FULL_REVIEWED_MONTHS")
+        flat = select_predeclared_flat_races(data, month=month)
         texts[month] = {
-            "racelist": data["racelist"],
-            "horselist": data["horselist"],
+            "racelist": flat["racelist"],
+            "horselist": flat["horselist"],
         }
-        observed_races += coverage.observed_races
+        observed_races += coverage.structurally_accepted_races
+        excluded_banei += coverage.predeclared_out_of_scope_races
 
     batch = build_prior_day_features(texts)
     if batch.eligible_races != observed_races:
@@ -100,5 +106,6 @@ def screen_nar_local_2017_2022(
         status="NAR_PRIVATE_2022_SCREEN_ONLY_NO_LIVE_ROI",
         months_checked=len(texts),
         races_checked=observed_races,
+        predeclared_out_of_scope_races=excluded_banei,
         metrics=candidate.metrics,
     )
