@@ -71,6 +71,11 @@ def check_nar_multiyear_local(
     # Validate *all* names before accessing even training-period contents.
     month_paths: dict[str, Path] = {}
     for path in archives:
+        # Metadata only, including sealed holdout: never open its ZIP or
+        # follow a symlink to an unintended archive.
+        if (path.is_symlink() or any(parent.is_symlink() for parent in path.parents)
+                or not path.is_file()):
+            raise UnsafeNarSource("NAR_UNTRUSTED_OR_MISSING_MONTHLY_PATH")
         match = _ZIP_RE.fullmatch(path.name)
         if match is None or match.group(1) not in _EXPECTED_MONTHS:
             raise UnsafeNarSource("NAR_DUPLICATE_OR_OUTSIDE_RESEARCH_MONTH")
