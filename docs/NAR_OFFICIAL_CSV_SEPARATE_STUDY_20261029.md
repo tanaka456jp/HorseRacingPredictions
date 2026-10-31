@@ -124,3 +124,32 @@ py -3 scripts/inspect_nar_multiyear_local.py `
 ```
 
 Those ZIPs are example paths; this project change did **not** fetch, create, parse or upload any actual NAR records. With only two months, the CLI should report **94 missing months**, not an ROI or commercially usable model. For real probability training and return evaluation the independently verified official source and research rights, pre-event feature availability, immutable forecast/cutoff, complete provider returns and prospective sample ledger all remain distinct gates.
+
+
+## 2026-10-31: 2022-only CatBoost screening, 2023–24 sealed
+
+Implemented `src/horse_racing_predictions/nar_private_catboost_screening.py` to train **independent winner and podium models** from prior-day-only form (`past_starts`, past win/top-3 rates, mean historical finish, days since prior start) using the existing open-source CatBoost engine.
+
+- Frozen model-fitting period: 2017–2021. Frozen *model selection / preliminary screening*: 2022.
+- The 2023–2024 unseen outcomes are not read by the model-fitting/screening projection: only the number of sealed races is counted when a broader in-memory batch is passed.
+- No current-race final outcome, market popularity/odds, final run time, same-day result, post-race payouts or race-specific downstream outcomes are model features. Current race identifiers are grouping keys only, not model features.
+- Reports 2022 winner Top1 hit rate, top3 overlap and independently fitted outsider Top3 hit rate **only**. These statistics are **not** realized ROI, and not a verified forward prediction.
+
+Operator-only local 72-month entrypoint (`src/horse_racing_predictions/nar_local_screening.py`, `scripts/screen_nar_local_2017_2022.py`):
+- Accepts an operator-maintained **private local JSON array** of exactly **72 absolute ZIP paths**, one official-format monthly `race.zip` for every month 2017-01 to 2022-12, with an explicit personal/private NAR approval flag.
+- Verifies all filename months and rejects 2023–2024/2025–2026 **before any file read**, then performs whole-month checks; a dirty or missing month is **blocked**, not silently removed from the denominator.
+- Builds the pre-day features, trains and assesses in memory, prints **aggregate 2022 screening metrics only**, does not save a model file, copy original source records, download, or access GitHub or note. A 150-million-decoded-character in-memory safety limit may block large historical sources; this should later be replaced with a separate memory-bounded, permission-reviewed streaming solution if needed.
+- A strict whole-month rejection will also block common real-world exceptional races; this avoids misleading accuracy but is **not yet a production-ready missing/scratch/refund processing policy**. A pre-registered eligibility/void protocol is needed before any actual 2023–24 holdout ROI.
+
+Example only (no ZIPs or private JSON have been created/downloaded by this PR):
+
+```powershell
+$env:PYTHONPATH = "src"
+py -3 scripts/screen_nar_local_2017_2022.py `
+  --private-zip-paths-json "D:\HorseRacingPredictions\nar-personal\monthly-paths-private.json" `
+  --confirm-personal-private-nar-permission --iterations 40
+```
+
+The JSON list must hold 72 explicitly nominated full paths. The JSON is **private** and must remain outside the Git repository. The CatBoost research dependency (`pip install -e ".[research]"`) is required. These CLI options are not proof that any past data was obtained with the permitted acquisition method.
+
+Current state remains synthetic-only CI. The user has stated NAR use permission; precise source license and automation scope have not been independently inspected. No real data read, no OOS ROI calculated and no positive expected value demonstrated.
