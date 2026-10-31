@@ -19,7 +19,7 @@ from .nar_monthly_coverage_audit import (
     audit_nar_monthly_coverage, select_predeclared_flat_races,
 )
 from .nar_official_zip_probe import UnsafeNarSource, _ZIP_RE
-from .nar_prior_day_features import build_prior_day_features
+from .nar_incremental_prior_day import build_prior_day_features_month_by_month
 from .nar_private_catboost_screening import (
     NarCatBoostScreeningMetrics, fit_nar_private_catboost_screening,
 )
@@ -28,7 +28,6 @@ _REQUIRED_MONTHS = frozenset(
     f"{year}{month:02d}" for year in range(2017, 2023)
     for month in range(1, 13)
 )
-_MAX_DECODED_CHARS = 150_000_000
 
 
 @dataclass(frozen=True)
@@ -61,6 +60,7 @@ def screen_nar_local_2017_2022(
     # Preflight EVERY archive name before reading any source bytes:
     # no accidental opening of 2023–24 unseen or protected 2025–26.
     source_months: set[str] = set()
+    path_by_month: dict[str, Path] = {}
     for p in archives:
         match = _ZIP_RE.fullmatch(p.name)
         if match is None or match.group(1) not in _REQUIRED_MONTHS:
@@ -69,34 +69,41 @@ def screen_nar_local_2017_2022(
         if month in source_months:
             raise UnsafeNarSource("NAR_DUPLICATE_TRAINING_MONTH")
         source_months.add(month)
+        path_by_month[month] = p
     if source_months != _REQUIRED_MONTHS:
         raise UnsafeNarSource("NAR_TRAINING_MONTH_COVERAGE_INCOMPLETE")
 
-    texts: dict[str, dict[str, str]] = {}
-    total_chars = 0
-    observed_races = 0
-    excluded_banei = 0
-    for source in archives:
-        month, data = _read_nar_local_csv_texts(
-            source, personal_private_permission_confirmed=True,
-        )
-        if month in texts or month not in _REQUIRED_MONTHS:
-            raise UnsafeNarSource("NAR_TRAINING_MONTH_MISMATCH")
-        total_chars += sum(len(s) for s in data.values())
-        if total_chars > _MAX_DECODED_CHARS:
-            raise UnsafeNarSource("NAR_LOCAL_MEMORY_BUDGET_EXCEEDED")
-        coverage = audit_nar_monthly_coverage(data, month=month).summary
-        if not coverage.complete_month_for_research:
-            raise UnsafeNarSource("NAR_TRAINING_REQUIRES_FULL_REVIEWED_MONTHS")
-        flat = select_predeclared_flat_races(data, month=month)
-        texts[month] = {
-            "racelist": flat["racelist"],
-            "horselist": flat["horselist"],
-        }
-        observed_races += coverage.structurally_accepted_races
-        excluded_banei += coverage.predeclared_out_of_scope_races
+    # Process one complete month at a time, in chronological order. No
+    # retained 72-month CSV text dictionary and no full-history rank lists.
+    totals = {"months": 0, "races": 0, "banei": 0}
 
-    batch = build_prior_day_features(texts)
+    def verified_months():
+        for expected_month in sorted(_REQUIRED_MONTHS):
+            month, data = _read_nar_local_csv_texts(
+                path_by_month[expected_month],
+                personal_private_permission_confirmed=True,
+            )
+            if month != expected_month:
+                raise UnsafeNarSource("NAR_TRAINING_MONTH_MISMATCH")
+            coverage = audit_nar_monthly_coverage(data, month=month).summary
+            if not coverage.complete_month_for_research:
+                raise UnsafeNarSource("NAR_TRAINING_REQUIRES_FULL_REVIEWED_MONTHS")
+            flat = select_predeclared_flat_races(data, month=month)
+            totals["months"] += 1
+            totals["races"] += coverage.structurally_accepted_races
+            totals["banei"] += coverage.predeclared_out_of_scope_races
+            # Yield only two cleaned text members to the incremental builder.
+            # The three source CSV strings are released at month boundaries.
+            yield month, {
+                "racelist": flat["racelist"],
+                "horselist": flat["horselist"],
+            }
+
+    # Model fitting cannot start before all 72 months have completed both
+    # the normalizer and the strict chronological feature construction.
+    batch = build_prior_day_features_month_by_month(verified_months())
+    observed_races = totals["races"]
+    excluded_banei = totals["banei"]
     if batch.eligible_races != observed_races:
         raise UnsafeNarSource("NAR_TRAINING_RACE_COUNT_CONFLICT")
     candidate = fit_nar_private_catboost_screening(
@@ -104,7 +111,7 @@ def screen_nar_local_2017_2022(
     )
     return NarLocalScreeningReport(
         status="NAR_PRIVATE_2022_SCREEN_ONLY_NO_LIVE_ROI",
-        months_checked=len(texts),
+        months_checked=totals["months"],
         races_checked=observed_races,
         predeclared_out_of_scope_races=excluded_banei,
         metrics=candidate.metrics,
