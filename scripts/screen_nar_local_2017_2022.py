@@ -59,6 +59,7 @@ def main() -> int:
     print(json.dumps({
         "status": report.status,
         "monthsChecked": report.months_checked,
+        "predeclaredOutOfScopeBaneiRaces": report.predeclared_out_of_scope_races,
         "trainingRaces": m.training_races,
         "tuningRaces": m.tuning_races,
         "trainingRunners": m.training_runners,
