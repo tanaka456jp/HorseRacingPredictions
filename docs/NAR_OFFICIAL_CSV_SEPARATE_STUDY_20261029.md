@@ -94,3 +94,33 @@ New pure `nar_monthly_coverage_audit.py` audits the complete union of race keys 
 **Research caution:** Even a month that passes every structural check does NOT establish official origin, permitted usage scope, a pre-race immutable forecast, eligibility fixed before the off, or unbiased economic ROI. Some settlement-based exclusion reasons can only be known *after* the race. Therefore **no economic ROI may be claimed from a retrospectively cleaned sample**: the evaluator must explicitly pre-register betting eligibility, record pre-event picks for *all* attempted races and resolve void/refund cases prospectively under the official rules. Until these are checked, all ROI/publication/training permission flags remain false.
 
 The user has reported an NAR usage approval, but the exact authorized acquisition rate/automation, retention, private versus commercial model applications and publication scope are not independently documented in GitHub. No automated download, no NAR/private-source GitHub artifact, no note posting, no new JRA-VAN connection.
+
+
+## 2026-10-31: as-of-date historical features and full multiyear readiness
+
+The official NAR downloadable `horselist.csv` contains final finishing position (field 32), final time (field 33), final 3F (field 35), and popularity (field 36). Therefore **copying the downloaded current-race columns directly to training features would leak outcomes**. Per the [official May 2026 PDF](https://www.keiba.go.jp/pdf/manual/data_pdf_manual.pdf) the only horse identity available here is textual name plus date of birth (field 11); names alone do not prove identity.
+
+New `nar_prior_day_features.py`:
+- reads locally authorized, already-decoded `racelist` and `horselist` monthly data **only**, not the payback/odds file; calculates past starts/wins/top-3 rate/mean finish and days since last race
+- validates source race and starter coverage; rejects ties, duplicated same-day horse appearances, unknown birth dates, and 2025–2026 protected months rather than silently accepting contaminated records
+- groups by **race date** then computes features for every race on a date before updating history, preventing cross-race and same-day lookahead
+- keeps the current race's final finish as a **separate training label**, absent from the feature dataclass; ignores current popularity, time, 3F, weight changes and other post-race fields
+- **does not** verify that the final runner list, jockeys or posted card actually existed before the off; the output is therefore explicitly labelled **retrospectively reconstructed**, NOT a contemporaneously frozen prediction
+
+New `nar_multiyear_readiness.py` and `scripts/inspect_nar_multiyear_local.py`:
+- accept operator-explicit, local, already-authorized monthly ZIP paths only — no directory crawl, NAR bulk downloader, web calls, note or GitHub artifacts
+- strictly inspect each month (all observed races, payout/roster consistency, no partial clean-only subsets), then reconstruct date-correct historical form across the approved months
+- report 2017–2021 training, 2022 tuning, 2023–2024 unseen race counts and number of missing calendar months out of the predeclared **96** months
+- disclose partial history with exit code **3**; any structurally rejected month blocks the multiyear research rather than shrinking its ROI denominator after observing outcomes
+- prints aggregate counts only. No source records, name, path, race IDs or license reference leave the computer.
+
+Usage, only when properly authorized local archives are present, for example:
+
+```powershell
+$env:PYTHONPATH = "src"
+py -3 scripts/inspect_nar_multiyear_local.py `
+  --local-monthly-race-zips "D:\HorseRacingPredictions\nar-personal\202401_1234567890_race.zip" "D:\HorseRacingPredictions\nar-personal\202402_1234567890_race.zip" `
+  --confirm-personal-private-nar-permission
+```
+
+Those ZIPs are example paths; this project change did **not** fetch, create, parse or upload any actual NAR records. With only two months, the CLI should report **94 missing months**, not an ROI or commercially usable model. For real probability training and return evaluation the independently verified official source and research rights, pre-event feature availability, immutable forecast/cutoff, complete provider returns and prospective sample ledger all remain distinct gates.
