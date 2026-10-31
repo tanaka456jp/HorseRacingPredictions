@@ -126,7 +126,9 @@ def test_real_flat_payout_error_cannot_hide_behind_banei_exclusion(tmp_path):
 
 
 def test_only_banei_still_has_no_flat_training_sample():
-    data = _banei_fixture()
+    # Include a valid race-based settlement member so the file's three
+    # required CSVs remain structurally nonempty.
+    data = _banei_fixture(include_payback=True)
     report = audit_nar_monthly_coverage(data, month="202402").summary
     assert report.observed_races == 1
     assert report.predeclared_out_of_scope_races == 1
