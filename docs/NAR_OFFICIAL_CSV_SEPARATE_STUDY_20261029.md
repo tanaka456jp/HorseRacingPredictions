@@ -153,3 +153,41 @@ py -3 scripts/screen_nar_local_2017_2022.py `
 The JSON list must hold 72 explicitly nominated full paths. The JSON is **private** and must remain outside the Git repository. The CatBoost research dependency (`pip install -e ".[research]"`) is required. These CLI options are not proof that any past data was obtained with the permitted acquisition method.
 
 Current state remains synthetic-only CI. The user has stated NAR use permission; precise source license and automation scope have not been independently inspected. No real data read, no OOS ROI calculated and no positive expected value demonstrated.
+
+
+## 2026-11-01: first real-month admission blocker removed — only predeclared nonflat scope
+
+NAR official guidance distinguishes flat horse racing from ban'ei at **Obihiro (帯広)**: [official races explainer](https://www.keiba.go.jp/about/outline/races.html). The NAR monthly dataset can therefore contain events outside the study's pre-registered flat racing scope. Previously, **one Obihiro row failed the entire month**, making proper monthly training infeasible whenever it appeared.
+
+Updated `nar_monthly_coverage_audit.py` with a *fixed track-only predicate* (`競馬場 == 帯広`) that does **not** read finishes, payouts or odds before deciding the scope. Every source race remains counted. Monthly reports separately show:
+- `observed_races` = all race keys from the union of three source CSVs, including Obihiro
+- `predeclared_out_of_scope_races` = Obihiro ban'ei, excluded by predetermined venue/discipline rather than actual outcome
+- `unresolved_in_scope_races` = flat-racing races with incomplete roster, tied finish, missing/contradictory settlement, or other in-scope inconsistencies
+- `structurally_accepted_races` = normalized in-scope flat races only
+
+Invariant: `observed_races = structurally_accepted_races + predeclared_out_of_scope_races + unresolved_in_scope_races`. A month can pass **only** if `unresolved_in_scope_races == 0` and at least one eligible in-scope race exists. `select_predeclared_flat_races` is the sole stage producing a private, in-memory eligible subset and only after the complete-month ledger passes. The original strict final-result normalizer remains unchanged. The local CLI returns failure for unresolved in-scope races, not the preregistered Obihiro exclusion.
+
+This prevents a real-world structural blocker **without** permitting performance-dependent exclusion. If a different venue has a nonstandard race type, the program **fails closed** until a separate, preregistered eligibility rule and payout treatment is documented. Deliberate withdrawal, dead heat, or refunds in a flat race still block actual ROI pending a proper ex-ante selection and settlement policy. A clean 2017–22 training/2022 screen is still neither a valid 2023–24 OOS result nor a positive EV proof.
+
+### Practical 72-month list preparation — zero ZIP-content reads
+
+`nar_private_manifest_inventory.py` and `scripts/prepare_nar_private_training_manifest_local.py` let the operator select one **dedicated, local folder** of permission-cleared, already-downloaded NAR monthly ZIPs. The command reads only immediate filenames (no recursive scan, ZIP reads, imports, web or provider calls), rejects 2023+ sealed/other archive ZIPs, duplicate months, symlinks and old JRA-VAN protected folders. Without explicit write opt-in it **reports missing months only**.
+
+Example PowerShell, from the checked-out research branch:
+
+```powershell
+$env:PYTHONPATH = "src"
+py -3 scripts/prepare_nar_private_training_manifest_local.py `
+  --local-nar-training-zip-directory "D:\HorseRacingPredictions\nar-personal\training-zips" `
+  --confirm-personal-private-nar-permission
+
+# Only after all 72 months are present, and only if approved:
+py -3 scripts/prepare_nar_private_training_manifest_local.py `
+  --local-nar-training-zip-directory "D:\HorseRacingPredictions\nar-personal\training-zips" `
+  --private-manifest-output "D:\HorseRacingPredictions\nar-personal\monthly-paths-private.json" `
+  --confirm-personal-private-nar-permission --write-private-manifest
+```
+
+The manifest is written once with create-new semantics **outside** the Git checkout. Do not commit or attach it; it holds absolute paths. These are illustrative locations only, not claims about the user's actual PC. The user has reported NAR data-use permission, but the exact authorization for a mass-download method remains unconfirmed; these commands **never download** archives. All CI tests use synthetic source names/data only.
+
+**Research milestone remaining:** authorized actual 2017–2022 ZIP acquisition and local completeness audit, then real historical tuning and prospectively frozen forecasts/official payouts. No real data analyzed as part of this change.
