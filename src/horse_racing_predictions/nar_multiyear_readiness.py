@@ -13,7 +13,9 @@ from pathlib import Path
 from typing import Sequence
 
 from .nar_local_monthly_intake import _read_nar_local_csv_texts
-from .nar_monthly_coverage_audit import audit_nar_monthly_coverage
+from .nar_monthly_coverage_audit import (
+    audit_nar_monthly_coverage, select_predeclared_flat_races,
+)
 from .nar_official_zip_probe import UnsafeNarSource
 from .nar_prior_day_features import build_prior_day_features
 
@@ -33,6 +35,7 @@ class NarMultiMonthReadiness:
     required_months: int
     missing_months: int
     source_races: int
+    predeclared_out_of_scope_races: int
     reconstructed_target_races: int
     reconstructed_runner_rows: int
     fit_2017_2021_races: int
@@ -62,6 +65,7 @@ def check_nar_multiyear_local(
 
     months: dict[str, dict[str, str]] = {}
     total_races = 0
+    excluded_banei = 0
     for source in archives:
         month, texts = _read_nar_local_csv_texts(
             source, personal_private_permission_confirmed=True,
@@ -69,14 +73,18 @@ def check_nar_multiyear_local(
         if month not in _EXPECTED_MONTHS or month in months:
             raise UnsafeNarSource("NAR_DUPLICATE_OR_OUTSIDE_RESEARCH_MONTH")
         coverage = audit_nar_monthly_coverage(texts, month=month).summary
-        if coverage.excluded_races:
-            # Do not select only the accepted races to improve backtest.
+        if not coverage.complete_month_for_research:
+            # Anomalies inside the predeclared flat-race scope fail closed.
+            # The separately enumerated Banei venue is outside the scope
+            # regardless of its future outcome.
             raise UnsafeNarSource("NAR_MULTIMONTH_HAS_EXCLUDED_RACES_ROI_BLOCKED")
+        flat = select_predeclared_flat_races(texts, month=month)
         months[month] = {
-            "racelist": texts["racelist"],
-            "horselist": texts["horselist"],
+            "racelist": flat["racelist"],
+            "horselist": flat["horselist"],
         }
-        total_races += coverage.observed_races
+        total_races += coverage.structurally_accepted_races
+        excluded_banei += coverage.predeclared_out_of_scope_races
 
     batch = build_prior_day_features(months)
     if batch.eligible_races != total_races:
@@ -105,7 +113,8 @@ def check_nar_multiyear_local(
         observed_months=len(months),
         required_months=len(_EXPECTED_MONTHS),
         missing_months=missing,
-        source_races=total_races,
+        source_races=total_races + excluded_banei,
+        predeclared_out_of_scope_races=excluded_banei,
         reconstructed_target_races=batch.eligible_races,
         reconstructed_runner_rows=batch.target_runner_rows,
         fit_2017_2021_races=fit,
