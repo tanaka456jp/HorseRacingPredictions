@@ -1,7 +1,8 @@
 """Real CatBoost dual inference with fictional local race cards only."""
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
+from unittest.mock import patch
 import json
 
 import pandas as pd
@@ -20,6 +21,19 @@ DATE = "2026-11-01"
 FRIDAY = datetime.fromisoformat("2026-10-30T19:00:00+09:00")
 
 
+class _FrozenResearchFixtureClock(datetime):
+    """A fabricated model really predates the fabricated Friday preview.
+
+    Tests must not fail when the actual calendar advances beyond Oct 2026.
+    This overrides the clock only inside synthetic artifact creation, not the
+    production checks which reject model artifacts generated after forecast.
+    """
+    @classmethod
+    def now(cls, tz=None):
+        fixed = datetime(2026, 10, 30, 4, 0, tzinfo=timezone.utc)
+        return fixed.astimezone(tz) if tz else fixed.replace(tzinfo=None)
+
+
 def _artifact(tmp_path):
     pytest.importorskip("catboost")
     sample = prepare_strict_odds_free_training_sample(
@@ -31,9 +45,10 @@ def _artifact(tmp_path):
         iterations=30,
     )
     path = tmp_path / "research-candidate"
-    training.save_dual_candidate_for_research(
-        candidate, destination=path, source_ref="synthetic-fake-no-license",
-    )
+    with patch.object(training, "datetime", _FrozenResearchFixtureClock):
+        training.save_dual_candidate_for_research(
+            candidate, destination=path, source_ref="synthetic-fake-no-license",
+        )
     return path
 
 
