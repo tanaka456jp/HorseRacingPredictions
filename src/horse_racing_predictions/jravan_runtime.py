@@ -89,80 +89,22 @@ def _probe_registry_views() -> tuple[bool | None, bool | None]:
 
 
 def inspect_jravan_runtime() -> JraVanRuntimeReport:
-    python_bits = struct.calcsize("P") * 8
-    registered_64bit, registered_32bit = _probe_registry_views()
-    guidance = list(
-        classify_registration(
-            registered_64bit=registered_64bit,
-            registered_32bit=registered_32bit,
-            python_bits=python_bits,
-        )
-    )
-
-    if sys.platform != "win32":
-        return JraVanRuntimeReport(
-            status="unsupported_platform",
-            python_version=sys.version.split()[0],
-            python_bits=python_bits,
-            progid=PROGID,
-            registered_64bit=registered_64bit,
-            registered_32bit=registered_32bit,
-            com_created=False,
-            error="JV-Link COM requires Windows.",
-            guidance=tuple(guidance),
-        )
-
-    try:
-        import win32com.client.dynamic
-    except ImportError as exc:
-        return JraVanRuntimeReport(
-            status="blocked",
-            python_version=sys.version.split()[0],
-            python_bits=python_bits,
-            progid=PROGID,
-            registered_64bit=registered_64bit,
-            registered_32bit=registered_32bit,
-            com_created=False,
-            error=f"pywin32 is not installed: {exc}",
-            guidance=tuple(guidance),
-        )
-
-    try:
-        win32com.client.dynamic.Dispatch(PROGID)
-    except Exception as exc:
-        message = f"{type(exc).__name__}: {exc}"
-        hresult = getattr(exc, "hresult", None)
-        if (
-            hresult == INVALID_CLASS_STRING_HRESULT
-            or "2147221005" in message
-        ):
-            guidance.insert(
-                0,
-                "COM returned 0x800401F3 (Invalid class string): the ProgID "
-                "is not registered in the Python process COM view."
-            )
-        return JraVanRuntimeReport(
-            status="blocked",
-            python_version=sys.version.split()[0],
-            python_bits=python_bits,
-            progid=PROGID,
-            registered_64bit=registered_64bit,
-            registered_32bit=registered_32bit,
-            com_created=False,
-            error=message,
-            guidance=tuple(guidance),
-        )
-
+    # The free Data Lab trial has expired. Even COM *construction* can open
+    # an authentication/expiry browser page. Never Dispatch JV-Link during
+    # runtime checks; only offline code and fictional tests may proceed.
     return JraVanRuntimeReport(
-        status="ready",
+        status="disabled_trial_expired",
         python_version=sys.version.split()[0],
-        python_bits=python_bits,
+        python_bits=struct.calcsize("P") * 8,
         progid=PROGID,
-        registered_64bit=registered_64bit,
-        registered_32bit=registered_32bit,
-        com_created=True,
-        error=None,
-        guidance=tuple(guidance),
+        registered_64bit=None,
+        registered_32bit=None,
+        com_created=False,
+        error="JRA_VAN_TRIAL_EXPIRED_LIVE_COM_DISABLED",
+        guidance=(
+            "All new JRA-VAN/JV-Link connections are disabled.",
+            "Use approved non-JRA-VAN offline research instead.",
+        ),
     )
 
 

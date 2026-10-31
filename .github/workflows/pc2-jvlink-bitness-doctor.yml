@@ -1,0 +1,94 @@
+name: PC2 JV-Link 32-64 Initialization Doctor (No Data Download)
+
+on:
+  push:
+    branches: ["feature/weekly-odds-free-note-20261021"]
+    paths:
+      - "scripts/probe_jvlink_bitness_child.ps1"
+      - "scripts/probe_jvlink_pc2_runner.ps1"
+      - ".github/workflows/pc2-jvlink-bitness-doctor.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: horse-pc2-jvlink-bitness-metadata
+  cancel-in-progress: false
+
+jobs:
+  static-guards:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Syntax check and forbidden-operation review without COM
+        shell: pwsh
+        run: |
+          $paths = @(
+            "scripts/probe_jvlink_bitness_child.ps1",
+            "scripts/probe_jvlink_pc2_runner.ps1"
+          )
+          foreach ($path in $paths) {
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile(
+              (Resolve-Path $path).Path, [ref]$tokens, [ref]$errors
+            ) | Out-Null
+            if (@($errors).Count -ne 0) {
+              throw "PC2_JVLINK_DIAGNOSTIC_POWERSHELL_SYNTAX_FAILED"
+            }
+            $source = Get-Content -Raw -LiteralPath $path
+            foreach ($forbidden in @(
+              '\bGet-ItemProperty\b',
+              '\bSet-ItemProperty\b',
+              '\bRemove-Item\b',
+              '\bStart-Service\b',
+              '\bSet-Service\b',
+              '\bInvoke-WebRequest\b',
+              '\bInvoke-RestMethod\b',
+              '\.JVGets\s*\(',
+              '\.JVRead\s*\(',
+              '\.JVSetUIProperties\s*\('
+            )) {
+              if ($source -match $forbidden) {
+                throw "PC2_JVLINK_DIAGNOSTIC_FORBIDDEN_OPERATION"
+              }
+            }
+          }
+  windows-pc2-initialization:
+    name: PC2 x86/x64 COM and JVInit only (no JVOpen)
+    needs: static-guards
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 8
+    steps:
+      - name: Checkout without deleting unrelated local work
+        uses: actions/checkout@v4
+        with:
+          clean: false
+          persist-credentials: false
+      - name: Probe separate x86 and x64 native JV-Link
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          & .\scripts\probe_jvlink_pc2_runner.ps1 `
+            -OutputPath "artifacts/jvlink_runner_bitness.json"
+          # The Windows PowerShell caller can inherit a stale
+          # LASTEXITCODE from earlier GitHub steps. Verify the actual report.
+          $report = Get-Content -LiteralPath "artifacts/jvlink_runner_bitness.json" -Raw |
+            ConvertFrom-Json
+          if ($report.physicalPC2Verified -ne $true -or
+              $report.bitness.bit32.childProcessStarted -ne $true -or
+              $report.bitness.bit64.childProcessStarted -ne $true) {
+            throw "PC2_JVLINK_CHILD_PROCESS_EVIDENCE_MISSING"
+          }
+      - name: Upload summary with return codes only (no key/data)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pc2-jvlink-init-bitness-metadata
+          path: artifacts/jvlink_runner_bitness.json
+          if-no-files-found: error
+          retention-days: 7

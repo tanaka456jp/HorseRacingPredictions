@@ -1,0 +1,148 @@
+name: PC2 D-Drive Isolated Python64 JV-Link Doctor (Free Wheels)
+
+on:
+  push:
+    branches: ["feature/weekly-odds-free-note-20261021"]
+    paths:
+      - ".github/workflows/pc2-jvlink-python64-venv-auth.yml"
+      - "scripts/prepare_pc2_isolated_pywin32_venv.ps1"
+      - "requirements-pc2-jvlink64-py314.txt"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pc2-jvlink64-free-isolated-venv-diagnostic
+  cancel-in-progress: false
+
+jobs:
+  verify-setup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Parse PowerShell, verify pinned official wheel and free-only tools
+        shell: pwsh
+        run: |
+          $path = 'scripts/prepare_pc2_isolated_pywin32_venv.ps1'
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path $path).Path, [ref]$tokens, [ref]$errors
+          ) | Out-Null
+          if (@($errors).Count -ne 0) { throw 'INVALID_ISOLATED_INSTALLER_SCRIPT' }
+          $file = Get-Content 'requirements-pc2-jvlink64-py314.txt' -Raw
+          if ($file -notmatch 'pywin32==312 --hash=sha256:a4dd3a848290ef724347b19f301045831d8e802fa4464f491b98b1e0a081432e') {
+            throw 'FREE_PYWIN32_SHA256_DOES_NOT_MATCH_PYPI_OFFICIAL'
+          }
+          $code = Get-Content $path -Raw
+          foreach ($pat in @(
+            '\bRemove-Item\b', '\bSet-Service\b', '\bStart-Service\b',
+            '\bStop-Service\b', '\bSet-ItemProperty\b',
+            '\bGet-ItemProperty\b', '\.JVOpen\s*\(', '\.JVGets\s*\('
+          )) {
+            if ($code -match $pat) { throw 'D_VENV_INSTALLER_FORBIDDEN_OPERATION' }
+          }
+
+  pc2-isolated-com:
+    name: PC2 hashed free pywin32 only on D then Python64 JVOpen
+    needs: verify-setup
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          clean: false
+          persist-credentials: false
+      - name: Create/reuse only owned isolated D Python venv, no system pip
+        id: prepare
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          & .\scripts\prepare_pc2_isolated_pywin32_venv.ps1 `
+            -OutputPath 'artifacts/pc2_pywin32_venv_status.json'
+          $report = Get-Content -LiteralPath 'artifacts/pc2_pywin32_venv_status.json' -Raw |
+            ConvertFrom-Json
+          if ($report.physicalPC2Verified -ne $true -or
+              $report.usageKeyRead -ne $false -or
+              $report.serviceChanged -ne $false -or
+              $report.publicationAuthorized -ne $false) {
+            throw 'D_VENV_PREPARATION_INVARIANT_FAILURE'
+          }
+          if ($report.status -eq 'ISOLATED_PYTHON64_COM_DEPENDENCY_READY' -and
+              $report.dependencyVerified -eq $true -and
+              $report.selectedPythonBits -eq 64) {
+            Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value 'ready=true'
+          } else {
+            Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value 'ready=false'
+          }
+      - name: Actual Python64 current-week authentication without raw records
+        if: steps.prepare.outputs.ready == 'true'
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $venvPython = 'D:\HorseRacingPredictions\runtime\pc2-jvlink64-py314-312\Scripts\python.exe'
+          $out = 'artifacts/pc2_python64_isolated_jvopen.json'
+          $childOut = Join-Path (Get-Location).Path (
+            'artifacts\jvopen_venv_' + [Guid]::NewGuid().ToString('N') + '.json'
+          )
+          $program = Join-Path (Get-Location).Path 'scripts\probe_pc2_python64_jvopen_auth_only.py'
+          $env:PYTHONPATH = Join-Path (Get-Location).Path 'src'
+          $result = [ordered]@{
+            status = 'BLOCKED'; stage = 'D_VENV_PYTHON_NOT_RUN'
+            pythonBits = 0; verifiedPhysicalPC2 = ($env:COMPUTERNAME -eq 'DESKTOP-MVV1FD4')
+            jvInitSucceeded = $false; jvOpenAttempted = $false
+            jvOpenReturnCode = $null; jvCloseAttempted = $false
+            jvCloseSucceeded = $false; usageKeyRead = $false
+            rawRecordsRead = $false; protectedHoldoutOpened = $false
+            notePostAttempted = $false; publicationAuthorized = $false
+          }
+          $proc = $null
+          try {
+            $psi = New-Object System.Diagnostics.ProcessStartInfo
+            $psi.FileName = $venvPython
+            $psi.Arguments = ('"{0}" --output "{1}"' -f $program, $childOut)
+            $psi.UseShellExecute = $false
+            $psi.CreateNoWindow = $true
+            $psi.RedirectStandardOutput = $true
+            $psi.RedirectStandardError = $true
+            $proc = [System.Diagnostics.Process]::Start($psi)
+            if (-not $proc.WaitForExit(90000)) {
+              $result.stage = 'PYTHON_JVLINK_WATCHDOG_TIMEOUT'
+              try { $proc.Kill() } catch {}
+            } elseif (Test-Path -LiteralPath $childOut -PathType Leaf) {
+              $proof = Get-Content -LiteralPath $childOut -Raw | ConvertFrom-Json
+              if ($proof.verifiedPhysicalPC2 -eq $true -and
+                  $proof.pythonBits -eq 64 -and
+                  $proof.usageKeyRead -eq $false -and
+                  $proof.rawRecordsRead -eq $false -and
+                  $proof.protectedHoldoutOpened -eq $false -and
+                  $proof.publicationAuthorized -eq $false) {
+                foreach ($key in @(
+                  'status','stage','pythonBits','jvInitSucceeded',
+                  'jvOpenAttempted','jvOpenReturnCode','jvCloseAttempted',
+                  'jvCloseSucceeded'
+                )) { $result[$key] = $proof.$key }
+              } else { $result.stage = 'PYTHON_PROOF_INVALID' }
+            } else { $result.stage = 'PYTHON_NO_RETURN_CODE' }
+          } catch {
+            $result.stage = 'PYTHON_ISOLATED_COM_PROCESS_FAILED'
+          } finally {
+            if ($null -ne $proc) { $proc.Dispose() }
+          }
+          $result | ConvertTo-Json -Depth 5 |
+            Set-Content -LiteralPath $out -Encoding UTF8
+          Get-Content -LiteralPath $out -Encoding UTF8
+      - name: Upload only dependency status and numeric JVOpen results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pc2-jvlink64-isolated-venv-diagnostic-metadata
+          path: |
+            artifacts/pc2_pywin32_venv_status.json
+            artifacts/pc2_python64_isolated_jvopen.json
+          retention-days: 7
+          if-no-files-found: warn

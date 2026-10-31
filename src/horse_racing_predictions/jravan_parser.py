@@ -4,7 +4,6 @@ from dataclasses import asdict, dataclass
 import json
 from pathlib import Path
 
-import pandas as pd
 
 
 JV_DATA_SPEC_VERSION = "4.9.0.1"
@@ -480,6 +479,11 @@ def parse_raw_jsonl(
     jra_only: bool = True,
     completed_only: bool = True,
 ) -> tuple[pd.DataFrame, JraVanParseReport]:
+    # The fixed-width RA/SE decoders need only the Python stdlib and must
+    # work inside the PC2's isolated 64-bit pywin32-only JV-Link runtime.
+    # Pandas is required only when constructing a saved research DataFrame.
+    import pandas as pd
+
     path = Path(path)
     races: dict[str, RaceRecord] = {}
     horses: dict[tuple[str, str], HorseRaceRecord] = {}
@@ -532,12 +536,25 @@ def parse_raw_jsonl(
                         skipped_non_jra_se += 1
                         continue
                     record = parse_se(text)
-                    horse_key = (
-                        record.race_id,
-                        record.blood_registration_number
-                        or str(record.post_position)
-                        or record.horse_name,
-                    )
+                    # str(None) is truthy and used to collapse every
+                    # unnumbered pre-draw horse into the *same* key.
+                    # Distinguish a missing post position from a real
+                    # number, and retain actual horse identity instead.
+                    registration = record.blood_registration_number.strip()
+                    # Horse name is known before Saturday's post draw and
+                    # remains stable across JRA-VAN update stages. Prefer
+                    # it over optional registration/post numbers: otherwise
+                    # an early incomplete SE and its later finalized SE
+                    # could be silently treated as two different horses.
+                    if record.horse_name.strip():
+                        stable_horse_key = "name:" + record.horse_name.strip()
+                    elif registration:
+                        stable_horse_key = "blood:" + registration
+                    elif record.post_position is not None:
+                        stable_horse_key = "post:" + str(record.post_position)
+                    else:
+                        raise ValueError("SE has no stable horse identity")
+                    horse_key = (record.race_id, stable_horse_key)
                     horses[horse_key] = _select_latest(
                         horses.get(horse_key),
                         record,
@@ -557,11 +574,13 @@ def parse_raw_jsonl(
             unmatched_se += 1
             continue
 
-        if completed_only and (
-            horse.finish_position is None
-            or horse.win_odds is None
-            or horse.win_odds <= 1.0
-        ):
+        # Race/horse inclusion must NEVER depend on win_odds.  JRA-VAN may
+        # omit or publish odds at a different update stage; discarding such
+        # horses would create odds-dependent sampling bias in training and
+        # inflate/alter held-out accuracy.  Only a known finishing position
+        # establishes a completed result here. Downstream research validates
+        # that a full 4-18 runner roster with exactly one winner is present.
+        if completed_only and horse.finish_position is None:
             skipped_incomplete_se += 1
             continue
 
