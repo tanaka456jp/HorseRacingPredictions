@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from unittest.mock import patch
 
 import pytest
 
@@ -23,7 +24,10 @@ from horse_racing_predictions.strict_dual_catboost_candidate import (
     save_dual_candidate_for_research,
 )
 from test_strict_dual_catboost_candidate import _history
-from test_dual_candidate_private_preview import _fake_recent_and_entries
+from test_dual_candidate_private_preview import (
+    _fake_recent_and_entries, _FrozenResearchFixtureClock,
+)
+from horse_racing_predictions import strict_dual_catboost_candidate as training
 
 FRIDAY = datetime.fromisoformat("2026-10-30T20:00:00+09:00")
 
@@ -44,9 +48,12 @@ def _trained_predraw(tmp_path):
         validation_through="2022-06-18", iterations=30,
     )
     path = tmp_path / "friday-predraw-models"
-    save_dual_candidate_for_research(
-        candidate, destination=path, source_ref="fictional-friday-not-real",
-    )
+    # Keep the synthetic artifact creation time before the fictional
+    # Friday prediction time, regardless of the current calendar date.
+    with patch.object(training, "datetime", _FrozenResearchFixtureClock):
+        save_dual_candidate_for_research(
+            candidate, destination=path, source_ref="fictional-friday-not-real",
+        )
     return load_dual_research_candidate(path)
 
 
