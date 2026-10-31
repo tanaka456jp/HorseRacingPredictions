@@ -52,6 +52,7 @@ def main() -> int:
         "requiredMonths": result.required_months,
         "missingMonths": result.missing_months,
         "sourceRaces": result.source_races,
+        "predeclaredOutOfScopeBaneiRaces": result.predeclared_out_of_scope_races,
         "reconstructedTargets": result.reconstructed_target_races,
         "reconstructedRunners": result.reconstructed_runner_rows,
         "fit2017to2021Races": result.fit_2017_2021_races,
