@@ -168,6 +168,10 @@ def build_prior_day_features(
                     asof=feat, final_finish_label=target_finish,
                 ))
                 same_day.append((identity, target_finish))
+        # Reject duplicate horses appearing in two races on one day;
+        # otherwise corrupted input could create false extra history.
+        if len({identity for identity, _ in same_day}) != len(same_day):
+            raise UnsafeNarSource("NAR_ASOF_SAME_HORSE_TWICE_ONE_DAY")
         # Day boundary: no intra-day race result can affect a prediction.
         for identity, rank in same_day:
             history[identity].append((current_day, rank))
