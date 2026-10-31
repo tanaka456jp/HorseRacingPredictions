@@ -191,3 +191,26 @@ py -3 scripts/prepare_nar_private_training_manifest_local.py `
 The manifest is written once with create-new semantics **outside** the Git checkout. Do not commit or attach it; it holds absolute paths. These are illustrative locations only, not claims about the user's actual PC. The user has reported NAR data-use permission, but the exact authorization for a mass-download method remains unconfirmed; these commands **never download** archives. All CI tests use synthetic source names/data only.
 
 **Research milestone remaining:** authorized actual 2017–2022 ZIP acquisition and local completeness audit, then real historical tuning and prospectively frozen forecasts/official payouts. No real data analyzed as part of this change.
+
+
+## 2026-11-01: streaming research memory and sealed evaluation safety fix
+
+**Two concrete architectural blockers were fixed in Draft PR #142:**
+
+1. The original `screen_nar_local_2017_2022` collected *all 72 decoded CSV months* in a Python dictionary and then rebuilt every horse's full result-list history repeatedly. This was not scalable for real NAR data.
+   - `nar_incremental_prior_day.py` now processes **one reviewed month at a time** in chronological order and stores only per-horse aggregates `starts, wins, top3, rank_sum, last_date`. Every race on a date sees earlier **dates only**, even if multiple tracks race that date. The current race's finish is kept in an isolated label field, never as an as-of model feature.
+   - `nar_local_screening.py` now requires all 72 explicit month names before **any source content read**, sorts the approved files chronologically, audits a month (including Banei preregistered scope), yields it to the incremental form builder, and lets its raw strings go out of scope before reading the next month.
+   - All target rows for 2017–2022 remain resident until model fitting. Therefore memory is *not* strictly O(horses) overall: the CSV and historical-form components are bounded per month and O(horses) respectively, while modeling target memory is O(total training runners). The hard target cap is 1 million rows; that and per-month 16 MB member limits may still require a later permitted chunk/columnar approach if real data exceed them.
+   - Synthetic equivalence tests compare exact row-by-row features with the prior implementation and check same-day and future-month refusal.
+
+2. The earlier `nar_multiyear_readiness.py` would **read results from 2023–2024** in a supposed catalogue-only check. This risked compromising the independent evaluation period before the model and selection rule were frozen.
+   - The 2017–2024 catalogue preflights the *names and filesystem metadata only* for 2023–24; ZIP contents and result labels are **not opened**.
+   - Only explicitly selected 2017–22 ZIPs are read, validated, and incrementally projected into the 2017–21 fitting / 2022 tuning counts.
+   - `sealed_2023_2024_months_listed` reports how many held-out monthly file *names* are present, while `unseen_2023_2024_races=0` means **unknown because no data was accessed**, **not** that there were zero historical races. CLI output now explicitly marks those race counts unknown and ZIP bytes unopened.
+   - Synthetic tests include malformed 2023–24 ZIP contents and a spy that raises if any attempt is made to read those files.
+
+The **2023–24 evaluation lock remains intact**: no selection, training, tuning, or payoff inspection from that period before models and betting rules are frozen. The separate 2025–26 holdout is likewise untouched. No actual NAR data, source permission emails or JRA-VAN archives were opened. No connection to the provider, automated download, GitHub upload, note publication or paid model occurred.
+
+### Remaining evidence needed for any real ROI claim
+
+A permission-compatible acquisition of independent NAR monthly records, a private source audit, prospective prediction-time validation (historical final records alone do not prove availability), and a preregistered plan for scratches, dead heats, voids, and refunds. Do not select races using post-race payout availability and then call the sample unbiased. Report per-day and per-race settlement coverage before ROI; historical optimism alone is not positive expected value.
