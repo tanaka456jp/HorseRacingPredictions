@@ -1,0 +1,28 @@
+name: NAR PC2 Candidate D-Root Discovery (Metadata Only)
+on:
+  push:
+    branches: ["feature/weekly-odds-free-note-20261021"]
+    paths:
+      - ".github/workflows/nar-pc2-allowlisted-discovery.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: nar-pc2-allowlisted-discovery
+  cancel-in-progress: false
+jobs:
+  metadata:
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 10
+    steps:
+      - name: Checkout preserving unrelated local data
+        uses: actions/checkout@v4
+        with:
+          clean: false
+          persist-credentials: false
+      - name: Scan only nominated D-root names, not NAR/JRA archive contents
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          & .\scripts\inspect_pc2_nar_allowlisted_monthly_filenames.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
