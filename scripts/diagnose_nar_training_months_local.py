@@ -40,6 +40,7 @@ def main() -> int:
         "status": result.status,
         "monthsPresent": result.months_present,
         "monthsMissing": result.months_missing,
+        "missingMonthIds": result.missing_month_ids,
         "monthsStructurallyAccepted": result.months_structurally_accepted,
         "monthsRequiringReview": result.months_with_unresolved_errors,
         "observedRaces": result.observed_races,
