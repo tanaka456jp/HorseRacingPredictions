@@ -34,6 +34,8 @@ def test_partial_two_month_preflight_preserves_all_months_and_anomaly_reasons(tm
     )
     assert report.months_present == 2
     assert report.months_missing == 70
+    assert "201703" in report.missing_month_ids
+    assert "201701" not in report.missing_month_ids
     assert report.months_structurally_accepted == 1
     assert report.months_with_unresolved_errors == 1
     assert report.observed_races == 2
@@ -82,6 +84,7 @@ def test_all_72_fictional_months_full_source_diagnostic(tmp_path):
     assert report.status == "NAR_72_MONTHS_STRUCTURALLY_READY_FOR_SEPARATE_PRIVATE_REVIEW"
     assert report.months_present == 72
     assert report.months_missing == 0
+    assert report.missing_month_ids == ()
     assert report.months_structurally_accepted == 72
     assert report.months_with_unresolved_errors == 0
     assert report.observed_races == 72
