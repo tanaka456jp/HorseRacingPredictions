@@ -214,3 +214,29 @@ The **2023–24 evaluation lock remains intact**: no selection, training, tuning
 ### Remaining evidence needed for any real ROI claim
 
 A permission-compatible acquisition of independent NAR monthly records, a private source audit, prospective prediction-time validation (historical final records alone do not prove availability), and a preregistered plan for scratches, dead heats, voids, and refunds. Do not select races using post-race payout availability and then call the sample unbiased. Report per-day and per-race settlement coverage before ROI; historical optimism alone is not positive expected value.
+
+
+## 2026-11-01: first real-data blocker triage across all 72 months
+
+The strict local CatBoost entrypoint intentionally blocks as soon as the first monthly ZIP contains an in-scope anomalous race or invalid file. That is correct as an **economic study gate**, but not actionable for the operator who needs to see how many historical months actually have issues.
+
+New *separate preflight-only* module `src/horse_racing_predictions/nar_training_preflight.py` and CLI `scripts/diagnose_nar_training_months_local.py`:
+
+- Explicit, user-authorized local 2017-01 to 2022-12 NAR folder only; a preliminary name inventory rejects other ZIPs including 2023–24 evaluation sources and JRA-VAN archives **before opening any ZIP**.
+- Independently checks each present monthly ZIP's 3 CSVs and published race/payback schema; an individual corrupt ZIP, size cap, missing payout or tie does **not** prevent the remaining training-period months from being reported.
+- Prints a *redacted* JSON report with `monthsPresent`, `monthsMissing`, `monthsStructurallyAccepted`, `monthsRequiringReview`, `observedRaces`, `acceptedFlatRaces`, `predeclaredBaneiOutOfScopeRaces`, `unresolvedFlatRaces`, and one line per month containing only counts and **static rejection codes**, never names, file paths, race numbers or raw records.
+- Returns 0 only for all 72 present months with no in-scope anomalous race; returns 3 for known source gaps/issues; returns 2 when the directory or permission is not trusted. A successful preflight is **not** research/ROI approval.
+- No file writes, provider calls, user-data GitHub artifacts, model fitting, sealed 2023–24 access, or posting. Synthetic regression covers partial, corrupted, fully populated, and protected-source cases.
+
+Local operator example (illustrative path, **not** an assertion that any real ZIP is present):
+
+```powershell
+$env:PYTHONPATH = "src"
+py -3 scripts/diagnose_nar_training_months_local.py `
+  --local-nar-training-zip-directory "D:\HorseRacingPredictions\nar-personal\training-zips" `
+  --confirm-personal-private-nar-permission
+```
+
+**Important distinction:** the preflight can disclose that an *in-scope* race has a tie, scratch or unpaid place result. It **does not** authorize dropping that race from economic evaluation after seeing the outcome; the original complete and predeclared betting-eligibility ledger is still necessary. Do not interpret `monthsStructurallyAccepted` as legitimate samples for profit estimation.
+
+The current source-byte read cap remains 16 MB per ZIP CSV member, 40 MB total. If a genuine officially downloaded month triggers `NAR_LOCAL_CSV_BYTE_CAP`, log its **static error code only** and address the large-file reader by bounded streaming, **not** by raising limits blindly or uploading the source.
