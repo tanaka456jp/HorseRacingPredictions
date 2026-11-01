@@ -39,6 +39,7 @@ class NarPreflightReport:
     status: str
     months_present: int
     months_missing: int
+    missing_month_ids: tuple[str, ...]
     months_structurally_accepted: int
     months_with_unresolved_errors: int
     observed_races: int
@@ -119,6 +120,7 @@ def diagnose_nar_training_folder(
                 if all_good else "NAR_TRAINING_SOURCES_INCOMPLETE_OR_ANOMALOUS"),
         months_present=inventory.observed_months,
         months_missing=len(inventory.missing_months),
+        missing_month_ids=inventory.missing_months,
         months_structurally_accepted=complete,
         months_with_unresolved_errors=len(detail)-complete,
         observed_races=observed,
