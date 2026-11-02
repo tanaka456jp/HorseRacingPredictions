@@ -5,7 +5,7 @@ from datetime import date, datetime, timedelta, timezone
 import pytest
 
 from horse_racing_predictions.friday_oos_admission import (
-    audit_preregistered_friday_oos,
+    audit_preregistered_friday_oos, evaluate_preregistered_friday_oos,
 )
 from horse_racing_predictions.oddsfree_ev_research import (
     FinalRaceSettlement, FrozenOddsFreeForecast,
@@ -176,3 +176,70 @@ def test_500_races_on_fewer_than_60_days_cannot_pass_sample_gate():
     assert result.distinct_racing_dates == 50
     assert not result.meets_preregistered_sample_minimums
     assert result.status == "INSUFFICIENT_LOCKED_OOS_SAMPLE"
+
+
+def _qualifying_fictional_calendar():
+    first = date(2023, 1, 7)
+    return [
+        _case((first + timedelta(days=7 * week)).isoformat(), race_num)
+        for week in range(60)
+        for race_num in range(1, 10 if week < 20 else 9)
+    ]
+
+
+def _economic(cases, *, expected_races=None, documented_exclusions=None):
+    return evaluate_preregistered_friday_oos(
+        expected_races=(
+            {rid: f.race_day for rid, f, _ in cases}
+            if expected_races is None else expected_races
+        ),
+        forecasts=[f for _, f, _ in cases],
+        settlements=[p for _, _, p in cases],
+        documented_exclusions=(
+            {} if documented_exclusions is None else documented_exclusions
+        ),
+        bootstrap_samples=200,
+    )
+
+
+def test_locked_friday_roi_cannot_run_on_underpowered_two_race_sample():
+    result = _economic([_case("2024-10-26", 1), _case("2024-10-27", 2)])
+    assert result.status == "BLOCKED_INSUFFICIENT_PREREGISTERED_OOS_SAMPLE"
+    assert result.economics is None
+    assert result.economic_evaluation_performed is False
+    assert result.positive_expected_value_demonstrated is False
+    assert result.publication_authorized is False
+
+
+def test_locked_friday_roi_only_diagnostic_after_complete_500_race_60_day_gate():
+    races = _qualifying_fictional_calendar()
+    assert len(races) == 500
+    report = _economic(races)
+    assert report.economic_evaluation_performed
+    assert report.admission.meets_preregistered_sample_minimums
+    assert report.admission.distinct_racing_dates == 60
+    assert report.economics is not None
+    assert report.economics.races == 500
+    assert report.economics.independent_race_days == 60
+    assert report.economics.bootstrap_interval_available
+    assert report.status == "HISTORICAL_REALIZED_ROI_DIAGNOSTIC_UNVERIFIED_PROVENANCE"
+    # All bets win in this fabricated example, but no false EV claim follows.
+    assert report.economics.combined_realized_roi > 0
+    assert not report.positive_expected_value_demonstrated
+    assert not report.economics.positive_expected_value_demonstrated
+    assert not report.publication_authorized
+    assert not report.live_betting_authorized
+    assert not report.admission.training_source_rights_verified
+
+
+def test_locked_economic_evaluator_blocks_missing_and_invalid_payouts():
+    cases = _qualifying_fictional_calendar()
+    expected = {rid: f.race_day for rid, f, _ in cases}
+    with pytest.raises(ValueError, match="FRIDAY_OOS_MISSING_OR_SELECTIVELY_DROPPED_RACE"):
+        _economic(cases[:-1], expected_races=expected)
+    rid, frozen, settlement = cases[-1]
+    invalid = replace(settlement, win_return_per_100_yen={
+        k: 0 for k in settlement.win_return_per_100_yen
+    })
+    with pytest.raises(ValueError, match="PAYOUT_CONTRADICTS_FINAL_FINISH"):
+        _economic([*cases[:-1], (rid, frozen, invalid)])
