@@ -119,7 +119,7 @@ def test_2025_final_holdout_and_weekday_races_not_admitted():
     with pytest.raises(ValueError, match="FRIDAY_OOS_OUTSIDE_LOCKED_WEEKEND_FOLD"):
         _audit([], expected_races={"JRA-20241028-01": "2024-10-28"},
                documented_exclusions={"JRA-20241028-01": "refund_or_scratch"})
-    with pytest.raises(ValueError, match="FRIDAY_OOS_RACE_DATE_MISMATCH"):
+    with pytest.raises(ValueError, match="FRIDAY_OOS_RACE_ID_DAY_CONTRADICTION"):
         _audit([c], expected_races={c[0]: "2024-10-27"})
 
 
@@ -243,3 +243,13 @@ def test_locked_economic_evaluator_blocks_missing_and_invalid_payouts():
     })
     with pytest.raises(ValueError, match="PAYOUT_CONTRADICTS_FINAL_FINISH"):
         _economic([*cases[:-1], (rid, frozen, invalid)])
+
+
+def test_manifest_rejects_embedded_race_date_conflicts_and_malformed_ids():
+    case = _case()
+    with pytest.raises(ValueError, match="FRIDAY_OOS_RACE_ID_DAY_CONTRADICTION"):
+        _audit([], expected_races={"JRA-20241027-01": "2024-10-26"},
+               documented_exclusions={"JRA-20241027-01": "refund_or_scratch"})
+    with pytest.raises(ValueError, match="FRIDAY_OOS_JRA_RACE_ID_REQUIRED"):
+        _audit([], expected_races={"JRA-INVENTED-NOT-A-DATE": "2024-10-26"},
+               documented_exclusions={"JRA-INVENTED-NOT-A-DATE": "refund_or_scratch"})
