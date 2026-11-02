@@ -40,9 +40,16 @@ The separately pre-registered NAR flat-racing protocol still governs:
 - 2025–2026: unopened, not a source of design/tuning/threshold changes.
 - 500 fully settled races and 60 distinct OOS racing dates **minimum** before
   displaying any numeric economic diagnostic.
+- Track *all* in-scope races and the fraction with an eligible complete
+  candidate/baseline/official-settlement match. Excluding ばんえい before
+  outcomes does not conceal missing settlement in the flat-racing scope.
 - Every race in the independently verified calendar must have both frozen
   candidate and baseline pre-off predictions and one official settlement,
   or a static, independently documented exclusion code.
+- Candidate and baseline must have the **same race field, start time and
+  pre-off prediction cutoff**, avoiding comparisons where one model sees
+  later information than the other. Distinct model labels alone do not
+  prove that baseline fitting was independently performed.
 - Candidate and baseline get the **same 100 yen win on rank 1 + 100 yen
   outsider-place** positions per race. This is virtual evaluation only.
   The outsider must be distinct from the winner model's top 3.
