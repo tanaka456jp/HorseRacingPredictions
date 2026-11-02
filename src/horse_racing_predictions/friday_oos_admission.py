@@ -12,7 +12,8 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Mapping, Sequence
 
 from .oddsfree_ev_research import (
-    FinalRaceSettlement, FrozenOddsFreeForecast, select_top3_and_outsider,
+    FinalRaceSettlement, FrozenOddsFreeForecast, OddsFreeEconomicResearch,
+    select_top3_and_outsider,
 )
 
 _JST = timezone(timedelta(hours=9))
@@ -177,4 +178,68 @@ def audit_preregistered_friday_oos(
         excluded_by_reason=by_reason,
         meets_preregistered_sample_minimums=sufficient,
         forecast_clock_and_fold_structurally_verified=True,
+    )
+
+
+@dataclass(frozen=True)
+class FridayLockedEconomicReview:
+    """Diagnostic report; an ROI number here is never an EV or release claim."""
+
+    admission: FridayOOSAdmission
+    economics: "OddsFreeEconomicResearch | None"
+    economic_evaluation_performed: bool
+    status: str
+    positive_expected_value_demonstrated: bool = False
+    publication_authorized: bool = False
+    live_betting_authorized: bool = False
+
+
+def evaluate_preregistered_friday_oos(
+    *,
+    expected_races: Mapping[str, str],
+    forecasts: Sequence[FrozenOddsFreeForecast],
+    settlements: Sequence[FinalRaceSettlement],
+    documented_exclusions: Mapping[str, str],
+    bootstrap_samples: int = 1000,
+) -> FridayLockedEconomicReview:
+    """Evaluate locked Friday predictions only after complete-manifest admission.
+
+    A single forgotten/unsettled race cannot simply disappear from the
+    denominator. Under-sampled diagnostics report NO ROI rather than
+    calculating flattering numbers on a cherry-picked partial subset.
+    Official provenance, frozen forecast authenticity, model lineage,
+    independent benchmarks and actual data-use rights still need separate
+    verification. No automatic promotion can result from this function.
+    """
+    from .oddsfree_ev_research import (
+        OddsFreeEconomicResearch, evaluate_frozen_oddsfree_economics,
+    )
+
+    admission = audit_preregistered_friday_oos(
+        expected_races=expected_races,
+        forecasts=forecasts,
+        settlements=settlements,
+        documented_exclusions=documented_exclusions,
+    )
+    if not admission.meets_preregistered_sample_minimums:
+        return FridayLockedEconomicReview(
+            admission=admission,
+            economics=None,
+            economic_evaluation_performed=False,
+            status="BLOCKED_INSUFFICIENT_PREREGISTERED_OOS_SAMPLE",
+        )
+    # All forecast races and payout records were paired by the admission
+    # gate; evaluator separately checks the genuine payout/finish arithmetic
+    # rather than inferring any dividends from known outcome ranks.
+    economics: OddsFreeEconomicResearch = evaluate_frozen_oddsfree_economics(
+        list(forecasts), list(settlements), bootstrap_samples=bootstrap_samples,
+    )
+    if (economics.races != admission.matched_settlements
+            or economics.independent_race_days != admission.distinct_racing_dates):
+        raise ValueError("FRIDAY_OOS_EVALUATOR_COVERAGE_MISMATCH")
+    return FridayLockedEconomicReview(
+        admission=admission,
+        economics=economics,
+        economic_evaluation_performed=True,
+        status="HISTORICAL_REALIZED_ROI_DIAGNOSTIC_UNVERIFIED_PROVENANCE",
     )
