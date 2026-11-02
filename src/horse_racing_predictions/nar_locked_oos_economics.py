@@ -45,6 +45,8 @@ class NarLockedOutOfSample:
     excluded_races: int
     exclusions_by_reason: tuple[tuple[str, int], ...]
     racing_days: int
+    in_scope_manifest_races: int
+    eligible_race_coverage_fraction: float
     minimum_screening_covered: bool
     economic_diagnostic_performed: bool
     candidate_realized_roi: float | None
@@ -195,6 +197,7 @@ def evaluate_nar_locked_out_of_sample(
     for rid in eligible:
         a,b= candidate[rid], benchmark[rid]
         if (a.race_day != b.race_day or a.post_time_utc != b.post_time_utc
+                or a.predicted_at_utc != b.predicted_at_utc
                 or set(a.winner_scores) != set(b.winner_scores)
                 or set(a.winner_scores) != set(finals[rid].finishing_positions)):
             raise ValueError("NAR_OOS_BENCHMARK_OR_SETTLEMENT_FIELD_MISMATCH")
@@ -205,11 +208,19 @@ def evaluate_nar_locked_out_of_sample(
         for reason in set(documented_exclusions.values())
     ))
     min_pass = len(eligible) >= _MIN_RACES and days >= _MIN_DAYS
+    predeclared_scope = sum(
+        code == "outside_predeclared_flat_scope"
+        for code in documented_exclusions.values()
+    )
+    in_scope = len(calendar) - predeclared_scope
+    coverage_fraction = len(eligible) / in_scope if in_scope else 0.0
     common = dict(
         scheduled_races=len(calendar), paired_settled_races=len(eligible),
         excluded_races=len(documented_exclusions),
         exclusions_by_reason=by_reason,
         racing_days=days, minimum_screening_covered=min_pass,
+        in_scope_manifest_races=in_scope,
+        eligible_race_coverage_fraction=coverage_fraction,
         bootstrap_days=days, additional_cost_yen_per_race=extra_cost_yen_per_race,
     )
     if not min_pass:
