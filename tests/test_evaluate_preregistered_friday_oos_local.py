@@ -1,10 +1,19 @@
 """Fictional local-operator JSON handoff never grants real EV or note rights."""
 import json
+from importlib.util import module_from_spec, spec_from_file_location
+from pathlib import Path
 
-from scripts.evaluate_preregistered_friday_oos_local import (
-    research_aggregate, main,
-)
 from test_friday_oos_admission import _case
+
+# This repository deliberately keeps scripts/ as standalone CLIs.
+# Import by file path, as other CLI tests do, without changing sys.path.
+_script_path = Path(__file__).resolve().parents[1] / "scripts" / "evaluate_preregistered_friday_oos_local.py"
+_spec = spec_from_file_location("evaluate_preregistered_friday_oos_local", _script_path)
+assert _spec is not None and _spec.loader is not None
+_cli = module_from_spec(_spec)
+_spec.loader.exec_module(_cli)
+research_aggregate = _cli.research_aggregate
+main = _cli.main
 
 
 def _document():
