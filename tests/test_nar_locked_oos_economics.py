@@ -63,6 +63,8 @@ def test_500_races_60_days_matched_pair_positive_fictional_returns_not_ev():
     result=run(cases,cost=50)
     assert result.paired_settled_races==500
     assert result.racing_days==60
+    assert result.in_scope_manifest_races==500
+    assert result.eligible_race_coverage_fraction==pytest.approx(1.0)
     assert result.minimum_screening_covered
     assert result.economic_diagnostic_performed
     assert result.candidate_realized_roi==pytest.approx(1.15)
@@ -164,3 +166,35 @@ def test_same_model_ref_cannot_hide_per_race_refit_after_unseen_results():
     refitted=replace(two[1],model_fit_through_day="2022-12-30")
     with pytest.raises(ValueError,match="NAR_OOS_SINGLE_FROZEN_MODEL_REQUIRED"):
         run([one,two],candidates=[one[1],refitted])
+
+
+def test_benchmark_must_use_exactly_same_pre_off_information_cutoff():
+    entry=race()
+    unequal=replace(
+        entry[2],
+        predicted_at_utc=entry[2].predicted_at_utc-timedelta(minutes=15),
+    )
+    with pytest.raises(ValueError,match="NAR_OOS_BENCHMARK_OR_SETTLEMENT_FIELD_MISMATCH"):
+        run([entry],benchmarks=[unequal])
+
+
+def test_report_all_disclosed_in_scope_exclusions_not_only_profitable_races():
+    first=race(race_num=1)
+    second=race(race_num=2)
+    third=race(race_num=3)
+    calendar={r:f.race_day for r,f,_,_ in (first,second,third)}
+    result=run(
+        [first],calendar=calendar,
+        excluded={
+            second[0]:"unverified_official_payout",
+            third[0]:"outside_predeclared_flat_scope",
+        },
+    )
+    assert result.scheduled_races==3
+    assert result.in_scope_manifest_races==2
+    assert result.eligible_race_coverage_fraction==pytest.approx(.5)
+    assert result.exclusions_by_reason==(
+        ("outside_predeclared_flat_scope",1),
+        ("unverified_official_payout",1),
+    )
+    assert not result.economic_diagnostic_performed
