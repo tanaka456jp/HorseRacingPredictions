@@ -145,7 +145,7 @@ def test_report_never_uses_economic_outcomes_or_promotes_to_note():
 
 
 def test_exact_preregistered_500_races_60_days_is_only_structural_gate():
-    start = date(2024, 1, 6)  # Saturday
+    start = date(2023, 1, 7)  # Saturday
     all_cases = []
     for week in range(60):
         day = start + timedelta(days=7 * week)
@@ -166,7 +166,7 @@ def test_exact_preregistered_500_races_60_days_is_only_structural_gate():
 
 
 def test_500_races_on_fewer_than_60_days_cannot_pass_sample_gate():
-    start = date(2024, 1, 6)
+    start = date(2023, 1, 7)
     all_cases = [
         _case((start + timedelta(days=7 * week)).isoformat(), race_num)
         for week in range(50) for race_num in range(1, 11)
