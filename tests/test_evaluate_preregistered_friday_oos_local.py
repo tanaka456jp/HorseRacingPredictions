@@ -75,9 +75,7 @@ def test_cli_safe_refusal_omits_private_filename_and_horse_data(
     assert "BLOCKED" in output
     assert "MY_SECRET_PRIVATE" not in output
     assert "FICTIONAL_" not in output
-    assert '"positiveExpectedValueDemonstrated": false' in output.lower().replace(
-        "false", "false"
-    ) if False else "positiveExpectedValueDemonstrated" in output
+    assert '"positiveExpectedValueDemonstrated": false' in output
 
 
 def test_cli_returns_nonzero_for_missing_sample_size(tmp_path, monkeypatch, capsys):
