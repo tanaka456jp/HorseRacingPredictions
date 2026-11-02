@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
+import re
 from typing import Mapping, Sequence
 
 from .oddsfree_ev_research import (
@@ -97,10 +98,11 @@ def audit_preregistered_friday_oos(
     expected = {}
     for race_id, day_string in expected_races.items():
         if (not isinstance(race_id, str)
-                or not race_id.startswith("JRA-")
-                or not 4 < len(race_id) <= 80):
+                or not re.fullmatch(r"JRA-[0-9]{8}-[0-9A-Za-z-]{1,24}", race_id)):
             raise ValueError("FRIDAY_OOS_JRA_RACE_ID_REQUIRED")
         day = _valid_day(day_string)
+        if race_id[4:12] != day.strftime("%Y%m%d"):
+            raise ValueError("FRIDAY_OOS_RACE_ID_DAY_CONTRADICTION")
         if not (_LOCKED_FROM <= day <= _LOCKED_THROUGH
                 and day.weekday() in (5, 6)):
             raise ValueError("FRIDAY_OOS_OUTSIDE_LOCKED_WEEKEND_FOLD")
