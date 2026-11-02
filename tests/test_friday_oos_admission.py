@@ -142,3 +142,37 @@ def test_report_never_uses_economic_outcomes_or_promotes_to_note():
     assert first == second
     assert not second.payout_rights_verified
     assert not second.historical_friday_availability_independently_verified
+
+
+def test_exact_preregistered_500_races_60_days_is_only_structural_gate():
+    start = date(2024, 1, 6)  # Saturday
+    all_cases = []
+    for week in range(60):
+        day = start + timedelta(days=7 * week)
+        for race_num in range(1, 10):
+            if len(all_cases) == 500:
+                break
+            all_cases.append(_case(day.isoformat(), race_num))
+    assert len(all_cases) == 500
+    result = _audit(all_cases)
+    assert result.scheduled_races == 500
+    assert result.distinct_racing_dates == 60
+    assert result.meets_preregistered_sample_minimums
+    assert result.status == "STRUCTURAL_SAMPLE_MINIMUMS_MET_EXTERNAL_EVIDENCE_REQUIRED"
+    assert not result.manifest_independently_verified
+    assert not result.positive_expected_value_demonstrated
+    assert not result.publication_authorized
+    assert not result.training_source_rights_verified
+
+
+def test_500_races_on_fewer_than_60_days_cannot_pass_sample_gate():
+    start = date(2024, 1, 6)
+    all_cases = [
+        _case((start + timedelta(days=7 * week)).isoformat(), race_num)
+        for week in range(50) for race_num in range(1, 11)
+    ]
+    result = _audit(all_cases)
+    assert result.frozen_forecasts == 500
+    assert result.distinct_racing_dates == 50
+    assert not result.meets_preregistered_sample_minimums
+    assert result.status == "INSUFFICIENT_LOCKED_OOS_SAMPLE"
