@@ -149,9 +149,9 @@ def test_exact_preregistered_500_races_60_days_is_only_structural_gate():
     all_cases = []
     for week in range(60):
         day = start + timedelta(days=7 * week)
-        for race_num in range(1, 10):
-            if len(all_cases) == 500:
-                break
+        # 20 dates x 9 races + 40 dates x 8 races = 500 races
+        # spread over exactly 60 distinct race dates.
+        for race_num in range(1, 10 if week < 20 else 9):
             all_cases.append(_case(day.isoformat(), race_num))
     assert len(all_cases) == 500
     result = _audit(all_cases)
