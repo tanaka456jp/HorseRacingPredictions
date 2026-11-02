@@ -67,10 +67,10 @@ def test_500_races_60_days_matched_pair_positive_fictional_returns_not_ev():
     assert result.economic_diagnostic_performed
     assert result.candidate_realized_roi==pytest.approx(1.15)
     assert result.benchmark_realized_roi==pytest.approx(-1)
-    assert result.matched_improvement_roi==pytest.approx(2.15)
+    assert result.matched_improvement_roi==pytest.approx(1.72)
     assert result.candidate_cost_adjusted_roi==pytest.approx(.72)
     assert result.candidate_day_block_lower_95==pytest.approx(.72)
-    assert result.matched_improvement_day_block_lower_95==pytest.approx(2.15)
+    assert result.matched_improvement_day_block_lower_95==pytest.approx(1.72)
     assert not result.positive_expected_value_demonstrated
     assert not result.observed_source_rights_independently_verified
     assert not result.official_payout_provenance_verified
@@ -156,3 +156,11 @@ def test_duplicate_forecast_and_cost_guards():
         run([x],candidates=[x[1],x[1]])
     with pytest.raises(ValueError,match="NAR_OOS_BOUNDED_STUDY_INPUT_REQUIRED"):
         run([x],cost=101)
+
+
+def test_same_model_ref_cannot_hide_per_race_refit_after_unseen_results():
+    one=race("2023-01-07",1)
+    two=race("2023-01-14",1)
+    refitted=replace(two[1],model_fit_through_day="2022-12-30")
+    with pytest.raises(ValueError,match="NAR_OOS_SINGLE_FROZEN_MODEL_REQUIRED"):
+        run([one,two],candidates=[one[1],refitted])
