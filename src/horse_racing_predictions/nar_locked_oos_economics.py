@@ -90,7 +90,7 @@ def _validate_frozen(
     designation: str,
 ) -> dict[str, FrozenOddsFreeForecast]:
     seen: dict[str, FrozenOddsFreeForecast] = {}
-    model_names = set()
+    model_fingerprints = set()
     for f in rows:
         if not isinstance(f, FrozenOddsFreeForecast):
             raise ValueError("NAR_OOS_FROZEN_FORECAST_REQUIRED")
@@ -115,8 +115,8 @@ def _validate_frozen(
         if _day(f.model_fit_through_day) > _FIT_END:
             raise ValueError("NAR_OOS_2022_MODEL_LOCK_BROKEN")
         seen[f.race_id] = f
-        model_names.add(f.model_ref)
-    if len(model_names) != 1 and seen:
+        model_fingerprints.add((f.model_ref, f.model_fit_through_day))
+    if len(model_fingerprints) != 1 and seen:
         raise ValueError("NAR_OOS_SINGLE_FROZEN_MODEL_REQUIRED")
     return seen
 
@@ -237,7 +237,7 @@ def evaluate_nar_locked_out_of_sample(
     candidate_roi=total_a/(200*len(eligible))-1
     bench_roi=total_b/(200*len(eligible))-1
     adjusted_roi=total_a/spend-1
-    delta_roi=(total_a-total_b)/(200*len(eligible))
+    delta_roi=(total_a-total_b)/spend
 
     # Bootstrap WHOLE matched race days; both model outcomes use precisely
     # the same sampled days, correcting race-within-day dependence.
@@ -254,7 +254,7 @@ def evaluate_nar_locked_out_of_sample(
             b_total+=b
             sampled_races+=n
         sample_roi.append(a_total/((200+extra_cost_yen_per_race)*sampled_races)-1)
-        sample_delta.append((a_total-b_total)/(200*sampled_races))
+        sample_delta.append((a_total-b_total)/((200+extra_cost_yen_per_race)*sampled_races))
     sample_roi.sort()
     sample_delta.sort()
     lower=_quantile(sample_roi,0.025)
