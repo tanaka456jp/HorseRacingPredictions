@@ -90,8 +90,8 @@ def audit_preregistered_friday_oos(
             or not isinstance(forecasts, (tuple, list))
             or not isinstance(settlements, (tuple, list))
             or not 1 <= len(expected_races) <= 20000
-            or len(forecasts) > len(expected_races)
-            or len(settlements) > len(expected_races)):
+            or len(forecasts) > 2 * len(expected_races)
+            or len(settlements) > 2 * len(expected_races)):
         raise ValueError("FRIDAY_OOS_BOUNDED_MANIFEST_REQUIRED")
     expected = {}
     for race_id, day_string in expected_races.items():
