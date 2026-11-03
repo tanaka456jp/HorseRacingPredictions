@@ -43,6 +43,9 @@ for ($rootIndex = 0; $rootIndex -lt $roots.Count; $rootIndex++) {
     $hintCount = 0
     $largeHintCount = 0
     $zipHintCount = 0
+    $csvHintCount = 0
+    $jsonlHintCount = 0
+    $columnarHintCount = 0
     $months = @{}
     try {
         if (Test-Path -LiteralPath $root -PathType Container) {
@@ -106,6 +109,9 @@ for ($rootIndex = 0; $rootIndex -lt $roots.Count; $rootIndex++) {
                             $hintCount++
                             if ($child.Length -ge 500000) { $largeHintCount++ }
                             if ($child.Extension -eq '.zip') { $zipHintCount++ }
+                            if ($child.Extension -eq '.csv') { $csvHintCount++ }
+                            if ($child.Extension -eq '.jsonl') { $jsonlHintCount++ }
+                            if ($child.Extension -in @('.parquet', '.feather')) { $columnarHintCount++ }
                         }
                     }
                     if ($status -eq 'BOUNDED_CAP_REACHED_INCOMPLETE') { break }
@@ -133,6 +139,9 @@ for ($rootIndex = 0; $rootIndex -lt $roots.Count; $rootIndex++) {
         OtherCandidateNameHints = $hintCount
         LargeOtherCandidateHintsAtLeast500KB = $largeHintCount
         ZIPOtherCandidateHints = $zipHintCount
+        CSVCandidateHints = $csvHintCount
+        JSONLCandidateHints = $jsonlHintCount
+        ColumnarCandidateHints = $columnarHintCount
     }
 }
 ([ordered]@{
