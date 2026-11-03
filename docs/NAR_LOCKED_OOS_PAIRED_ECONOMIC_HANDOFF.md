@@ -189,3 +189,31 @@ CatBoost learning run, OOS positive EV, Friday JRA publication readiness
 or successful NAR data acquisition. The user's earlier reported NAR
 permission is preserved as user-reported context; this run did not inspect
 the text of that grant.
+
+## 2026-11-03 PC2 wider source-name audit (read-only)
+
+The bounded filename-only source discovery added by commits 5069a4f, 3657f2c,
+f5dcfda, and 27ca3c9 completed on physical PC2 DESKTOP-MVV1FD4.
+[Latest PC2 run #41560547709](https://github.com/tanaka456jp/HorseRacingPredictions/actions/runs/41560547709)
+finished SUCCESS (PowerShell static check and PC2 execution).
+
+- D: 8,273 directories and 79,560 entries visited; **zero** exact
+  2017-2022 official monthly ZIP names, **zero of 72** distinct training months;
+  three broad historical racing *filename hints*, all CSV and >=500 KB.
+- Conventional PC2 user Downloads, Documents and Desktop: zero official monthly
+  ZIPs and zero generic historical racing filename hints.
+- The scan is bounded to depth 8 and skips sensitive directory names and
+  reparse points; this is **not** proof of absence across all folders
+  or on other machines.
+- Each of the three CSV names is only a hint: original provider, rights,
+  period coverage, race format, and usefulness for pre-event model features
+  have **not been verified**. No content was read, no path/name uploaded,
+  no provider was contacted, and no archive was modified.
+- No real-data CatBoost fitting, real ROI, positive EV evidence, or JRA note
+  publication followed. Protected holdout sources remain unopened.
+
+Next priority: private, non-uploaded review of the origin and rights of the
+three CSV hints; require explicit authorization before any source-content
+inspection. Acquire proper NAR 2017-2022 original monthly data only through
+a permitted operator method. Do not reroute JRA-VAN, post-race labels or
+sealed 2023-2026 outcomes into pre-off features or training.
