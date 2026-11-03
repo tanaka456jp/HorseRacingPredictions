@@ -1,4 +1,4 @@
-name: NAR PC2 Candidate D-Root Discovery (Metadata Only)
+name: NAR PC2 Data Availability Audit (Filenames Only)
 on:
   push:
     branches: ["feature/weekly-odds-free-note-20261021"]
@@ -20,9 +20,15 @@ jobs:
         with:
           clean: false
           persist-credentials: false
-      - name: Scan only nominated D-root names, not NAR/JRA archive contents
+      - name: Check bounded D roots only, never read CSV or ZIP contents
         shell: powershell
         run: |
           $ErrorActionPreference = 'Stop'
           & .\scripts\inspect_pc2_nar_allowlisted_monthly_filenames.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Crosscheck exact candidate training ZIP months (names and sizes only)
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          & .\scripts\inspect_pc2_nar_training_zip_presence_readonly.ps1
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
