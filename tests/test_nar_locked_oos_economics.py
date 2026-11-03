@@ -198,3 +198,25 @@ def test_report_all_disclosed_in_scope_exclusions_not_only_profitable_races():
         ("unverified_official_payout",1),
     )
     assert not result.economic_diagnostic_performed
+
+
+def test_corrupted_underpowered_settlement_cannot_pass_as_structurally_admitted():
+    entry = race()
+    broken = replace(
+        entry[3],
+        win_return_per_100_yen={
+            horse: 0 for horse in entry[3].win_return_per_100_yen
+        },
+    )
+    with pytest.raises(ValueError,match="PAYOUT_CONTRADICTS_FINAL_FINISH"):
+        run([(entry[0],entry[1],entry[2],broken)])
+
+
+def test_underpowered_valid_settlement_still_reports_no_roi():
+    entry = race()
+    report = run([entry])
+    assert report.paired_settled_races == 1
+    assert report.economic_diagnostic_performed is False
+    assert report.candidate_realized_roi is None
+    assert report.benchmark_realized_roi is None
+    assert report.positive_expected_value_demonstrated is False
