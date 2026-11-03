@@ -202,6 +202,24 @@ def evaluate_nar_locked_out_of_sample(
                 or set(a.winner_scores) != set(finals[rid].finishing_positions)):
             raise ValueError("NAR_OOS_BENCHMARK_OR_SETTLEMENT_FIELD_MISMATCH")
 
+    # Validate the full paired settlement arithmetic on EVERY admitted race,
+    # even when the sample is underpowered and no ROI may be returned.
+    # Otherwise a corrupt or outcome-inconsistent small real-data upload
+    # could misleadingly be labelled a structurally eligible sample.
+    blocks: dict[date, list[tuple[int, int]]] = {}
+    for rid in sorted(eligible):
+        final = finals[rid]
+        candidate_return = _race_result(
+            select_top3_and_outsider(candidate[rid]), final,
+        )
+        benchmark_return = _race_result(
+            select_top3_and_outsider(benchmark[rid]), final,
+        )
+        blocks.setdefault(calendar[rid], []).append(
+            (candidate_return[0] + candidate_return[1],
+             benchmark_return[0] + benchmark_return[1]),
+        )
+
     days = len({calendar[r] for r in eligible})
     by_reason = tuple(sorted(
         (reason, sum(v == reason for v in documented_exclusions.values()))
@@ -234,14 +252,8 @@ def evaluate_nar_locked_out_of_sample(
             **common,
         )
 
-    # Actual per-race official payout arithmetic is delegated to the
-    # shared strict evaluator; no odds are read or synthesized.
-    blocks: dict[date, list[tuple[int, int]]] = {}
-    for rid in sorted(eligible):
-        final = finals[rid]
-        x = _race_result(select_top3_and_outsider(candidate[rid]), final)
-        y = _race_result(select_top3_and_outsider(benchmark[rid]), final)
-        blocks.setdefault(calendar[rid], []).append((x[0]+x[1], y[0]+y[1]))
+    # Payout pairs already passed strict validation above; this branch
+    # only computes aggregate ROI after both minimum size gates pass.
     spend = (200+extra_cost_yen_per_race) * len(eligible)
     total_a=sum(x for day_rows in blocks.values() for x,_ in day_rows)
     total_b=sum(y for day_rows in blocks.values() for _,y in day_rows)
