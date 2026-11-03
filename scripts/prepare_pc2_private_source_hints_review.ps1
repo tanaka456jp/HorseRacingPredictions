@@ -105,11 +105,11 @@ try {
     $acl.SetAccessRuleProtection($true, $false)
     $ids = @(
         [System.Security.Principal.WindowsIdentity]::GetCurrent().User,
-        (New-Object System.Security.Principal.SecurityIdentifier('S-1-5-18')),
-        (New-Object System.Security.Principal.SecurityIdentifier('S-1-5-32-544'))
+        ([System.Security.Principal.SecurityIdentifier]::new('S-1-5-18')),
+        ([System.Security.Principal.SecurityIdentifier]::new('S-1-5-32-544'))
     )
     foreach ($sid in $ids) {
-        $rule = New-Object System.Security.AccessControl.FileSystemAccessRule(
+        $rule = [System.Security.AccessControl.FileSystemAccessRule]::new(
             $sid, [System.Security.AccessControl.FileSystemRights]::FullControl,
             ([System.Security.AccessControl.InheritanceFlags]::ContainerInherit -bor
              [System.Security.AccessControl.InheritanceFlags]::ObjectInherit),
@@ -148,7 +148,7 @@ try {
     }
     $text = $report | ConvertTo-Json -Depth 7
     [System.IO.File]::WriteAllText(
-        $file, $text, (New-Object System.Text.UTF8Encoding($false))
+        $file, $text, ([System.Text.UTF8Encoding]::new($false))
     )
     # No filenames, source paths, source hashes or source data in Actions logs.
     $jraHints = @($sorted | Where-Object {
