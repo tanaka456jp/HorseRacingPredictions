@@ -131,3 +131,61 @@ returns code 2 with a non-sensitive failure reason.
 
 Passing synthetic CI checks proves arithmetic and safety guards only.
 It does not show any improvement in real expected value.
+
+## 2026-11-03 PC② evidence: training source is NOT locally ready
+
+The dedicated self-hosted Windows PC② **DESKTOP-MVV1FD4** completed
+[GitHub run #41553689089](https://github.com/tanaka456jp/HorseRacingPredictions/actions/runs/41553689089)
+using two **metadata-only** audits. The four named D-root candidates in
+`inspect_pc2_nar_allowlisted_monthly_filenames.ps1` had **zero**
+2017–2022 NAR monthly ZIP filenames matching the official candidate name
+pattern. Both exact `nar-personal` source locations were absent; **0 of 72**
+required training ZIP months were present. This audit does not imply no
+archives exist anywhere on the PC or on other machines: it only looked
+within the explicitly listed bounded locations and never read ZIP bytes.
+
+To remove ambiguity for **future operator-permitted files**, the self-hosted
+[private D setup #41554242564](https://github.com/tanaka456jp/HorseRacingPredictions/actions/runs/41554242564)
+created this **empty** landing on PC②:
+
+```text
+D:\Development\HorseRacingPredictions\nar-personal
+```
+
+The new directory received restricted Windows permissions for the PC②
+runner account, SYSTEM and Administrators. The Git repository now ignores
+`nar-personal/` to reduce accidental provider-data commits. No archive
+content was read, no download attempted, and no data was copied or deleted.
+The workflow is a one-time setup, **not an autonomous downloader**.
+
+When **and only when** the NAR permission's acquisition/processing/retention
+scope has been confirmed, operator-acquired original monthly ZIPs can be
+placed in this folder under the exact official `YYYYMM_*_race.zip` names.
+Do not place JRA-VAN files, protected 2023–2026 OOS files, credentials,
+unapproved copies or other datasets in this training-only landing.
+
+The next locally controlled step, after sources have been provided, is a
+filenames-only private manifest inventory:
+
+```powershell
+python scripts/prepare_nar_private_training_manifest_local.py `
+  --local-nar-training-zip-directory "D:\Development\HorseRacingPredictions\nar-personal" `
+  --confirm-personal-private-nar-permission
+```
+
+That command does **not** read ZIP contents. After 72 months are present
+and independently permitted, a separate explicit local content preflight
+can be run:
+
+```powershell
+python scripts/diagnose_nar_training_months_local.py `
+  --local-nar-training-zip-directory "D:\Development\HorseRacingPredictions\nar-personal" `
+  --confirm-personal-private-nar-permission
+```
+
+**Current deployment conclusion: `NAR_REAL_TRAINING_NOT_READY_0_OF_72`.**
+Continue general software safety improvements, but do not claim a real
+CatBoost learning run, OOS positive EV, Friday JRA publication readiness
+or successful NAR data acquisition. The user's earlier reported NAR
+permission is preserved as user-reported context; this run did not inspect
+the text of that grant.
