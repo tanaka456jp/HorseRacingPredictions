@@ -1,0 +1,28 @@
+name: NAR PC2 Private D Source Landing Setup (No Data Retrieval)
+on:
+  push:
+    branches: ["feature/weekly-odds-free-note-20261021"]
+    paths:
+      - ".github/workflows/nar-pc2-private-d-landing.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: nar-pc2-private-d-landing
+  cancel-in-progress: false
+jobs:
+  prepare-private-source-folder:
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 10
+    steps:
+      - name: Checkout without cleaning or uploading private data
+        uses: actions/checkout@v4
+        with:
+          clean: false
+          persist-credentials: false
+      - name: Create only one access-restricted D landing for user-approved NAR ZIPs
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          & .\scripts\prepare_pc2_private_nar_landing.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
