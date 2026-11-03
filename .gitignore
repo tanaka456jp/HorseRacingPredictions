@@ -8,3 +8,6 @@ __pycache__/
 .DS_Store
 data/
 artifacts/
+
+# Licensed private NAR ZIPs must stay on PC2; never commit provider rows.
+nar-personal/
