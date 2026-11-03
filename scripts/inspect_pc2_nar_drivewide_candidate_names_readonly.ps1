@@ -26,8 +26,8 @@ $blocked = '(?i)^(?:\$recycle\.bin|system volume information|recovery|\.git|\.ve
 $official = '^(?<month>(?:19|20)\d{4})_\d{8,13}_race\.zip$'
 $hint = '(?i)(?:nar|keiba|地方競馬|競馬|race|horselist|racelist|payback)'
 $studyYear = '(?:2017|2018|2019|2020|2021|2022)'
-$maxDirs = 8000
-$maxEntries = 120000
+$maxDirs = 30000
+$maxEntries = 250000
 $maxDepth = 8
 $summaries = @()
 
@@ -41,6 +41,8 @@ for ($rootIndex = 0; $rootIndex -lt $roots.Count; $rootIndex++) {
     $skippedProtected = 0
     $officialCount = 0
     $hintCount = 0
+    $largeHintCount = 0
+    $zipHintCount = 0
     $months = @{}
     try {
         if (Test-Path -LiteralPath $root -PathType Container) {
@@ -102,6 +104,8 @@ for ($rootIndex = 0; $rootIndex -lt $roots.Count; $rootIndex++) {
                                   $child.Name -match $studyYear) {
                             # Hints, not official archives; never emit file names.
                             $hintCount++
+                            if ($child.Length -ge 500000) { $largeHintCount++ }
+                            if ($child.Extension -eq '.zip') { $zipHintCount++ }
                         }
                     }
                     if ($status -eq 'BOUNDED_CAP_REACHED_INCOMPLETE') { break }
@@ -127,6 +131,8 @@ for ($rootIndex = 0; $rootIndex -lt $roots.Count; $rootIndex++) {
         DistinctTrainingMonthsByName = $months.Count
         DuplicateZIPsByMonth = $duplicates
         OtherCandidateNameHints = $hintCount
+        LargeOtherCandidateHintsAtLeast500KB = $largeHintCount
+        ZIPOtherCandidateHints = $zipHintCount
     }
 }
 ([ordered]@{
