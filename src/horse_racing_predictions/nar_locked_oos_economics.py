@@ -58,6 +58,7 @@ class NarLockedOutOfSample:
     benchmark_realized_roi: float | None
     matched_improvement_roi: float | None
     candidate_cost_adjusted_roi: float | None
+    candidate_zero_return_exclusions_sensitivity_roi: float | None
     candidate_day_block_lower_95: float | None
     matched_improvement_day_block_lower_95: float | None
     bootstrap_days: int
@@ -266,6 +267,7 @@ def evaluate_nar_locked_out_of_sample(
             economic_diagnostic_performed=False,
             candidate_realized_roi=None, benchmark_realized_roi=None,
             matched_improvement_roi=None, candidate_cost_adjusted_roi=None,
+            candidate_zero_return_exclusions_sensitivity_roi=None,
             candidate_day_block_lower_95=None,
             matched_improvement_day_block_lower_95=None,
             **common,
@@ -279,6 +281,13 @@ def evaluate_nar_locked_out_of_sample(
     candidate_roi=total_a/(200*len(eligible))-1
     bench_roi=total_b/(200*len(eligible))-1
     adjusted_roi=total_a/spend-1
+    # Explicit missing-outcome stress test: charge the same full virtual
+    # stake plus cost on ALL in-scope calendar races; award zero payout for
+    # documented missing-payout/withdrawn races. This is NOT observed ROI;
+    # it shows how much optimistic omission can change the conclusion.
+    missing_zero_roi = total_a / (
+        (200 + extra_cost_yen_per_race) * in_scope
+    ) - 1
     delta_roi=(total_a-total_b)/spend
 
     # Bootstrap WHOLE matched race days; both model outcomes use precisely
@@ -302,7 +311,8 @@ def evaluate_nar_locked_out_of_sample(
     lower=_quantile(sample_roi,0.025)
     delta_lower=_quantile(sample_delta,0.025)
     if not all(isfinite(v) for v in (
-        candidate_roi,bench_roi,adjusted_roi,delta_roi,lower,delta_lower,
+        candidate_roi,bench_roi,adjusted_roi,missing_zero_roi,
+        delta_roi,lower,delta_lower,
     )):
         raise ValueError("NAR_OOS_NONFINITE_ECONOMIC_DIAGNOSTIC")
     return NarLockedOutOfSample(
@@ -312,6 +322,7 @@ def evaluate_nar_locked_out_of_sample(
         benchmark_realized_roi=bench_roi,
         matched_improvement_roi=delta_roi,
         candidate_cost_adjusted_roi=adjusted_roi,
+        candidate_zero_return_exclusions_sensitivity_roi=missing_zero_roi,
         candidate_day_block_lower_95=lower,
         matched_improvement_day_block_lower_95=delta_lower,
         **common,
