@@ -51,8 +51,15 @@ def run(cases,*,calendar=None,excluded=None,candidates=None,benchmarks=None,
 def calendar_500(days=60):
     start=date(2023,1,7)
     if days==60:
-        return [race((start+timedelta(days=7*w)).isoformat(),i)
-                for w in range(60) for i in range(1,10 if w<20 else 9)]
+        # Fictional 2023 and 2024 evidence is deliberately balanced:
+        # 30 distinct racing dates in each year, 260 and 240 races.
+        dates = (
+            [start+timedelta(days=7*w) for w in range(30)]
+            + [date(2024,1,6)+timedelta(days=7*w) for w in range(30)]
+        )
+        return [race(day.isoformat(), i)
+                for w,day in enumerate(dates)
+                for i in range(1,10 if w<20 else 9)]
     return [race((start+timedelta(days=7*w)).isoformat(),i)
             for w in range(50) for i in range(1,11)]
 
@@ -63,6 +70,14 @@ def test_500_races_60_days_matched_pair_positive_fictional_returns_not_ev():
     result=run(cases,cost=50)
     assert result.paired_settled_races==500
     assert result.racing_days==60
+    assert result.minimum_annual_balance_met
+    assert result.minimum_annual_coverage_met
+    assert [(a.year, a.paired_settled_races, a.racing_days)
+            for a in result.annual_breakdown] == [
+                (2023, 260, 30), (2024, 240, 30),
+            ]
+    assert all(a.candidate_cost_adjusted_roi == pytest.approx(.72)
+               for a in result.annual_breakdown)
     assert result.in_scope_manifest_races==500
     assert result.eligible_race_coverage_fraction==pytest.approx(1.0)
     assert result.minimum_screening_covered
@@ -231,8 +246,9 @@ def _calendar_with_unverified_exclusions(extra: int, *, reason: str):
     calendar = {rid: f.race_day for rid, f, _, _ in cases}
     missing = {}
     for index in range(extra):
-        day_text = "2023-01-07" if index < 20 else "2023-01-14"
-        number = index + 1 if index < 20 else index - 19
+        # Split missing races over both years to test the per-year floor.
+        day_text = "2023-01-07" if index < 13 else "2024-01-06"
+        number = index + 1 if index < 13 else index - 12
         rid = f"NAR:{day_text.replace('-', '')}:架空追加競馬場:{number:02d}"
         missing[rid] = day_text
     calendar.update(missing)
@@ -263,17 +279,18 @@ def test_95_percent_frozen_calendar_coverage_is_required_before_showing_roi():
 
 def test_95_percent_coverage_boundary_accepts_eligible_complete_pairs():
     cases, calendar, exclusions = _calendar_with_unverified_exclusions(
-        26, reason="unverified_official_payout",
+        25, reason="unverified_official_payout",
     )
     report = run(cases, calendar=calendar, excluded=exclusions)
-    assert report.eligible_race_coverage_fraction == pytest.approx(500 / 526)
+    assert report.eligible_race_coverage_fraction == pytest.approx(500 / 525)
+    assert report.minimum_annual_coverage_met
     assert report.minimum_coverage_met
     assert report.minimum_screening_covered
     assert report.economic_diagnostic_performed
-    # These 26 in-scope races have no paid-out result, so the stress
-    # scenario counts 26 additional virtual 200+cost bets as full losses.
+    # These 25 in-scope races have no paid-out result, so the stress
+    # scenario counts 25 additional virtual 200+cost bets as full losses.
     assert report.candidate_zero_return_exclusions_sensitivity_roi == pytest.approx(
-        (report.candidate_cost_adjusted_roi + 1) * 500 / 526 - 1
+        (report.candidate_cost_adjusted_roi + 1) * 500 / 525 - 1
     )
     assert report.candidate_zero_return_exclusions_sensitivity_roi < (
         report.candidate_cost_adjusted_roi
@@ -294,4 +311,70 @@ def test_prospectively_out_of_scope_races_not_counted_as_missing_payouts():
     assert report.candidate_zero_return_exclusions_sensitivity_roi == pytest.approx(
         report.candidate_cost_adjusted_roi
     )
+    assert not report.positive_expected_value_demonstrated
+
+
+def test_one_year_only_cannot_masquerade_as_two_year_evidence():
+    # 500 settled races and 60 distinct dates all from 2023 would pass
+    # the old 500/60/95% pooled gates; this must NOT produce OOS ROI.
+    start = date(2023, 1, 7)
+    cases = [
+        race((start + timedelta(days=3*w)).isoformat(), number)
+        for w in range(60)
+        for number in range(1, 10 if w < 20 else 9)
+    ]
+    assert len(cases) == 500
+    result = run(cases)
+    assert result.minimum_coverage_met
+    assert not result.minimum_annual_balance_met
+    assert not result.minimum_annual_coverage_met
+    assert result.racing_days == 60
+    assert result.status == "NAR_OOS_INSUFFICIENT_ANNUAL_BALANCE"
+    assert result.annual_breakdown[1].paired_settled_races == 0
+    assert result.candidate_realized_roi is None
+    assert all(year.candidate_cost_adjusted_roi is None
+               for year in result.annual_breakdown)
+    assert not result.positive_expected_value_demonstrated
+
+
+def test_globally_95_percent_but_undercovered_2024_blocks_all_roi():
+    # 500/526 = 95.06% global coverage, but 240/253 = 94.86%
+    # within 2024. A profitable-looking pooled ROI must not appear.
+    cases, calendar, exclusions = _calendar_with_unverified_exclusions(
+        26, reason="unverified_official_payout",
+    )
+    result = run(cases, calendar=calendar, excluded=exclusions)
+    assert result.minimum_coverage_met
+    assert not result.minimum_annual_coverage_met
+    assert result.minimum_annual_balance_met
+    assert result.status == "NAR_OOS_INSUFFICIENT_PAIRED_COVERAGE"
+    assert not result.economic_diagnostic_performed
+    assert result.candidate_cost_adjusted_roi is None
+    assert result.candidate_day_block_lower_95 is None
+    assert all(a.candidate_cost_adjusted_roi is None
+               for a in result.annual_breakdown)
+
+
+def test_separate_annual_roi_reveals_negative_second_year_without_ev_claim():
+    cases = calendar_500()
+    changed = []
+    for rid, candidate, baseline, result in cases:
+        if candidate.race_day.startswith("2024"):
+            payout = dict(result.win_return_per_100_yen)
+            payout["1"] = 100
+            result = replace(result, win_return_per_100_yen=payout)
+        changed.append((rid, candidate, baseline, result))
+    report = run(changed, cost=50)
+    assert report.economic_diagnostic_performed
+    a, b = report.annual_breakdown
+    assert (a.year, b.year) == (2023, 2024)
+    assert a.candidate_cost_adjusted_roi == pytest.approx(.72)
+    assert b.candidate_cost_adjusted_roi == pytest.approx(-.08)
+    assert report.candidate_cost_adjusted_roi == pytest.approx(
+        (260 * 430 + 240 * 230) / (500 * 250) - 1
+    )
+    assert a.benchmark_cost_adjusted_roi == pytest.approx(-1.0)
+    assert b.benchmark_cost_adjusted_roi == pytest.approx(-1.0)
+    assert a.matched_improvement_roi == pytest.approx(430/250)
+    assert b.matched_improvement_roi == pytest.approx(230/250)
     assert not report.positive_expected_value_demonstrated
