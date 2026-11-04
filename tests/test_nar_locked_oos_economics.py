@@ -72,6 +72,7 @@ def test_500_races_60_days_matched_pair_positive_fictional_returns_not_ev():
     assert result.benchmark_realized_roi==pytest.approx(-1)
     assert result.matched_improvement_roi==pytest.approx(1.72)
     assert result.candidate_cost_adjusted_roi==pytest.approx(.72)
+    assert result.candidate_zero_return_exclusions_sensitivity_roi==pytest.approx(.72)
     assert result.candidate_day_block_lower_95==pytest.approx(.72)
     assert result.matched_improvement_day_block_lower_95==pytest.approx(1.72)
     assert not result.positive_expected_value_demonstrated
@@ -220,6 +221,7 @@ def test_underpowered_valid_settlement_still_reports_no_roi():
     assert report.economic_diagnostic_performed is False
     assert report.candidate_realized_roi is None
     assert report.benchmark_realized_roi is None
+    assert report.candidate_zero_return_exclusions_sensitivity_roi is None
     assert report.positive_expected_value_demonstrated is False
 
 
@@ -268,6 +270,14 @@ def test_95_percent_coverage_boundary_accepts_eligible_complete_pairs():
     assert report.minimum_coverage_met
     assert report.minimum_screening_covered
     assert report.economic_diagnostic_performed
+    # These 26 in-scope races have no paid-out result, so the stress
+    # scenario counts 26 additional virtual 200+cost bets as full losses.
+    assert report.candidate_zero_return_exclusions_sensitivity_roi == pytest.approx(
+        (report.candidate_cost_adjusted_roi + 1) * 500 / 526 - 1
+    )
+    assert report.candidate_zero_return_exclusions_sensitivity_roi < (
+        report.candidate_cost_adjusted_roi
+    )
     assert not report.positive_expected_value_demonstrated
 
 
@@ -281,4 +291,7 @@ def test_prospectively_out_of_scope_races_not_counted_as_missing_payouts():
     assert report.eligible_race_coverage_fraction == pytest.approx(1.0)
     assert report.minimum_coverage_met
     assert report.economic_diagnostic_performed
+    assert report.candidate_zero_return_exclusions_sensitivity_roi == pytest.approx(
+        report.candidate_cost_adjusted_roi
+    )
     assert not report.positive_expected_value_demonstrated
