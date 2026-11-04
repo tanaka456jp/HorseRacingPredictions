@@ -41,12 +41,21 @@ The separately pre-registered NAR flat-racing protocol still governs:
 - 500 fully settled races and 60 distinct OOS racing dates **minimum** before
   displaying any numeric economic diagnostic.
 - **At least 95% paired coverage of the independently predeclared in-scope
-  calendar** is also required. Coverage uses an exact 19/20 integer threshold
-  and counts ordinary settlement/forecast exclusions as missing; only races
-  genuinely **predeclared** outside the flat-race scope are omitted from its
-  denominator. Falling below 95% returns
+  calendar and in EACH of 2023 and 2024** is required. Coverage uses an
+  exact 19/20 integer threshold and counts ordinary settlement/forecast
+  exclusions as missing; only races genuinely **predeclared** outside the
+  flat-race scope are omitted from its denominator. Falling below 95%
+  globally **or in either year** returns
   `NAR_OOS_INSUFFICIENT_PAIRED_COVERAGE` and **no ROI or CI**, even if
   500 races and 60 distinct dates remain.
+- **Year balance is a separate pre-outcome gate**: each of 2023 and 2024
+  must contribute **at least 150 complete paired races on 20 independent
+  racing days**, in addition to the pooled 500 races/60 days. An entirely
+  absent or severely under-represented year returns
+  `NAR_OOS_INSUFFICIENT_ANNUAL_BALANCE` with **no monetary diagnostic**.
+  These limits were committed before any verified real-data OOS run;
+  they are protective research screening thresholds, not an inferential
+  guarantee of statistical power.
 - Track *all* in-scope races and the fraction with an eligible complete
   candidate/baseline/official-settlement match. Excluding ばんえい before
   outcomes does not conceal missing settlement in the flat-racing scope.
@@ -72,6 +81,13 @@ The separately pre-registered NAR flat-racing protocol still governs:
   observed paired candidate gross return by the **entire in-scope calendar**
   stake. It is a transparent adverse-missingness stress scenario, **not**
   measured ROI, realized bets or additional proof of expected value.
+- `annual_breakdown` always reports 2023 and 2024 race/date counts,
+  eligible coverage and gate diagnostics. **Only after all pooled and
+  annual gates pass** does it report separate annual candidate, benchmark
+  and paired-improvement cost-adjusted ROI. This makes a positive
+  aggregate return alongside a negative 2024 visible rather than hiding
+  calendar regime deterioration. Yearly point estimates alone are not
+  statistically independent positive-EV confirmations.
 - **Even when both lower confidence bounds exceed zero**, reports keep
   `positive_expected_value_demonstrated = false`, rights and source
   provenance flags false, and betting/publication flags false. Independent
@@ -123,10 +139,11 @@ No user identifiers, real horse names, venue names, source paths or licensed
 rows are written to a remote CI log: the CLI only prints aggregate counts,
 static exclusion reason codes and optional diagnostic returns.
 
-If the study lacks 500 matched races / 60 different dates **or** 95%
-of the predeclared in-scope calendar, the CLI returns code 2 **with no ROI
-values**. Error/corruption/unapproved content also returns code 2 with a
-non-sensitive failure reason. A passing fictional CI is not real evidence.
+If the study lacks 500 matched races / 60 different dates, 95% eligible
+coverage **both pooled and annually**, or 150 matched races / 20 dates in
+**each** year, the CLI returns code 2 **with no ROI values**. Error,
+corruption or unapproved content also returns code 2 with a non-sensitive
+failure reason. A passing fictional CI is not real evidence.
 
 ## Prioritized blockers
 
