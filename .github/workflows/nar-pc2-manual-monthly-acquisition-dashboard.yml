@@ -23,6 +23,14 @@ jobs:
         shell: pwsh
         run: |
           $path = "scripts/create_pc2_nar_manual_acquisition_dashboard.ps1"
+          # Windows PowerShell 5.1 (used by the physical PC2 runner)
+          # interprets UTF-8 WITHOUT BOM as the local ANSI code page.
+          # Japanese literal strings then become malformed PowerShell.
+          $raw = [IO.File]::ReadAllBytes((Resolve-Path $path).Path)
+          if ($raw.Length -lt 3 -or $raw[0] -ne 239 -or
+              $raw[1] -ne 187 -or $raw[2] -ne 191) {
+            throw "NAR_PC2_POWERSHELL_51_UTF8_BOM_REQUIRED"
+          }
           $tokens = $null
           $errors = $null
           [System.Management.Automation.Language.Parser]::ParseFile(
