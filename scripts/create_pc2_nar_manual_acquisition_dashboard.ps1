@@ -1,4 +1,4 @@
-# PC2 offline acquisition dashboard for operator-permitted official NAR months.
+﻿# PC2 offline acquisition dashboard for operator-permitted official NAR months.
 # Reads ONLY filenames and filesystem metadata. Does not open archive contents,
 # download, access provider URLs, train or publish. Never log paths or filenames.
 [CmdletBinding()]
