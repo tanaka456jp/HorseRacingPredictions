@@ -66,6 +66,7 @@ def test_500_races_60_days_matched_pair_positive_fictional_returns_not_ev():
     assert result.in_scope_manifest_races==500
     assert result.eligible_race_coverage_fraction==pytest.approx(1.0)
     assert result.minimum_screening_covered
+    assert result.minimum_coverage_met
     assert result.economic_diagnostic_performed
     assert result.candidate_realized_roi==pytest.approx(1.15)
     assert result.benchmark_realized_roi==pytest.approx(-1)
@@ -220,3 +221,64 @@ def test_underpowered_valid_settlement_still_reports_no_roi():
     assert report.candidate_realized_roi is None
     assert report.benchmark_realized_roi is None
     assert report.positive_expected_value_demonstrated is False
+
+
+def _calendar_with_unverified_exclusions(extra: int, *, reason: str):
+    """Fictional extra races remain in the frozen calendar but not ROI."""
+    cases = calendar_500()
+    calendar = {rid: f.race_day for rid, f, _, _ in cases}
+    missing = {}
+    for index in range(extra):
+        day_text = "2023-01-07" if index < 20 else "2023-01-14"
+        number = index + 1 if index < 20 else index - 19
+        rid = f"NAR:{day_text.replace('-', '')}:架空追加競馬場:{number:02d}"
+        missing[rid] = day_text
+    calendar.update(missing)
+    return cases, calendar, dict.fromkeys(missing, reason)
+
+
+def test_95_percent_frozen_calendar_coverage_is_required_before_showing_roi():
+    # Both samples have 500 paired settled races on 60 distinct dates,
+    # but the 27 omitted in-scope races drop coverage below the 95% floor.
+    cases, calendar, exclusions = _calendar_with_unverified_exclusions(
+        27, reason="unverified_official_payout",
+    )
+    report = run(cases, calendar=calendar, excluded=exclusions)
+    assert report.paired_settled_races == 500
+    assert report.racing_days == 60
+    assert report.in_scope_manifest_races == 527
+    assert report.eligible_race_coverage_fraction == pytest.approx(500 / 527)
+    assert not report.minimum_coverage_met
+    assert not report.minimum_screening_covered
+    assert report.status == "NAR_OOS_INSUFFICIENT_PAIRED_COVERAGE"
+    assert not report.economic_diagnostic_performed
+    assert report.candidate_realized_roi is None
+    assert report.benchmark_realized_roi is None
+    assert report.candidate_day_block_lower_95 is None
+    assert report.matched_improvement_day_block_lower_95 is None
+    assert not report.positive_expected_value_demonstrated
+
+
+def test_95_percent_coverage_boundary_accepts_eligible_complete_pairs():
+    cases, calendar, exclusions = _calendar_with_unverified_exclusions(
+        26, reason="unverified_official_payout",
+    )
+    report = run(cases, calendar=calendar, excluded=exclusions)
+    assert report.eligible_race_coverage_fraction == pytest.approx(500 / 526)
+    assert report.minimum_coverage_met
+    assert report.minimum_screening_covered
+    assert report.economic_diagnostic_performed
+    assert not report.positive_expected_value_demonstrated
+
+
+def test_prospectively_out_of_scope_races_not_counted_as_missing_payouts():
+    cases, calendar, exclusions = _calendar_with_unverified_exclusions(
+        27, reason="outside_predeclared_flat_scope",
+    )
+    report = run(cases, calendar=calendar, excluded=exclusions)
+    assert report.scheduled_races == 527
+    assert report.in_scope_manifest_races == 500
+    assert report.eligible_race_coverage_fraction == pytest.approx(1.0)
+    assert report.minimum_coverage_met
+    assert report.economic_diagnostic_performed
+    assert not report.positive_expected_value_demonstrated
