@@ -40,6 +40,13 @@ The separately pre-registered NAR flat-racing protocol still governs:
 - 2025–2026: unopened, not a source of design/tuning/threshold changes.
 - 500 fully settled races and 60 distinct OOS racing dates **minimum** before
   displaying any numeric economic diagnostic.
+- **At least 95% paired coverage of the independently predeclared in-scope
+  calendar** is also required. Coverage uses an exact 19/20 integer threshold
+  and counts ordinary settlement/forecast exclusions as missing; only races
+  genuinely **predeclared** outside the flat-race scope are omitted from its
+  denominator. Falling below 95% returns
+  `NAR_OOS_INSUFFICIENT_PAIRED_COVERAGE` and **no ROI or CI**, even if
+  500 races and 60 distinct dates remain.
 - Track *all* in-scope races and the fraction with an eligible complete
   candidate/baseline/official-settlement match. Excluding ばんえい before
   outcomes does not conceal missing settlement in the flat-racing scope.
@@ -59,6 +66,12 @@ The separately pre-registered NAR flat-racing protocol still governs:
 - Use a whole-racing-day *paired* 95% bootstrap for candidate
   cost-adjusted ROI and candidate-minus-benchmark ROI. Do not treat
   races on the same day as independent samples.
+- A separate `candidate_zero_return_exclusions_sensitivity_roi` assumes
+  that every otherwise in-scope omitted race still incurred the fixed
+  two-ticket virtual stake plus scenario cost but paid **zero**. It divides
+  observed paired candidate gross return by the **entire in-scope calendar**
+  stake. It is a transparent adverse-missingness stress scenario, **not**
+  measured ROI, realized bets or additional proof of expected value.
 - **Even when both lower confidence bounds exceed zero**, reports keep
   `positive_expected_value_demonstrated = false`, rights and source
   provenance flags false, and betting/publication flags false. Independent
@@ -110,9 +123,10 @@ No user identifiers, real horse names, venue names, source paths or licensed
 rows are written to a remote CI log: the CLI only prints aggregate counts,
 static exclusion reason codes and optional diagnostic returns.
 
-If the study lacks 500 matched races / 60 different dates, the CLI returns
-code 2 **with no ROI values**. Error/corruption/unapproved content also
-returns code 2 with a non-sensitive failure reason.
+If the study lacks 500 matched races / 60 different dates **or** 95%
+of the predeclared in-scope calendar, the CLI returns code 2 **with no ROI
+values**. Error/corruption/unapproved content also returns code 2 with a
+non-sensitive failure reason. A passing fictional CI is not real evidence.
 
 ## Prioritized blockers
 
