@@ -1,0 +1,75 @@
+name: NAR PC2 Manual Monthly Acquisition Dashboard (Metadata Only)
+on:
+  push:
+    branches: ["feature/weekly-odds-free-note-20261021"]
+    paths:
+      - "scripts/create_pc2_nar_manual_acquisition_dashboard.ps1"
+      - ".github/workflows/nar-pc2-manual-monthly-acquisition-dashboard.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: nar-pc2-manual-monthly-acquisition-dashboard
+  cancel-in-progress: false
+jobs:
+  validate-offline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Parse PowerShell; require offline filename-only operation
+        shell: pwsh
+        run: |
+          $path = "scripts/create_pc2_nar_manual_acquisition_dashboard.ps1"
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path $path).Path, [ref]$tokens, [ref]$errors
+          ) | Out-Null
+          if (@($errors).Count -ne 0) { throw "NAR_MONTHLY_DASHBOARD_INVALID_POWERSHELL" }
+          $code = Get-Content -LiteralPath $path -Raw
+          foreach ($forbidden in @(
+            '\bGet-Content\b', '\bReadAllBytes\b', '\bReadAllText\b',
+            '\bOpenRead\b', '\bImport-Csv\b', '\bExpand-Archive\b',
+            '\bExtractToDirectory\b', '\bZipFile\b',
+            '\bInvoke-WebRequest\b', '\bInvoke-RestMethod\b',
+            '\bHttpClient\b', '\bWebClient\b', '\bStart-Process\b',
+            '\bInvoke-Expression\b', '\bCopy-Item\b', '\bMove-Item\b',
+            '\bRemove-Item\b', '\bSet-Content\b', '\bAdd-Content\b',
+            '\bOut-File\b', '\bSet-Acl\b'
+          )) {
+            if ($code -match $forbidden) {
+              throw "NAR_MONTHLY_DASHBOARD_DISALLOWED_OPERATION"
+            }
+          }
+          foreach ($contract in @(
+            'reportFileName',
+            'sourceContentsRead = $false',
+            'sourceDataUploaded = $false',
+            'filesDownloaded = 0',
+            'providerRequests = 0',
+            'positiveEvDemonstrated = $false'
+          )) {
+            if (-not $code.Contains($contract)) {
+              throw "NAR_MONTHLY_DASHBOARD_PROOF_CONTRACT_MISSING"
+            }
+          }
+          Write-Host "PASS: offline filename-only, no provider access"
+  pc2-dashboard:
+    needs: validate-offline
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 8
+    steps:
+      - name: Checkout without deleting local untracked datasets
+        uses: actions/checkout@v4
+        with:
+          clean: false
+          persist-credentials: false
+      - name: Build restricted local HTML dashboard with aggregate-only log
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          & .\scripts\create_pc2_nar_manual_acquisition_dashboard.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
