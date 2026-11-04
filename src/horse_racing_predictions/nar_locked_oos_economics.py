@@ -25,6 +25,10 @@ _LAST = date(2024, 12, 31)
 _FIT_END = date(2022, 12, 31)
 _MIN_RACES = 500
 _MIN_DAYS = 60
+# Fixed pre-outcome coverage floor: missing settlements must not be discarded
+# until an apparently profitable 500-race subset remains.
+_MIN_COVERAGE_NUMERATOR = 19
+_MIN_COVERAGE_DENOMINATOR = 20
 _NAR_ID = re.compile(r"NAR:([0-9]{8}):([^:/\\\r\n]{1,40}):([0-9]{2})\Z")
 _REASONS = frozenset({
     "pre_event_snapshot_missing",
@@ -48,6 +52,7 @@ class NarLockedOutOfSample:
     in_scope_manifest_races: int
     eligible_race_coverage_fraction: float
     minimum_screening_covered: bool
+    minimum_coverage_met: bool
     economic_diagnostic_performed: bool
     candidate_realized_roi: float | None
     benchmark_realized_roi: float | None
@@ -225,25 +230,39 @@ def evaluate_nar_locked_out_of_sample(
         (reason, sum(v == reason for v in documented_exclusions.values()))
         for reason in set(documented_exclusions.values())
     ))
-    min_pass = len(eligible) >= _MIN_RACES and days >= _MIN_DAYS
+    sample_minimum_met = len(eligible) >= _MIN_RACES and days >= _MIN_DAYS
     predeclared_scope = sum(
         code == "outside_predeclared_flat_scope"
         for code in documented_exclusions.values()
     )
     in_scope = len(calendar) - predeclared_scope
     coverage_fraction = len(eligible) / in_scope if in_scope else 0.0
+    # Use exact integer arithmetic so 95% is not sensitive to floating
+    # rounding. Exclusions outside the preregistered flat-race scope are
+    # counted in the calendar but not the coverage denominator.
+    coverage_met = (
+        in_scope > 0
+        and _MIN_COVERAGE_DENOMINATOR * len(eligible)
+        >= _MIN_COVERAGE_NUMERATOR * in_scope
+    )
+    min_pass = sample_minimum_met and coverage_met
     common = dict(
         scheduled_races=len(calendar), paired_settled_races=len(eligible),
         excluded_races=len(documented_exclusions),
         exclusions_by_reason=by_reason,
         racing_days=days, minimum_screening_covered=min_pass,
+        minimum_coverage_met=coverage_met,
         in_scope_manifest_races=in_scope,
         eligible_race_coverage_fraction=coverage_fraction,
         bootstrap_days=days, additional_cost_yen_per_race=extra_cost_yen_per_race,
     )
     if not min_pass:
         return NarLockedOutOfSample(
-            status="NAR_OOS_INSUFFICIENT_PREREGISTERED_EVIDENCE",
+            status=(
+                "NAR_OOS_INSUFFICIENT_PAIRED_COVERAGE"
+                if sample_minimum_met and not coverage_met
+                else "NAR_OOS_INSUFFICIENT_PREREGISTERED_EVIDENCE"
+            ),
             economic_diagnostic_performed=False,
             candidate_realized_roi=None, benchmark_realized_roi=None,
             matched_improvement_roi=None, candidate_cost_adjusted_roi=None,
