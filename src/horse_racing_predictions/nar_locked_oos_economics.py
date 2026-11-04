@@ -25,6 +25,10 @@ _LAST = date(2024, 12, 31)
 _FIT_END = date(2022, 12, 31)
 _MIN_RACES = 500
 _MIN_DAYS = 60
+# Fixed before any real locked-holdout evaluation: a two-year study must
+# include substantive independent evidence from BOTH calendar years.
+_MIN_YEAR_RACES = 150
+_MIN_YEAR_DAYS = 20
 # Fixed pre-outcome coverage floor: missing settlements must not be discarded
 # until an apparently profitable 500-race subset remains.
 _MIN_COVERAGE_NUMERATOR = 19
@@ -42,6 +46,18 @@ _REASONS = frozenset({
 
 
 @dataclass(frozen=True)
+class NarAnnualOutOfSample:
+    year: int
+    in_scope_manifest_races: int
+    paired_settled_races: int
+    racing_days: int
+    eligible_race_coverage_fraction: float
+    candidate_cost_adjusted_roi: float | None
+    benchmark_cost_adjusted_roi: float | None
+    matched_improvement_roi: float | None
+
+
+@dataclass(frozen=True)
 class NarLockedOutOfSample:
     status: str
     scheduled_races: int
@@ -53,6 +69,9 @@ class NarLockedOutOfSample:
     eligible_race_coverage_fraction: float
     minimum_screening_covered: bool
     minimum_coverage_met: bool
+    minimum_annual_coverage_met: bool
+    minimum_annual_balance_met: bool
+    annual_breakdown: tuple[NarAnnualOutOfSample, NarAnnualOutOfSample]
     economic_diagnostic_performed: bool
     candidate_realized_roi: float | None
     benchmark_realized_roi: float | None
@@ -246,13 +265,55 @@ def evaluate_nar_locked_out_of_sample(
         and _MIN_COVERAGE_DENOMINATOR * len(eligible)
         >= _MIN_COVERAGE_NUMERATOR * in_scope
     )
-    min_pass = sample_minimum_met and coverage_met
+    # Pooling years can conceal an almost missing 2024: demand a 95%
+    # paired-match rate and independent sample sizes WITHIN EACH year.
+    # Do not compute/report year-specific monetary values on a failed gate.
+    annual: list[NarAnnualOutOfSample] = []
+    for year in (2023, 2024):
+        year_eligible = {rid for rid in eligible if calendar[rid].year == year}
+        year_outside = sum(
+            calendar[rid].year == year
+            and reason == "outside_predeclared_flat_scope"
+            for rid, reason in documented_exclusions.items()
+        )
+        year_in_scope = sum(day.year == year for day in calendar.values()) - year_outside
+        year_days = len({calendar[rid] for rid in year_eligible})
+        annual.append(NarAnnualOutOfSample(
+            year=year,
+            in_scope_manifest_races=year_in_scope,
+            paired_settled_races=len(year_eligible),
+            racing_days=year_days,
+            eligible_race_coverage_fraction=(
+                len(year_eligible) / year_in_scope if year_in_scope else 0.0
+            ),
+            candidate_cost_adjusted_roi=None,
+            benchmark_cost_adjusted_roi=None,
+            matched_improvement_roi=None,
+        ))
+    annual_coverage_met = all(
+        summary.in_scope_manifest_races > 0
+        and _MIN_COVERAGE_DENOMINATOR * summary.paired_settled_races
+        >= _MIN_COVERAGE_NUMERATOR * summary.in_scope_manifest_races
+        for summary in annual
+    )
+    annual_balance_met = all(
+        summary.paired_settled_races >= _MIN_YEAR_RACES
+        and summary.racing_days >= _MIN_YEAR_DAYS
+        for summary in annual
+    )
+    min_pass = (
+        sample_minimum_met and coverage_met
+        and annual_coverage_met and annual_balance_met
+    )
     common = dict(
         scheduled_races=len(calendar), paired_settled_races=len(eligible),
         excluded_races=len(documented_exclusions),
         exclusions_by_reason=by_reason,
         racing_days=days, minimum_screening_covered=min_pass,
         minimum_coverage_met=coverage_met,
+        minimum_annual_coverage_met=annual_coverage_met,
+        minimum_annual_balance_met=annual_balance_met,
+        annual_breakdown=tuple(annual),
         in_scope_manifest_races=in_scope,
         eligible_race_coverage_fraction=coverage_fraction,
         bootstrap_days=days, additional_cost_yen_per_race=extra_cost_yen_per_race,
@@ -260,8 +321,12 @@ def evaluate_nar_locked_out_of_sample(
     if not min_pass:
         return NarLockedOutOfSample(
             status=(
-                "NAR_OOS_INSUFFICIENT_PAIRED_COVERAGE"
-                if sample_minimum_met and not coverage_met
+                "NAR_OOS_INSUFFICIENT_ANNUAL_BALANCE"
+                if sample_minimum_met and not annual_balance_met
+                else "NAR_OOS_INSUFFICIENT_PAIRED_COVERAGE"
+                if sample_minimum_met and not (
+                    coverage_met and annual_coverage_met
+                )
                 else "NAR_OOS_INSUFFICIENT_PREREGISTERED_EVIDENCE"
             ),
             economic_diagnostic_performed=False,
@@ -290,6 +355,32 @@ def evaluate_nar_locked_out_of_sample(
     ) - 1
     delta_roi=(total_a-total_b)/spend
 
+    annual_with_returns: list[NarAnnualOutOfSample] = []
+    for summary in annual:
+        annual_rows = (
+            (x, y) for day, pairs in blocks.items()
+            if day.year == summary.year for x, y in pairs
+        )
+        annual_a = annual_b = 0
+        for a, b in annual_rows:
+            annual_a += a
+            annual_b += b
+        annual_stake = (
+            (200 + extra_cost_yen_per_race) * summary.paired_settled_races
+        )
+        annual_with_returns.append(NarAnnualOutOfSample(
+            year=summary.year,
+            in_scope_manifest_races=summary.in_scope_manifest_races,
+            paired_settled_races=summary.paired_settled_races,
+            racing_days=summary.racing_days,
+            eligible_race_coverage_fraction=(
+                summary.eligible_race_coverage_fraction
+            ),
+            candidate_cost_adjusted_roi=annual_a / annual_stake - 1,
+            benchmark_cost_adjusted_roi=annual_b / annual_stake - 1,
+            matched_improvement_roi=(annual_a - annual_b) / annual_stake,
+        ))
+
     # Bootstrap WHOLE matched race days; both model outcomes use precisely
     # the same sampled days, correcting race-within-day dependence.
     daily=[(sum(x for x,_ in v), sum(y for _,y in v),len(v))
@@ -313,8 +404,14 @@ def evaluate_nar_locked_out_of_sample(
     if not all(isfinite(v) for v in (
         candidate_roi,bench_roi,adjusted_roi,missing_zero_roi,
         delta_roi,lower,delta_lower,
+        *(v for year in annual_with_returns for v in (
+            year.candidate_cost_adjusted_roi,
+            year.benchmark_cost_adjusted_roi,
+            year.matched_improvement_roi,
+        )),
     )):
         raise ValueError("NAR_OOS_NONFINITE_ECONOMIC_DIAGNOSTIC")
+    common["annual_breakdown"] = tuple(annual_with_returns)
     return NarLockedOutOfSample(
         status="NAR_OOS_DIAGNOSTIC_ONLY_RIGHTS_TIMESTAMPS_AND_FORWARD_TEST_UNVERIFIED",
         economic_diagnostic_performed=True,
