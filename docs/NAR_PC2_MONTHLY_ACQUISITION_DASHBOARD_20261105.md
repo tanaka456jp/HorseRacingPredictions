@@ -47,3 +47,44 @@ The three unrelated D-drive historical racing CSV filename hints remain **origin
 The project cannot quantify realized profitable or unprofitable racing strategy performance until it acquires independently permitted real historical entries and verified settlements and reconstructs honest **as-of** features without target information leakage. The actual NAR manual permits an operator to navigate to a race-level monthly ZIP; the offline private checklist removes the repetitive 72-month bookkeeping, **not** the separate manual download and rights verification gate.
 
 Passing the simulated CI or completion of this checklist is never evidence of real positive expected value.
+
+## New 2026-11-05 directly-from-folder local screening entrypoint
+
+The existing model code already implemented all-72-month in-memory training and
+2022 model-selection screening via a PRIVATE JSON list of 72 full paths.
+The CLI now also accepts a single operator-selected folder; it reuses the
+existing filename-only `inventory_private_nar_training_directory` and
+`screen_nar_local_2017_2022` functions rather than creating a second fitting
+implementation.
+
+**Run only after the intended 72 original, licensed NAR files have been
+separately acquired and the personal research/training scope has been
+reviewed.** On the local PC②, from a checkout containing the new code:
+
+```powershell
+python scripts/screen_nar_local_2017_2022.py `
+  --local-nar-training-zip-directory "D:\Development\HorseRacingPredictions\nar-personal" `
+  --confirm-personal-private-nar-permission `
+  --iterations 40
+```
+
+This command performs an immediate private folder inventory; **any missing
+month, duplicate month, unexpected/holdout ZIP, symlink, forbidden directory
+or malformed source blocks model training**. Only after full monthly
+coverage is verified does it read each explicit ZIP and validate all the
+flat-race outcomes and published payouts in memory, build past-day-only
+features, fit separate winner and outsider CatBoost models using 2017–2021,
+and report 2022 out-of-period **prediction hit rates only**. No model binary
+is persisted, no licensed source rows or filenames go to GitHub/Actions,
+and no NAR provider fetch or note posting is attempted.
+
+The original `--private-zip-paths-json` interface remains available for
+users who maintain a pre-reviewed separate private list. Both interfaces
+require explicit permission attestation before touching source content.
+
+A successful run **does not verify independent legal rights or authentic
+pre-off snapshots**: prior-day features are retrospectively reconstructed
+from finalized race data; 2022 hit rate is not a realized money ROI.
+The 2023–2024 independent holdout and the 2025+ protected period remain
+unopened. A user-supplied permission flag does not itself independently
+verify the actual grant.
