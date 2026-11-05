@@ -18,6 +18,7 @@ on:
       - "src/horse_racing_predictions/nar_local_screening.py"
       - "scripts/screen_nar_local_2017_2022.py"
       - "tests/test_nar_local_screening.py"
+      - "src/horse_racing_predictions/nar_private_manifest_inventory.py"
       - "scripts/train_strict_dual_pre2025_local.py"
       - ".github/workflows/ci-strict-dual-catboost.yml"
   pull_request:
@@ -37,6 +38,7 @@ on:
       - "src/horse_racing_predictions/nar_local_screening.py"
       - "scripts/screen_nar_local_2017_2022.py"
       - "tests/test_nar_local_screening.py"
+      - "src/horse_racing_predictions/nar_private_manifest_inventory.py"
       - "scripts/train_strict_dual_pre2025_local.py"
       - ".github/workflows/ci-strict-dual-catboost.yml"
 
