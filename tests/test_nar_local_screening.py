@@ -103,3 +103,124 @@ def test_local_cli_is_network_free_and_prints_no_source_rows():
     assert "requests" not in content
     assert "urllib" not in content
     assert "sourceNames" not in content
+
+
+def _load_local_cli():
+    import importlib.util
+    script = Path(__file__).resolve().parents[1] / "scripts" / "screen_nar_local_2017_2022.py"
+    spec = importlib.util.spec_from_file_location("nar_local_screening_cli", script)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_folder_cli_refuses_incomplete_months_without_reading_zip(tmp_path, monkeypatch, capsys):
+    import json
+    import sys
+    _archive(tmp_path, "201701")
+    cli = _load_local_cli()
+    def forbidden_read(*_args, **_kwargs):
+        raise AssertionError("NO ZIP BYTES BEFORE 72 MONTH COVERAGE")
+    monkeypatch.setattr(cli, "screen_nar_local_2017_2022", forbidden_read)
+    monkeypatch.setattr(sys, "argv", [
+        "screen_nar_local_2017_2022.py",
+        "--local-nar-training-zip-directory", str(tmp_path),
+        "--confirm-personal-private-nar-permission",
+    ])
+    assert cli.main() == 2
+    report = json.loads(capsys.readouterr().out)
+    assert report["status"] == "NAR_LOCAL_SCREENING_BLOCKED_SOURCE_OR_FOLDS"
+    assert not report["trainingExecuted"]
+    assert not report["sourceRowsUploaded"]
+    assert not report["sourceRightsIndependentlyVerified"]
+    assert not report["independentHoldoutOpened"]
+
+
+def test_folder_cli_2023_holdout_rejected_before_training(tmp_path, monkeypatch, capsys):
+    import json
+    import sys
+    _archive(tmp_path, "202301")
+    cli = _load_local_cli()
+    def forbidden_read(*_args, **_kwargs):
+        raise AssertionError("SEALED MONTH MUST NOT BE OPENED")
+    monkeypatch.setattr(cli, "screen_nar_local_2017_2022", forbidden_read)
+    monkeypatch.setattr(sys, "argv", [
+        "screen_nar_local_2017_2022.py",
+        "--local-nar-training-zip-directory", str(tmp_path),
+        "--confirm-personal-private-nar-permission",
+    ])
+    assert cli.main() == 2
+    report = json.loads(capsys.readouterr().out)
+    assert report["status"] == "NAR_LOCAL_SCREENING_BLOCKED_SOURCE_OR_FOLDS"
+    assert not report["independentHoldoutOpened"]
+    assert not report["trainingExecuted"]
+
+
+def test_folder_cli_requires_permission_before_any_private_inventory(tmp_path, monkeypatch, capsys):
+    import json
+    import sys
+    cli = _load_local_cli()
+    def forbidden_inventory(*_args, **_kwargs):
+        raise AssertionError("NO INVENTORY WITHOUT PERMISSION")
+    monkeypatch.setattr(cli, "inventory_private_nar_training_directory",
+                        forbidden_inventory)
+    monkeypatch.setattr(sys, "argv", [
+        "screen_nar_local_2017_2022.py",
+        "--local-nar-training-zip-directory", str(tmp_path),
+    ])
+    assert cli.main() == 2
+    report = json.loads(capsys.readouterr().out)
+    assert not report["trainingExecuted"]
+    assert not report["sourceRowsUploaded"]
+
+
+def test_folder_cli_72_fictional_months_fit_both_catboost_models(tmp_path, monkeypatch, capsys):
+    import json
+    import sys
+    pytest.importorskip("catboost")
+    paths = _all_72(tmp_path)
+    originals = [p.stat().st_size for p in paths]
+    cli = _load_local_cli()
+    monkeypatch.setattr(sys, "argv", [
+        "screen_nar_local_2017_2022.py",
+        "--local-nar-training-zip-directory", str(tmp_path),
+        "--confirm-personal-private-nar-permission",
+        "--iterations", "30",
+    ])
+    assert cli.main() == 0
+    stdout = capsys.readouterr().out
+    report = json.loads(stdout)
+    assert report["monthsChecked"] == 72
+    assert report["trainingRaces"] == 60
+    assert report["tuningRaces"] == 12
+    assert report["modelTrainingExecutedLocally"]
+    assert not report["realPayoutRoiVerified"]
+    assert not report["positiveExpectedValueDemonstrated"]
+    assert not report["modelBinarySaved"]
+    assert not report["sourceRowsUploaded"]
+    assert not report["sourceRightsIndependentlyVerified"]
+    assert not report["contemporaneousPreoffSnapshotVerified"]
+    assert not report["independentHoldoutOpened"]
+    assert "架空馬" not in stdout and "架空競馬場" not in stdout
+    assert str(tmp_path) not in stdout
+    assert [p.stat().st_size for p in paths] == originals
+    assert sorted(p.name for p in tmp_path.iterdir()) == sorted(p.name for p in paths)
+
+
+def test_legacy_private_json_path_list_is_preserved(tmp_path, monkeypatch, capsys):
+    import json
+    import sys
+    cli = _load_local_cli()
+    archive = _archive(tmp_path, "201701")
+    manifest = tmp_path / "private.json"
+    manifest.write_text(json.dumps([str(archive)] * 72), encoding="utf-8")
+    monkeypatch.setattr(sys, "argv", [
+        "screen_nar_local_2017_2022.py",
+        "--private-zip-paths-json", str(manifest),
+        "--confirm-personal-private-nar-permission",
+    ])
+    assert cli.main() == 2
+    assert json.loads(capsys.readouterr().out)["status"] == (
+        "NAR_LOCAL_SCREENING_BLOCKED_SOURCE_OR_FOLDS"
+    )
