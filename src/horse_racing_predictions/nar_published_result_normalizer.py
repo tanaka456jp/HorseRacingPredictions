@@ -21,6 +21,12 @@ from typing import Mapping
 from .nar_official_zip_probe import UnsafeNarSource
 
 _EXPECTED_WIDTH = {"racelist": 68, "horselist": 36, "payback": 54}
+# One verified 201711 NAR monthly ZIP uses a 66-field, headered
+# racelist (1228/1228 data rows) while horselist/payback remain 36/54.
+# Only columns <= 26 are consumed by this research code; preserve their
+# positions and pad two unused trailing fields in this pre-2023 variant.
+# Never guess legacy layout from a headerless or mixed-width CSV.
+_LEGACY_RACELIST_WIDTH = 66
 _HEADER_PREFIX = ("競馬場", "競走年月日", "レース番号")
 _MAX_INPUT_CHARS = 16_000_000
 _MAX_ROWS = 250_000
@@ -102,13 +108,20 @@ def _parse(text: str, kind: str, month: str) -> list[tuple[RaceKey, list[str]]]:
         first = next(reader)
         first = [part.strip().lstrip("\ufeff") for part in first]
         has_header = tuple(first[:3]) == _HEADER_PREFIX
+        expected_width = _EXPECTED_WIDTH[kind]
+        legacy = (
+            has_header
+            and kind == "racelist"
+            and "199801" <= month <= "202212"
+            and len(first) == _LEGACY_RACELIST_WIDTH
+        )
         if has_header and (
-            len(first) != _EXPECTED_WIDTH[kind]
+            (len(first) != expected_width and not legacy)
             or len(set(first)) != len(first)
         ):
             raise UnsafeNarSource("NAR_HEADER_SCHEMA_DRIFT")
-        # Headerless positional data is supported only at the exact official
-        # width, never by guessing or fuzzy column mappings.
+        # Headerless positional data requires the canonical width:
+        # a short data row could be truncated or structurally shifted.
         records = [] if has_header else [first]
         records.extend(reader)
     except (csv.Error, StopIteration):
@@ -117,8 +130,12 @@ def _parse(text: str, kind: str, month: str) -> list[tuple[RaceKey, list[str]]]:
         raise UnsafeNarSource("NAR_CSV_ROW_COUNT_INVALID")
     parsed: list[tuple[RaceKey, list[str]]] = []
     for row in records:
-        if len(row) != _EXPECTED_WIDTH[kind]:
+        if len(row) != (_LEGACY_RACELIST_WIDTH if legacy else expected_width):
             raise UnsafeNarSource("NAR_CSV_SCHEMA_DRIFT")
+        if legacy:
+            # Both source headers and every source row were exactly 66
+            # columns. No shifting, guessing or dropping fields.
+            row = [*row, "", ""]
         parsed.append((_race_key(row, month), row))
     return parsed
 
