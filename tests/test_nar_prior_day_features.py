@@ -129,6 +129,7 @@ def test_finishes_must_cover_whole_field_no_ties():
     month = _month("202402")
     entries = _read(month["horselist"])
     entries[1][31] = "1"
+    entries[2][31] = "2"  # invalid non-competition ordering: 1,1,2...
     month["horselist"] = _write(entries)
     with pytest.raises(UnsafeNarSource, match="NAR_ASOF_RESULT_ROSTER_INCOMPLETE"):
         build_prior_day_features({"202402": month})
@@ -143,3 +144,15 @@ def test_duplicate_race_across_months_is_rejected():
     month = _month("202402")
     with pytest.raises(UnsafeNarSource, match="NAR_ASOF_MONTHLY_INPUT_REQUIRED"):
         build_prior_day_features({"202402": {**month, "payback": "x"}})
+
+
+def test_payout_verified_competition_rank_can_feed_retrospective_prior_day_form():
+    data = _month("202402")
+    rows = _read(data["horselist"])
+    rows[4][31] = "4"
+    data["horselist"] = _write(rows)
+    result = build_prior_day_features({"202402": data})
+    assert result.eligible_races == 1
+    assert result.target_runner_rows == 8
+    assert [r.final_finish_label for r in result.return_data] == [1,2,3,4,4,6,7,8]
+    assert not result.contemporaneous_preoff_snapshot_proven
