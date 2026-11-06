@@ -103,7 +103,7 @@ def test_dead_heat_rejected_without_optimistic_roi_selection():
     report = audit_nar_monthly_coverage(data, month="202402")
     assert report.summary.excluded_races == 1
     assert report.summary.exclusion_reasons == (
-        ("NAR_DEAD_HEAT_PAYOUT_SETTLEMENT_UNRESOLVED", 1),
+        ("NAR_PAYOUT_CONTRADICTS_FINAL_RESULTS", 1),
     )
     assert report.summary.status == "NAR_MONTH_HAS_EXCLUSIONS_RESEARCH_ROI_BLOCKED"
 
@@ -176,3 +176,16 @@ def test_blank_finish_retains_full_month_denominator_with_static_reason():
     assert not report.summary.complete_month_for_research
     assert not report.summary.valid_economic_roi_sample
     assert not report.summary.positive_ev_demonstrated
+
+
+def test_payout_verified_dead_heat_is_accepted_without_posthoc_exclusion():
+    sample = _fixture(starters=8)
+    rows = list(csv.reader(StringIO(sample["horselist"])))
+    rows[4][31] = "4"
+    sample["horselist"] = _encode(rows)
+    result = audit_nar_monthly_coverage(sample, month="202402")
+    assert result.summary.observed_races == 1
+    assert result.summary.structurally_accepted_races == 1
+    assert result.summary.unresolved_in_scope_races == 0
+    assert result.summary.exclusion_reasons == ()
+    assert not result.summary.valid_economic_roi_sample
