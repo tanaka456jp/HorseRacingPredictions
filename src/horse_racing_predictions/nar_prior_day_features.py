@@ -19,7 +19,7 @@ from statistics import mean
 from typing import Mapping
 
 from .nar_official_zip_probe import UnsafeNarSource
-from .nar_published_result_normalizer import _parse, RaceKey
+from .nar_published_result_normalizer import _parse, RaceKey, _competition_rank_sequence
 
 
 @dataclass(frozen=True)
@@ -126,7 +126,8 @@ def build_prior_day_features(
         if (len(entries) != size
                 or len({row[1] for row in entries}) != size
                 or len({row[0] for row in entries}) != size
-                or {row[2] for row in entries} != set(range(1, size + 1))):
+                or _competition_rank_sequence([row[2] for row in entries])
+                not in {"COMPLETE", "DEAD_HEAT"}):
             raise UnsafeNarSource("NAR_ASOF_RESULT_ROSTER_INCOMPLETE")
 
     # Date is sorted explicitly, not the original record/source order.
