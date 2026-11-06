@@ -194,3 +194,64 @@ def test_csv_text_limit_refused():
     sample["racelist"] = "A" * 16_000_001
     with pytest.raises(UnsafeNarSource, match="NAR_CSV_TEXT_INVALID"):
         normalize_nar_published_results(sample, month="202402")
+
+
+def _legacy_2017_racelist(sample: dict[str, str]) -> dict[str, str]:
+    """Synthetic old 66-field headered racelist; all other members unchanged."""
+    changed = dict(sample)
+    rows = list(csv.reader(StringIO(sample["racelist"])))
+    changed["racelist"] = _encode([row[:66] for row in rows])
+    return changed
+
+
+def test_2017_headered_66_column_racelist_keeps_original_used_positions():
+    sample = _legacy_2017_racelist(
+        _fixture(month="201711", with_header=True)
+    )
+    from horse_racing_predictions.nar_published_result_normalizer import _parse
+    parsed = _parse(sample["racelist"], "racelist", "201711")
+    assert len(parsed) == 1
+    raw = parsed[0][1]
+    assert len(raw) == 68  # padding at the END; no field shifts
+    assert raw[21] == "ダート"
+    assert raw[26] == "8"
+    assert raw[66:] == ["", ""]
+    normalized = normalize_nar_published_results(sample, month="201711")
+    assert normalized.audit.checked_races == 1
+    assert normalized.audit.checked_starters == 8
+    assert not normalized.audit.pre_event_snapshot_verified
+    assert not normalized.audit.positive_ev_demonstrated
+
+
+def test_legacy_66_width_requires_actual_header_not_implicit_guess():
+    sample = _legacy_2017_racelist(
+        _fixture(month="201711", with_header=False)
+    )
+    with pytest.raises(UnsafeNarSource, match="NAR_CSV_SCHEMA_DRIFT"):
+        normalize_nar_published_results(sample, month="201711")
+
+
+def test_legacy_66_not_accepted_for_2024_or_as_arbitrary_short_data():
+    sample = _legacy_2017_racelist(
+        _fixture(month="202402", with_header=True)
+    )
+    with pytest.raises(UnsafeNarSource, match="NAR_HEADER_SCHEMA_DRIFT"):
+        normalize_nar_published_results(sample, month="202402")
+
+    sample = _fixture(month="201711", with_header=True)
+    rows = list(csv.reader(StringIO(sample["racelist"])))
+    rows[0] = rows[0][:66]
+    sample["racelist"] = _encode(rows)
+    with pytest.raises(UnsafeNarSource, match="NAR_CSV_SCHEMA_DRIFT"):
+        normalize_nar_published_results(sample, month="201711")
+
+
+def test_legacy_66_wrong_field_cannot_hide_malformed_training_race():
+    sample = _legacy_2017_racelist(
+        _fixture(month="201711", with_header=True)
+    )
+    rows = list(csv.reader(StringIO(sample["racelist"])))
+    rows[1][26] = "12"  # mismatch against eight actual starters
+    sample["racelist"] = _encode(rows)
+    with pytest.raises(UnsafeNarSource, match="NAR_RACE_STARTER_COUNT_MISMATCH"):
+        normalize_nar_published_results(sample, month="201711")
