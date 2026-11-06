@@ -261,7 +261,7 @@ def test_verified_lower_place_dead_heat_settles_from_official_yen_not_guessed():
 
     # A malformed dense 1,1,2 rank must never slip through as a valid tie.
     invalid = dict(ranks)
-    invalid["MOCK_HORSE_3"] = 2
+    invalid["MOCK_HORSE_3"] = 1  # 1,1,2,.. is a dense/non-competition rank
     with pytest.raises(ValueError, match="FINAL_RESULTS_INCOMPLETE_OR_DUPLICATED"):
         evaluate_frozen_oddsfree_economics(
             [f], [replace(final, finishing_positions=invalid)],
