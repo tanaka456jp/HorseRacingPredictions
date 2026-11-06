@@ -64,7 +64,12 @@ _SCOPE_REASON = "NAR_PREDECLARED_BANEI_OUT_OF_SCOPE"
 
 
 def _outside_flat_study_scope(key: RaceKey) -> bool:
-    return key[0].strip() == _PREDECLARED_BANEI_VENUE
+    # The official 201711 monthly NAR ZIP contains 132 non-flat races
+    # under an Obihiro venue label that is NOT the bare string "帯広".
+    # Match the already-established normalizer's Obihiro identity rule,
+    # rather than letting such predeclared banei races masquerade as
+    # payout-invalid flat races. Scope is venue-only, never result-based.
+    return _PREDECLARED_BANEI_VENUE in key[0].strip()
 
 
 def _as_csv(rows: list[list[str]]) -> str:
