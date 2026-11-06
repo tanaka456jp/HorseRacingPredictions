@@ -103,7 +103,7 @@ def test_dead_heat_rejected_without_optimistic_roi_selection():
     report = audit_nar_monthly_coverage(data, month="202402")
     assert report.summary.excluded_races == 1
     assert report.summary.exclusion_reasons == (
-        ("NAR_DEAD_HEAT_SCRATCH_OR_INCOMPLETE_RANKS", 1),
+        ("NAR_DEAD_HEAT_PAYOUT_SETTLEMENT_UNRESOLVED", 1),
     )
     assert report.summary.status == "NAR_MONTH_HAS_EXCLUSIONS_RESEARCH_ROI_BLOCKED"
 
@@ -113,7 +113,7 @@ def test_duplicate_payback_is_a_named_exclusion():
     data["payback"] += data["payback"]
     report = audit_nar_monthly_coverage(data, month="202402")
     assert report.summary.exclusion_reasons == (
-        ("NAR_DEAD_HEAT_OR_DUPLICATE_PAYOUT", 1),
+        ("NAR_IDENTICAL_DUPLICATE_PAYOUT_ROW", 1),
     )
 
 
@@ -158,3 +158,21 @@ def test_obihiro_venue_name_containing_banei_only_does_not_drop_flat_venue():
     report = audit_nar_monthly_coverage(_combine(flat, second), month="202402")
     assert report.summary.structurally_accepted_races == 2
     assert report.summary.predeclared_out_of_scope_races == 0
+
+
+def test_blank_finish_retains_full_month_denominator_with_static_reason():
+    first = _fixture()
+    other = _second_race()
+    rows = list(csv.reader(StringIO(other["horselist"])))
+    rows[1][31] = ""  # non-starter or missing-result reason is unknown
+    other["horselist"] = _encode(rows)
+    report = audit_nar_monthly_coverage(_combine(first, other), month="202402")
+    assert report.summary.observed_races == 2
+    assert report.summary.structurally_accepted_races == 1
+    assert report.summary.unresolved_in_scope_races == 1
+    assert report.summary.exclusion_reasons == (
+        ("NAR_OFFICIAL_BLANK_FINISH_STATUS_UNRESOLVED", 1),
+    )
+    assert not report.summary.complete_month_for_research
+    assert not report.summary.valid_economic_roi_sample
+    assert not report.summary.positive_ev_demonstrated
