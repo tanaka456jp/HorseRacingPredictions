@@ -127,3 +127,34 @@ def test_schema_corruption_still_refuses_entire_source():
 def test_protected_year_rejected_before_race_audit():
     with pytest.raises(UnsafeNarSource, match="NAR_PROTECTED_OR_INVALID_DATE"):
         audit_nar_monthly_coverage(_fixture(month="202502"), month="202502")
+
+
+def test_obihiro_variant_is_predeclared_outside_flat_scope_not_invalid_payout():
+    flat = _fixture()
+    banei = _second_race(race_number="4", bad_win=True)
+    for kind in ("racelist", "horselist", "payback"):
+        rows = list(csv.reader(StringIO(banei[kind])))
+        for row in rows:
+            row[0] = "帯広ば"
+        if kind == "racelist":
+            rows[0][21] = "ばんえい"
+        banei[kind] = _encode(rows)
+    result = audit_nar_monthly_coverage(_combine(flat, banei), month="202402")
+    summary = result.summary
+    assert summary.observed_races == 2
+    assert summary.structurally_accepted_races == 1
+    assert summary.predeclared_out_of_scope_races == 1
+    assert summary.unresolved_in_scope_races == 0
+    assert summary.exclusion_reasons == (
+        ("NAR_PREDECLARED_BANEI_OUT_OF_SCOPE", 1),
+    )
+    assert summary.complete_month_for_research
+    assert not summary.approved_for_model_training
+
+
+def test_obihiro_venue_name_containing_banei_only_does_not_drop_flat_venue():
+    flat = _fixture()
+    second = _second_race(race_number="4")
+    report = audit_nar_monthly_coverage(_combine(flat, second), month="202402")
+    assert report.summary.structurally_accepted_races == 2
+    assert report.summary.predeclared_out_of_scope_races == 0
