@@ -244,3 +244,26 @@ def test_score_and_settlement_maps_cannot_change_after_freeze():
     mutable_scores["MOCK_HORSE_1"] = -500
     assert mutated.winner_scores["MOCK_HORSE_1"] > 0
     assert select_top3_and_outsider(mutated).top3[0] == "MOCK_HORSE_1"
+
+
+def test_verified_lower_place_dead_heat_settles_from_official_yen_not_guessed():
+    f, final = fixture_race()
+    ranks = dict(final.finishing_positions)
+    ranks["MOCK_HORSE_5"] = 4  # 1,2,3,4,4,6,7,8
+    tie_final = replace(final, finishing_positions=ranks)
+    report = evaluate_frozen_oddsfree_economics(
+        [f], [tie_final], bootstrap_samples=200,
+    )
+    assert report.races == 1
+    assert report.combined_stake_yen == 200
+    assert report.combined_return_yen == 350
+    assert not report.positive_expected_value_demonstrated
+
+    # A malformed dense 1,1,2 rank must never slip through as a valid tie.
+    invalid = dict(ranks)
+    invalid["MOCK_HORSE_3"] = 2
+    with pytest.raises(ValueError, match="FINAL_RESULTS_INCOMPLETE_OR_DUPLICATED"):
+        evaluate_frozen_oddsfree_economics(
+            [f], [replace(final, finishing_positions=invalid)],
+            bootstrap_samples=200,
+        )
