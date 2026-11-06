@@ -18,7 +18,7 @@ from datetime import date
 from typing import Iterable, Mapping
 
 from .nar_official_zip_probe import UnsafeNarSource
-from .nar_published_result_normalizer import _parse, RaceKey
+from .nar_published_result_normalizer import _parse, RaceKey, _competition_rank_sequence
 from .nar_prior_day_features import (
     NarAsOfFeatures, NarAsOfResearchBatch, NarResearchTarget,
     _birthday, _integer,
@@ -97,7 +97,8 @@ def build_prior_day_features_month_by_month(
             if (len(horses) != size
                     or len({entry[0] for entry in horses}) != size
                     or len({entry[1] for entry in horses}) != size
-                    or {entry[2] for entry in horses} != set(range(1, size + 1))):
+                    or _competition_rank_sequence([entry[2] for entry in horses])
+                  not in {"COMPLETE", "DEAD_HEAT"}):
                 raise UnsafeNarSource("NAR_ASOF_RESULT_ROSTER_INCOMPLETE")
 
         by_day: dict[date, list[RaceKey]] = defaultdict(list)
