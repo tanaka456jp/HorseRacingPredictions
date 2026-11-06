@@ -58,44 +58,68 @@ jobs:
             throw 'NAR_SINGLE_MONTH_INVALID_ZIP_SIZE'
           }
           $env:PYTHONPATH = Join-Path (Get-Location).Path 'src'
-          $cli = Join-Path (Get-Location).Path 'scripts\inspect_nar_monthly_results_local.py'
-          # Never echo arguments, stdout, stderr, private filename, or source rows.
-          $resultLines = & python $cli --local-monthly-race-zip $source.FullName --confirm-personal-private-nar-permission 2>&1
-          $returnCode = $LASTEXITCODE
-          if ($returnCode -ne 0) {
-            Write-Host 'NAR_SINGLE_MONTH_PRIVATE_SOURCE_REVIEW_REQUIRED'
+          $cli = Join-Path (Get-Location).Path 'scripts\diagnose_nar_one_month_local.py'
+          # Pipe stays in-memory; no stderr or licensed input rows printed.
+          $lines = & python $cli --local-monthly-race-zip $source.FullName --expected-month '201711' --confirm-personal-private-nar-permission 2>&1
+          $code = $LASTEXITCODE
+          try {
+            $doc = [string]::Join([Environment]::NewLine, @($lines)) | ConvertFrom-Json
+          } catch {
+            Write-Host 'NAR_SINGLE_MONTH_PYTHON_RUNTIME_OR_PRIVATE_JSON_INVALID'
             exit 2
           }
-          try {
-            $doc = [string]::Join([Environment]::NewLine, @($resultLines)) | ConvertFrom-Json
-            if ($doc.month -cne '201711' -or
-                $doc.completeMonth -ne $true -or
-                $doc.status -cne 'NAR_LOCAL_FINAL_RESULTS_VALIDATED_NO_PRE_EVENT_PROOF' -or
-                $doc.positiveEvDemonstrated -ne $false -or
-                $doc.approvedForTraining -ne $false) {
-              throw 'NAR_SINGLE_MONTH_UNEXPECTED_AGGREGATE_REPORT'
+          if ($doc.month -cne '201711') {
+            Write-Host 'NAR_SINGLE_MONTH_UNEXPECTED_MONTH'
+            exit 2
+          }
+          if ($doc.status -ceq 'NAR_PRIVATE_MONTH_DIAGNOSTIC_BLOCKED') {
+            if ([string]$doc.stage -cnotmatch '^(ZIP_METADATA|ZIP_CSV_READ|CSV_SCHEMA_OR_MONTH|PRIVATE_PREFLIGHT)$' -or
+                [string]$doc.reasonCode -cnotmatch '^NAR_[A-Z0-9_]{1,90}$') {
+              Write-Host 'NAR_SINGLE_MONTH_PRIVATE_REPORT_INVALID'
+              exit 2
             }
-            # Strictly whitelisted and numeric-only console output.
-            $safe = [ordered]@{
-              schema = 'NAR.PC2.SinglePrivateMonthAggregate.v1'
-              status = 'NAR_201711_PRIVATE_STRUCTURAL_CHECK_PASSED_NO_REAL_EV'
+            ([ordered]@{
+              status = 'NAR_PRIVATE_201711_REVIEW_REQUIRED'
               month = '201711'
-              observedRaces = [int]$doc.observedRaces
-              parsedRaces = [int]$doc.parsedRaces
-              parsedStarters = [int]$doc.parsedStarters
-              excludedRaces = [int]$doc.excludedRaces
-              predeclaredOutOfScopeRaces = [int]$doc.predeclaredOutOfScopeRaces
-              unresolvedInScopeRaces = [int]$doc.unresolvedInScopeRaces
-              preEventSnapshotProven = $false
-              actualRightsIndependentlyVerified = $false
-              full72MonthCoverage = $false
-              trainModelsRun = $false
-              independentOosOpened = $false
+              stage = [string]$doc.stage
+              reasonCode = [string]$doc.reasonCode
               sourceBytesUploaded = $false
+              trainingRun = $false
               positiveEvDemonstrated = $false
-            }
-            $safe | ConvertTo-Json -Compress
-          } catch {
+            } | ConvertTo-Json -Compress)
+            exit 2
+          }
+          if ($doc.stage -cne 'MONTH_COVERAGE' -or $code -notin @(0,2) -or
+              $doc.status -cnotin @('NAR_PRIVATE_MONTH_STRUCTURE_OK_PREOFF_UNVERIFIED', 'NAR_PRIVATE_MONTH_REQUIRES_COVERAGE_REVIEW') -or
+              $doc.positiveEvDemonstrated -ne $false -or
+              $doc.sourceBytesUploaded -ne $false) {
             Write-Host 'NAR_SINGLE_MONTH_PRIVATE_REPORT_INVALID'
             exit 2
           }
+          $reasons = [ordered]@{}
+          foreach ($prop in $doc.staticReasonCounts.PSObject.Properties) {
+            if ($prop.Name -cnotmatch '^NAR_[A-Z0-9_]{1,90}$') {
+              Write-Host 'NAR_SINGLE_MONTH_REASON_CODE_INVALID'
+              exit 2
+            }
+            $reasons[$prop.Name] = [int]$prop.Value
+          }
+          $safe = [ordered]@{
+            schema = 'NAR.PC2.SinglePrivateMonthAggregate.v2'
+            status = [string]$doc.status
+            month = '201711'
+            observedRaces = [int]$doc.observedRaces
+            parsedRaces = [int]$doc.acceptedFlatRaces
+            parsedStarters = [int]$doc.acceptedFlatStarters
+            predeclaredOutOfScopeRaces = [int]$doc.predeclaredOutOfScopeRaces
+            unresolvedInScopeRaces = [int]$doc.unresolvedInScopeRaces
+            staticReasonCounts = $reasons
+            preEventSnapshotProven = $false
+            actualRightsIndependentlyVerified = $false
+            trainModelsRun = $false
+            independentOosOpened = $false
+            sourceBytesUploaded = $false
+            positiveEvDemonstrated = $false
+          }
+          $safe | ConvertTo-Json -Compress
+          if ($code -ne 0) { exit 2 }
