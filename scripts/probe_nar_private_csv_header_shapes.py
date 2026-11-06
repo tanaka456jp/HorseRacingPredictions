@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import csv
 from io import StringIO
+from itertools import chain
 import json
 from pathlib import Path
 import re
@@ -57,6 +58,42 @@ def inspect_header_shape(path: Path, *, month: str, permission_confirmed: bool) 
             second = next(reader, [])
             headers = [cell.strip().lstrip("\ufeff") for cell in first]
             prefix = tuple(headers[:3]) == _HEADER_PREFIX
+            position_counts = None
+            if kind == "racelist":
+                # Inspect only schema/semantic counts, never text values.
+                position_counts = {
+                    "records": 0,
+                    "rowWidthCounts": {},
+                    "flatVenueRecords": 0,
+                    "flatVenueSurfaceAt21": 0,
+                    "flatVenueDistanceAt23": 0,
+                    "flatVenueStartersAt26": 0,
+                    "baneiVenueRecords": 0,
+                }
+                for row in chain([second], reader):
+                    if not row:
+                        continue
+                    position_counts["records"] += 1
+                    if position_counts["records"] > 250000:
+                        raise UnsafeNarSource("NAR_PROBE_TOO_MANY_RACES")
+                    width = str(len(row))
+                    widths = position_counts["rowWidthCounts"]
+                    widths[width] = widths.get(width, 0) + 1
+                    if row[0].strip() == "帯広":
+                        position_counts["baneiVenueRecords"] += 1
+                        continue
+                    position_counts["flatVenueRecords"] += 1
+                    if len(row) > 26:
+                        if row[21].strip() in {"芝", "ダート"}:
+                            position_counts["flatVenueSurfaceAt21"] += 1
+                        raw_dist = row[23].strip()
+                        if (raw_dist.isascii() and raw_dist.isdecimal()
+                                and 100 <= int(raw_dist) <= 5000):
+                            position_counts["flatVenueDistanceAt23"] += 1
+                        raw_starters = row[26].strip()
+                        if (raw_starters.isascii() and raw_starters.isdecimal()
+                                and 5 <= int(raw_starters) <= 18):
+                            position_counts["flatVenueStartersAt26"] += 1
             aggregate.append({
                 "kind": kind,
                 "expectedWidth": _EXPECTED_WIDTH[kind],
@@ -70,6 +107,7 @@ def inspect_header_shape(path: Path, *, month: str, permission_confirmed: bool) 
                     sum(not cell for cell in headers) if prefix else None
                 ),
                 "prefixAndWidthMatch": prefix and len(first) == _EXPECTED_WIDTH[kind],
+                "racelistPositionalSanityCounts": position_counts,
             })
     return {
         "status": "NAR_LOCAL_HEADER_SHAPE_ONLY",
