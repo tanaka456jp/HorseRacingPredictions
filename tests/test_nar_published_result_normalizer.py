@@ -121,7 +121,7 @@ def test_outcome_rank_tie_must_not_be_overcounted():
     source = list(csv.reader(StringIO(sample["horselist"])))
     source[1][31] = "1"
     sample["horselist"] = _encode(source)
-    with pytest.raises(UnsafeNarSource, match="NAR_DEAD_HEAT_PAYOUT_SETTLEMENT_UNRESOLVED"):
+    with pytest.raises(UnsafeNarSource, match="NAR_PAYOUT_CONTRADICTS_FINAL_RESULTS"):
         normalize_nar_published_results(sample, month="202402")
 
 
@@ -297,3 +297,26 @@ def test_distinct_multiple_payback_rows_require_actual_dead_heat_settlement_revi
 def test_competition_rank_sequence_never_relabels_ties(ranks, expected):
     from horse_racing_predictions.nar_published_result_normalizer import _competition_rank_sequence
     assert _competition_rank_sequence(ranks) == expected
+
+
+def test_payout_verified_lower_rank_dead_heat_is_preserved_as_same_rank():
+    sample = _fixture(starters=8)
+    rows = list(csv.reader(StringIO(sample["horselist"])))
+    rows[4][31] = "4"  # fifth runner ties the fourth: 1,2,3,4,4,6,7,8
+    sample["horselist"] = _encode(rows)
+    normalized = normalize_nar_published_results(sample, month="202402")
+    finish = dict(normalized.races[0].finish_by_number)
+    assert finish[4] == finish[5] == 4
+    assert finish[6] == 6
+    assert dict(normalized.races[0].win_return_by_number)[1] == 250
+    assert dict(normalized.races[0].place_return_by_number)[4] == 0
+    assert not normalized.audit.positive_ev_demonstrated
+
+
+def test_dead_heat_for_win_requires_both_winners_published_not_one_fake_ticket():
+    sample = _fixture(starters=8)
+    rows = list(csv.reader(StringIO(sample["horselist"])))
+    rows[1][31] = "1"
+    sample["horselist"] = _encode(rows)
+    with pytest.raises(UnsafeNarSource, match="NAR_PAYOUT_CONTRADICTS_FINAL_RESULTS"):
+        normalize_nar_published_results(sample, month="202402")
