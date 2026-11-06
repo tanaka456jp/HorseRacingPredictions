@@ -5,6 +5,7 @@ on:
     branches: ["feature/weekly-odds-free-note-20261021"]
     paths:
       - ".github/workflows/nar-pc2-one-month-201711-readonly.yml"
+      - "scripts/probe_nar_private_csv_header_shapes.py"
   workflow_dispatch:
 
 permissions:
