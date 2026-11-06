@@ -7,6 +7,8 @@ on:
       - ".github/workflows/nar-pc2-one-month-201711-readonly.yml"
       - "scripts/probe_nar_private_csv_header_shapes.py"
       - "src/horse_racing_predictions/nar_published_result_normalizer.py"
+      - "src/horse_racing_predictions/nar_monthly_coverage_audit.py"
+      - "tests/test_nar_monthly_coverage_audit.py"
       - "tests/test_nar_published_result_normalizer.py"
   workflow_dispatch:
 
