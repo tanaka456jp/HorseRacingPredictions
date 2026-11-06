@@ -94,7 +94,7 @@ def test_payback_is_one_row_per_race_not_per_horse():
 
 def test_tie_or_duplicate_payback_row_rejected():
     sample = _fixture(duplicate_payback=True)
-    with pytest.raises(UnsafeNarSource, match="NAR_DEAD_HEAT_OR_DUPLICATE_PAYOUT"):
+    with pytest.raises(UnsafeNarSource, match="NAR_IDENTICAL_DUPLICATE_PAYOUT_ROW"):
         normalize_nar_published_results(sample, month="202402")
 
 
@@ -121,7 +121,7 @@ def test_outcome_rank_tie_must_not_be_overcounted():
     source = list(csv.reader(StringIO(sample["horselist"])))
     source[1][31] = "1"
     sample["horselist"] = _encode(source)
-    with pytest.raises(UnsafeNarSource, match="NAR_DEAD_HEAT_SCRATCH_OR_INCOMPLETE_RANKS"):
+    with pytest.raises(UnsafeNarSource, match="NAR_DEAD_HEAT_PAYOUT_SETTLEMENT_UNRESOLVED"):
         normalize_nar_published_results(sample, month="202402")
 
 
@@ -255,3 +255,45 @@ def test_legacy_66_wrong_field_cannot_hide_malformed_training_race():
     sample["racelist"] = _encode(rows)
     with pytest.raises(UnsafeNarSource, match="NAR_RACE_STARTER_COUNT_MISMATCH"):
         normalize_nar_published_results(sample, month="201711")
+
+
+@pytest.mark.parametrize(("raw_finish", "error"), [
+    ("", "NAR_OFFICIAL_BLANK_FINISH_STATUS_UNRESOLVED"),
+    ("取消", "NAR_OFFICIAL_EXCEPTION_SETTLEMENT_UNRESOLVED"),
+    ("除外", "NAR_OFFICIAL_EXCEPTION_SETTLEMENT_UNRESOLVED"),
+    ("中止", "NAR_OFFICIAL_EXCEPTION_SETTLEMENT_UNRESOLVED"),
+    ("失格", "NAR_OFFICIAL_EXCEPTION_SETTLEMENT_UNRESOLVED"),
+    ("取止", "NAR_OFFICIAL_EXCEPTION_SETTLEMENT_UNRESOLVED"),
+    ("不成", "NAR_OFFICIAL_EXCEPTION_SETTLEMENT_UNRESOLVED"),
+    ("3降", "NAR_DEMOTED_FINISH_SETTLEMENT_UNRESOLVED"),
+    ("?", "NAR_FINISH_RANK_INVALID"),
+])
+def test_official_non_numeric_finish_is_preserved_as_unsettled_not_as_a_loss(raw_finish, error):
+    sample = _fixture()
+    rows = list(csv.reader(StringIO(sample["horselist"])))
+    rows[1][31] = raw_finish
+    sample["horselist"] = _encode(rows)
+    with pytest.raises(UnsafeNarSource, match=error):
+        normalize_nar_published_results(sample, month="202402")
+
+
+def test_distinct_multiple_payback_rows_require_actual_dead_heat_settlement_review():
+    sample = _fixture()
+    rows = list(csv.reader(StringIO(sample["payback"])))
+    alternate = rows[0].copy()
+    alternate[4] = "2"
+    sample["payback"] = _encode([rows[0], alternate])
+    with pytest.raises(UnsafeNarSource, match="NAR_OFFICIAL_MULTIROW_PAYOUT_SETTLEMENT_UNRESOLVED"):
+        normalize_nar_published_results(sample, month="202402")
+
+
+@pytest.mark.parametrize(("ranks", "expected"), [
+    ([1, 2, 3, 4], "COMPLETE"),
+    ([1, 1, 3, 4], "DEAD_HEAT"),
+    ([1, 2, 2, 4], "DEAD_HEAT"),
+    ([1, 1, 2, 4], "INCOMPLETE"),
+    ([1, 2, 4], "INCOMPLETE"),
+])
+def test_competition_rank_sequence_never_relabels_ties(ranks, expected):
+    from horse_racing_predictions.nar_published_result_normalizer import _competition_rank_sequence
+    assert _competition_rank_sequence(ranks) == expected
