@@ -69,6 +69,9 @@ def inspect_header_shape(path: Path, *, month: str, permission_confirmed: bool) 
                     "flatVenueDistanceAt23": 0,
                     "flatVenueStartersAt26": 0,
                     "baneiVenueRecords": 0,
+                    "venueContainsBaneiNameRecords": 0,
+                    "nonstandardSurfaceRecords": 0,
+                    "nonstandardSurfaceAtBaneiNamedVenue": 0,
                 }
                 for row in chain([second], reader):
                     if not row:
@@ -79,8 +82,16 @@ def inspect_header_shape(path: Path, *, month: str, permission_confirmed: bool) 
                     width = str(len(row))
                     widths = position_counts["rowWidthCounts"]
                     widths[width] = widths.get(width, 0) + 1
+                    has_banei_name = "帯広" in row[0]
+                    if has_banei_name:
+                        position_counts["venueContainsBaneiNameRecords"] += 1
                     if row[0].strip() == "帯広":
                         position_counts["baneiVenueRecords"] += 1
+                    if len(row) > 26 and row[21].strip() not in {"芝", "ダート"}:
+                        position_counts["nonstandardSurfaceRecords"] += 1
+                        if has_banei_name:
+                            position_counts["nonstandardSurfaceAtBaneiNamedVenue"] += 1
+                    if has_banei_name:
                         continue
                     position_counts["flatVenueRecords"] += 1
                     if len(row) > 26:
