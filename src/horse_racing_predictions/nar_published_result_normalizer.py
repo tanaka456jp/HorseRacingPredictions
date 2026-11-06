@@ -247,19 +247,16 @@ def normalize_nar_published_results(
             raise UnsafeNarSource("NAR_STARTER_NAME_MISSING")
         bag[num] = rank
 
-    payouts: dict[RaceKey, list[str]] = {}
+    payouts: dict[RaceKey, list[list[str]]] = {}
     for key, row in parsed["payback"]:
-        if key in payouts:
-            # NAR's manual explicitly permits multiple *distinct* payback
-            # records per tied race. A single-row protocol must not choose
-            # the first and silently discard the other(s).
-            code = (
-                "NAR_IDENTICAL_DUPLICATE_PAYOUT_ROW"
-                if row == payouts[key]
-                else "NAR_OFFICIAL_MULTIROW_PAYOUT_SETTLEMENT_UNRESOLVED"
-            )
-            raise UnsafeNarSource(code)
-        payouts[key] = row
+        rows = payouts.setdefault(key, [])
+        # Official dead heats can create multiple distinct payback records.
+        # Identical duplicate rows do not establish new official outcomes.
+        if row in rows:
+            raise UnsafeNarSource("NAR_IDENTICAL_DUPLICATE_PAYOUT_ROW")
+        if len(rows) >= 18:
+            raise UnsafeNarSource("NAR_EXCESSIVE_OFFICIAL_PAYOUT_ROWS")
+        rows.append(row)
 
     if not races or set(races) != set(entrants) or set(races) != set(payouts):
         raise UnsafeNarSource("NAR_RACE_COVERAGE_MISMATCH")
@@ -284,9 +281,19 @@ def normalize_nar_published_results(
                             minimum=5, maximum=18)
         if declared != n:
             raise UnsafeNarSource("NAR_RACE_STARTER_COUNT_MISMATCH")
-        row = payouts[key]
-        wins = _payout_pairs(row, ((4, 5),))
-        places = _payout_pairs(row, ((7, 8), (10, 11), (13, 14)))
+        wins: dict[int, int] = {}
+        places: dict[int, int] = {}
+        for row in payouts[key]:
+            row_wins = _payout_pairs(row, ((4, 5),))
+            row_places = _payout_pairs(row, ((7, 8), (10, 11), (13, 14)))
+            # A duplicate ticket identifier may occur on separate payout
+            # rows; its actual yen amount MUST match before we unite it.
+            # Never sum the amounts or choose the more profitable record.
+            for source, dest in ((row_wins, wins), (row_places, places)):
+                for number, actual_yen in source.items():
+                    if number in dest and dest[number] != actual_yen:
+                        raise UnsafeNarSource("NAR_OFFICIAL_MULTIROW_PAYOUT_CONFLICT")
+                    dest[number] = actual_yen
         winner = {number for number, rank in entrants_by_num.items()
                   if rank == 1}
         place_cutoff = 2 if n <= 7 else 3
