@@ -125,3 +125,14 @@ def test_no_result_lists_retained_by_per_horse_aggregates():
     fields = module._Aggregate.__dataclass_fields__
     assert set(fields) == {"starts", "wins", "top3", "rank_sum", "last_date"}
     assert not hasattr(module._Aggregate(), "__dict__")
+
+
+def test_streaming_and_reference_form_preserve_identical_competition_ties():
+    data = _fake("202402")
+    rows = list(csv.reader(StringIO(data["horselist"])))
+    rows[4][31] = "4"  # valid fourth-place dead heat
+    data["horselist"] = _dump(rows)
+    first = build_prior_day_features({"202402": data})
+    second = build_prior_day_features_month_by_month([("202402", data)])
+    assert first.return_data == second.return_data
+    assert second.return_data[4].final_finish_label == 4
