@@ -1,0 +1,101 @@
+name: NAR PC2 Single Approved 201711 ZIP Read-Only Aggregate Check
+
+on:
+  push:
+    branches: ["feature/weekly-odds-free-note-20261021"]
+    paths:
+      - ".github/workflows/nar-pc2-one-month-201711-readonly.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nar-pc2-201711-readonly
+  cancel-in-progress: false
+
+jobs:
+  one-operator-downloaded-archive:
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 8
+    steps:
+      - name: Checkout code while protecting all PC2 data
+        uses: actions/checkout@v4
+        with:
+          clean: false
+          persist-credentials: false
+      - name: Read ONLY one operator-downloaded local 201711 NAR archive
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:COMPUTERNAME -cne 'DESKTOP-MVV1FD4') {
+            throw 'NAR_SINGLE_MONTH_WRONG_PHYSICAL_PC'
+          }
+          if ($env:GITHUB_REPOSITORY -cne 'tanaka456jp/HorseRacingPredictions' -or
+              $env:GITHUB_REF_NAME -cne 'feature/weekly-odds-free-note-20261021') {
+            throw 'NAR_SINGLE_MONTH_WRONG_REPOSITORY_OR_REF'
+          }
+          $landing = 'D:\Development\HorseRacingPredictions\nar-personal'
+          foreach ($dir in @('D:\Development', 'D:\Development\HorseRacingPredictions', $landing)) {
+            if (-not (Test-Path -LiteralPath $dir -PathType Container)) {
+              throw 'NAR_SINGLE_MONTH_PRIVATE_FOLDER_MISSING'
+            }
+            $item = Get-Item -LiteralPath $dir -Force
+            if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+              throw 'NAR_SINGLE_MONTH_REPARSE_FOLDER_REJECTED'
+            }
+          }
+          $sources = @(Get-ChildItem -LiteralPath $landing -File -Filter '201711_*_race.zip' -Force)
+          if ($sources.Count -ne 1) {
+            throw 'NAR_SINGLE_MONTH_EXPECTED_EXACTLY_ONE_NOVEMBER_2017_ZIP'
+          }
+          $source = $sources[0]
+          if ($source.Name -cnotmatch '^201711_[0-9]{8,13}_race\.zip$' -or
+              ($source.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+            throw 'NAR_SINGLE_MONTH_SOURCE_NAME_OR_REPARSE_REJECTED'
+          }
+          if ($source.Length -lt 1 -or $source.Length -gt 400000000) {
+            throw 'NAR_SINGLE_MONTH_INVALID_ZIP_SIZE'
+          }
+          $env:PYTHONPATH = Join-Path (Get-Location).Path 'src'
+          $cli = Join-Path (Get-Location).Path 'scripts\inspect_nar_monthly_results_local.py'
+          # Never echo arguments, stdout, stderr, private filename, or source rows.
+          $resultLines = & python $cli --local-monthly-race-zip $source.FullName --confirm-personal-private-nar-permission 2>&1
+          $returnCode = $LASTEXITCODE
+          if ($returnCode -ne 0) {
+            Write-Host 'NAR_SINGLE_MONTH_PRIVATE_SOURCE_REVIEW_REQUIRED'
+            exit 2
+          }
+          try {
+            $doc = [string]::Join([Environment]::NewLine, @($resultLines)) | ConvertFrom-Json
+            if ($doc.month -cne '201711' -or
+                $doc.completeMonth -ne $true -or
+                $doc.status -cne 'NAR_LOCAL_FINAL_RESULTS_VALIDATED_NO_PRE_EVENT_PROOF' -or
+                $doc.positiveEvDemonstrated -ne $false -or
+                $doc.approvedForTraining -ne $false) {
+              throw 'NAR_SINGLE_MONTH_UNEXPECTED_AGGREGATE_REPORT'
+            }
+            # Strictly whitelisted and numeric-only console output.
+            $safe = [ordered]@{
+              schema = 'NAR.PC2.SinglePrivateMonthAggregate.v1'
+              status = 'NAR_201711_PRIVATE_STRUCTURAL_CHECK_PASSED_NO_REAL_EV'
+              month = '201711'
+              observedRaces = [int]$doc.observedRaces
+              parsedRaces = [int]$doc.parsedRaces
+              parsedStarters = [int]$doc.parsedStarters
+              excludedRaces = [int]$doc.excludedRaces
+              predeclaredOutOfScopeRaces = [int]$doc.predeclaredOutOfScopeRaces
+              unresolvedInScopeRaces = [int]$doc.unresolvedInScopeRaces
+              preEventSnapshotProven = $false
+              actualRightsIndependentlyVerified = $false
+              full72MonthCoverage = $false
+              trainModelsRun = $false
+              independentOosOpened = $false
+              sourceBytesUploaded = $false
+              positiveEvDemonstrated = $false
+            }
+            $safe | ConvertTo-Json -Compress
+          } catch {
+            Write-Host 'NAR_SINGLE_MONTH_PRIVATE_REPORT_INVALID'
+            exit 2
+          }
