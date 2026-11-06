@@ -50,7 +50,8 @@ def _safe_finish_bucket(value: str) -> str:
         c for c in unicodedata.normalize("NFKC", value) if not c.isspace()
     )
     if normalized.isascii() and normalized.isdecimal():
-        return "NUMERIC_RANK" if 1 <= int(normalized) <= 18 else "OTHER_NUMBER"
+        return ("NUMERIC_RANK" if len(normalized) <= 2
+                and 1 <= int(normalized) <= 18 else "OTHER_NUMBER")
     if not normalized:
         return "BLANK"
     if normalized in _FINISH_MARKERS:
