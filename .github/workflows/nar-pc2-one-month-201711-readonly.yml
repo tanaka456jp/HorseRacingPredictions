@@ -87,6 +87,25 @@ jobs:
               trainingRun = $false
               positiveEvDemonstrated = $false
             } | ConvertTo-Json -Compress)
+            if ($doc.reasonCode -ceq 'NAR_HEADER_SCHEMA_DRIFT') {
+              $probe = Join-Path (Get-Location).Path 'scripts\probe_nar_private_csv_header_shapes.py'
+              $probeLines = & python $probe --local-monthly-race-zip $source.FullName --expected-month '201711' --confirm-personal-private-nar-permission 2>&1
+              if ($LASTEXITCODE -ne 0) {
+                Write-Host 'NAR_PRIVATE_HEADER_SHAPE_PROBE_NOT_AVAILABLE'
+              } else {
+                try {
+                  $shapes = [string]::Join([Environment]::NewLine, @($probeLines)) | ConvertFrom-Json
+                  if ($shapes.status -cne 'NAR_LOCAL_HEADER_SHAPE_ONLY' -or
+                      @($shapes.members).Count -ne 3 -or
+                      $shapes.sourceTextExported -ne $false) {
+                    throw 'NAR_PROBE_INVALID'
+                  }
+                  $shapes | ConvertTo-Json -Depth 5 -Compress
+                } catch {
+                  Write-Host 'NAR_PRIVATE_HEADER_SHAPE_RESULT_INVALID'
+                }
+              }
+            }
             exit 2
           }
           if ($doc.stage -cne 'MONTH_COVERAGE' -or $code -notin @(0,2) -or
