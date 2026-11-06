@@ -14,6 +14,7 @@ from itertools import chain
 import json
 from pathlib import Path
 import re
+import unicodedata
 from zipfile import ZipFile
 
 from horse_racing_predictions.nar_official_zip_probe import (
@@ -30,6 +31,36 @@ _CSV_LIMIT = 16_000_000
 _STATIC = re.compile(r"NAR_[A-Z0-9_]{1,90}\Z")
 
 
+
+# All categories are hardcoded; never print a private cell or race identity.
+_FINISH_MARKERS = {
+    "取消": "SCRATCH", "出走取消": "SCRATCH",
+    "除外": "EXCLUDED", "競走除外": "EXCLUDED",
+    "中止": "DID_NOT_FINISH", "競走中止": "DID_NOT_FINISH",
+    "失格": "DISQUALIFIED",
+    "取止": "RACE_CANCELLED", "競走取止": "RACE_CANCELLED",
+    "競走取り止め": "RACE_CANCELLED",
+    "不成": "NO_CONTEST", "競走不成立": "NO_CONTEST",
+}
+
+
+def _safe_finish_bucket(value: str) -> str:
+    """Return only a bounded, predefined *category*, never a source value."""
+    normalized = "".join(
+        c for c in unicodedata.normalize("NFKC", value) if not c.isspace()
+    )
+    if normalized.isascii() and normalized.isdecimal():
+        return "NUMERIC_RANK" if 1 <= int(normalized) <= 18 else "OTHER_NUMBER"
+    if not normalized:
+        return "BLANK"
+    if normalized in _FINISH_MARKERS:
+        return _FINISH_MARKERS[normalized]
+    if normalized.endswith(("降", "降着")):
+        digits = normalized[:-1] if normalized.endswith("降") else normalized[:-2]
+        if digits.isascii() and digits.isdecimal() and 1 <= int(digits) <= 18:
+            return "DEMOTED"
+    return "OTHER_TEXT"
+
 def inspect_header_shape(path: Path, *, month: str, permission_confirmed: bool) -> dict:
     if permission_confirmed is not True:
         raise UnsafeNarSource("NAR_PERSONAL_RESEARCH_PERMISSION_REQUIRED")
@@ -42,6 +73,9 @@ def inspect_header_shape(path: Path, *, month: str, permission_confirmed: bool) 
         raise UnsafeNarSource("NAR_WRONG_MONTHLY_ARCHIVE_NAME")
     inspect_nar_monthly_zip_structure(path)
     aggregate = []
+    flat_finish_counts = {}
+    flat_finish_races = {}
+    flat_horse_rows = 0
     with ZipFile(path) as zf:
         for kind in sorted(_EXPECTED_WIDTH):
             exact_name = f"{month}_{kind}.csv"
@@ -59,6 +93,19 @@ def inspect_header_shape(path: Path, *, month: str, permission_confirmed: bool) 
             headers = [cell.strip().lstrip("\ufeff") for cell in first]
             prefix = tuple(headers[:3]) == _HEADER_PREFIX
             position_counts = None
+            if kind == "horselist":
+                for row in chain([second], reader):
+                    if not row or len(row) != _EXPECTED_WIDTH[kind]:
+                        continue  # width is separately disclosed, never guessed
+                    if "帯広" in row[0]:
+                        continue  # predeclared venue-level banei exclusion
+                    flat_horse_rows += 1
+                    category = _safe_finish_bucket(row[31])
+                    flat_finish_counts[category] = flat_finish_counts.get(category, 0) + 1
+                    if category != "NUMERIC_RANK":
+                        # Keys exist *only* in process memory. Never serialize.
+                        key = tuple(row[:3])
+                        flat_finish_races.setdefault(category, set()).add(key)
             if kind == "racelist":
                 # Inspect only schema/semantic counts, never text values.
                 position_counts = {
@@ -124,6 +171,17 @@ def inspect_header_shape(path: Path, *, month: str, permission_confirmed: bool) 
         "status": "NAR_LOCAL_HEADER_SHAPE_ONLY",
         "month": month,
         "members": aggregate,
+        "flatFinishRankAggregate": {
+            "flatHorseRows": flat_horse_rows,
+            "horseRowsByFixedCategory": dict(sorted(flat_finish_counts.items())),
+            "flatRacesByExceptionalCategory": {
+                name: len(keys) for name, keys in sorted(flat_finish_races.items())
+            },
+            "flatRacesWithExceptionalRank": len(
+                set().union(*flat_finish_races.values()) if flat_finish_races else set()
+            ),
+            "rawRankTextExported": False,
+        },
         "sourceTextExported": False,
         "preEventSnapshotProven": False,
         "trainingExecuted": False,
