@@ -76,6 +76,8 @@ def inspect_header_shape(path: Path, *, month: str, permission_confirmed: bool) 
     flat_finish_counts = {}
     flat_finish_races = {}
     flat_horse_rows = 0
+    flat_rank_profiles = {}  # race-keyed only in ephemeral memory
+    flat_declared_counts = {}
     with ZipFile(path) as zf:
         for kind in sorted(_EXPECTED_WIDTH):
             exact_name = f"{month}_{kind}.csv"
@@ -101,6 +103,17 @@ def inspect_header_shape(path: Path, *, month: str, permission_confirmed: bool) 
                         continue  # predeclared venue-level banei exclusion
                     flat_horse_rows += 1
                     category = _safe_finish_bucket(row[31])
+                    profile = flat_rank_profiles.setdefault(tuple(row[:3]), {
+                        "ranked": [], "blank": 0, "all": 0,
+                        "blankTime": 0, "blankPopularity": 0,
+                    })
+                    profile["all"] += 1
+                    if category == "NUMERIC_RANK":
+                        profile["ranked"].append(int(unicodedata.normalize("NFKC", row[31])))
+                    elif category == "BLANK":
+                        profile["blank"] += 1
+                        profile["blankTime"] += bool(row[32].strip())
+                        profile["blankPopularity"] += bool(row[35].strip())
                     flat_finish_counts[category] = flat_finish_counts.get(category, 0) + 1
                     if category != "NUMERIC_RANK":
                         # Keys exist *only* in process memory. Never serialize.
@@ -140,6 +153,8 @@ def inspect_header_shape(path: Path, *, month: str, permission_confirmed: bool) 
                             position_counts["nonstandardSurfaceAtBaneiNamedVenue"] += 1
                     if has_banei_name:
                         continue
+                    if len(row) > 26 and row[26].strip().isascii() and row[26].strip().isdecimal():
+                        flat_declared_counts[tuple(row[:3])] = int(row[26].strip())
                     position_counts["flatVenueRecords"] += 1
                     if len(row) > 26:
                         if row[21].strip() in {"芝", "ダート"}:
@@ -167,10 +182,47 @@ def inspect_header_shape(path: Path, *, month: str, permission_confirmed: bool) 
                 "prefixAndWidthMatch": prefix and len(first) == _EXPECTED_WIDTH[kind],
                 "racelistPositionalSanityCounts": position_counts,
             })
+    blank_reconciliation = {
+        "racesWithBlank": 0, "blankHorseRows": 0,
+        "blankHorseRowsWithTime": 0, "blankHorseRowsWithPopularity": 0,
+        "blankRowsPerRaceHistogram": {},
+        "declaredEqualsRanked": 0, "declaredEqualsAllHorselistRows": 0,
+        "declaredEqualsNeither": 0,
+        "rankedSubsetContiguous": 0, "rankedSubsetNoncontiguous": 0,
+        "rankedSubsetDuplicateRanks": 0,
+        "rankedSubsetHasRankOne": 0,
+    }
+    for key, profile in flat_rank_profiles.items():
+        if not profile["blank"]:
+            continue
+        blank_reconciliation["racesWithBlank"] += 1
+        blank_reconciliation["blankHorseRows"] += profile["blank"]
+        blank_reconciliation["blankHorseRowsWithTime"] += profile["blankTime"]
+        blank_reconciliation["blankHorseRowsWithPopularity"] += profile["blankPopularity"]
+        count = str(profile["blank"])
+        histogram = blank_reconciliation["blankRowsPerRaceHistogram"]
+        histogram[count] = histogram.get(count, 0) + 1
+        ranked = profile["ranked"]
+        declared = flat_declared_counts.get(key)
+        if declared == len(ranked):
+            blank_reconciliation["declaredEqualsRanked"] += 1
+        if declared == profile["all"]:
+            blank_reconciliation["declaredEqualsAllHorselistRows"] += 1
+        if declared not in (len(ranked), profile["all"]):
+            blank_reconciliation["declaredEqualsNeither"] += 1
+        if 1 in ranked:
+            blank_reconciliation["rankedSubsetHasRankOne"] += 1
+        if len(set(ranked)) != len(ranked):
+            blank_reconciliation["rankedSubsetDuplicateRanks"] += 1
+        if sorted(ranked) == list(range(1, len(ranked) + 1)):
+            blank_reconciliation["rankedSubsetContiguous"] += 1
+        else:
+            blank_reconciliation["rankedSubsetNoncontiguous"] += 1
     return {
         "status": "NAR_LOCAL_HEADER_SHAPE_ONLY",
         "month": month,
         "members": aggregate,
+        "flatFinishReconciliation": blank_reconciliation,
         "flatFinishRankAggregate": {
             "flatHorseRows": flat_horse_rows,
             "horseRowsByFixedCategory": dict(sorted(flat_finish_counts.items())),
