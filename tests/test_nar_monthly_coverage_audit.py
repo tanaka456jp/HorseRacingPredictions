@@ -189,3 +189,32 @@ def test_payout_verified_dead_heat_is_accepted_without_posthoc_exclusion():
     assert result.summary.unresolved_in_scope_races == 0
     assert result.summary.exclusion_reasons == ()
     assert not result.summary.valid_economic_roi_sample
+
+
+def test_distinct_multiline_win_paybacks_are_not_outcome_selected_or_dropped():
+    data = _fixture(starters=8)
+    horses = list(csv.reader(StringIO(data["horselist"])))
+    horses[1][31] = "1"
+    data["horselist"] = _encode(horses)
+    payback = list(csv.reader(StringIO(data["payback"])))
+    second = payback[0].copy()
+    second[4], second[5] = "2", "240"
+    data["payback"] = _encode([payback[0], second])
+    report = audit_nar_monthly_coverage(data, month="202402")
+    assert report.summary.observed_races == 1
+    assert report.summary.structurally_accepted_races == 1
+    assert report.summary.exclusion_reasons == ()
+    assert not report.summary.valid_economic_roi_sample
+
+
+def test_official_multirow_conflicting_yen_is_never_combined():
+    data = _fixture(starters=8)
+    payback = list(csv.reader(StringIO(data["payback"])))
+    other = payback[0].copy()
+    other[5] = "999"
+    data["payback"] = _encode([payback[0], other])
+    report = audit_nar_monthly_coverage(data, month="202402")
+    assert report.summary.exclusion_reasons == (
+        ("NAR_OFFICIAL_MULTIROW_PAYOUT_CONFLICT", 1),
+    )
+    assert not report.summary.complete_month_for_research
