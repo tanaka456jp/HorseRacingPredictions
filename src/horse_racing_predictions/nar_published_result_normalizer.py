@@ -273,10 +273,13 @@ def normalize_nar_published_results(
         if not 5 <= n <= 18:
             raise UnsafeNarSource("NAR_UNSUPPORTED_FIELD_SIZE")
         rank_structure = _competition_rank_sequence(list(entrants_by_num.values()))
-        if rank_structure == "DEAD_HEAT":
-            raise UnsafeNarSource("NAR_DEAD_HEAT_PAYOUT_SETTLEMENT_UNRESOLVED")
-        if rank_structure != "COMPLETE":
+        if rank_structure not in ("COMPLETE", "DEAD_HEAT"):
             raise UnsafeNarSource("NAR_FINISH_RANK_SEQUENCE_INCOMPLETE")
+        # Competition ranks (1, 2, 2, 4) are valid official dead heats.
+        # Let the *actual* published win/place payouts confirm the ticket
+        # outcomes; never invent a winner/refund from a rank alone. A tied
+        # winner with multiple payable tickets fails safely under the
+        # single-row payout protocol below.
         declared = _numeric(races[key][26], "NAR_DECLARED_STARTERS_INVALID",
                             minimum=5, maximum=18)
         if declared != n:
