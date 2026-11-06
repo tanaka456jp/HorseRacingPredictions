@@ -78,6 +78,7 @@ def inspect_header_shape(path: Path, *, month: str, permission_confirmed: bool) 
     flat_horse_rows = 0
     flat_rank_profiles = {}  # race-keyed only in ephemeral memory
     flat_declared_counts = {}
+    flat_payback_rows = {}
     with ZipFile(path) as zf:
         for kind in sorted(_EXPECTED_WIDTH):
             exact_name = f"{month}_{kind}.csv"
@@ -95,6 +96,10 @@ def inspect_header_shape(path: Path, *, month: str, permission_confirmed: bool) 
             headers = [cell.strip().lstrip("\ufeff") for cell in first]
             prefix = tuple(headers[:3]) == _HEADER_PREFIX
             position_counts = None
+            if kind == "payback":
+                for row in chain([second], reader):
+                    if len(row) == _EXPECTED_WIDTH[kind] and "帯広" not in row[0]:
+                        flat_payback_rows.setdefault(tuple(row[:3]), []).append(tuple(row))
             if kind == "horselist":
                 for row in chain([second], reader):
                     if not row or len(row) != _EXPECTED_WIDTH[kind]:
@@ -218,10 +223,36 @@ def inspect_header_shape(path: Path, *, month: str, permission_confirmed: bool) 
             blank_reconciliation["rankedSubsetContiguous"] += 1
         else:
             blank_reconciliation["rankedSubsetNoncontiguous"] += 1
+    other_integrity = {
+        "flatRacesWithNonBlankDuplicateRanks": 0,
+        "flatRacesWithNonBlankRankGaps": 0,
+        "flatRacesWithMultiplePaybackRows": 0,
+        "flatRacesWithIdenticalPaybackRows": 0,
+        "flatRacesWithDistinctPaybackRows": 0,
+        "flatRacesMissingPaybackRows": 0,
+    }
+    for key in flat_declared_counts:
+        profile = flat_rank_profiles.get(key)
+        if profile and not profile["blank"]:
+            ranks = profile["ranked"]
+            if len(ranks) != len(set(ranks)):
+                other_integrity["flatRacesWithNonBlankDuplicateRanks"] += 1
+            if sorted(ranks) != list(range(1, len(ranks) + 1)):
+                other_integrity["flatRacesWithNonBlankRankGaps"] += 1
+        rows = flat_payback_rows.get(key, [])
+        if not rows:
+            other_integrity["flatRacesMissingPaybackRows"] += 1
+        if len(rows) > 1:
+            other_integrity["flatRacesWithMultiplePaybackRows"] += 1
+            if len(set(rows)) == 1:
+                other_integrity["flatRacesWithIdenticalPaybackRows"] += 1
+            else:
+                other_integrity["flatRacesWithDistinctPaybackRows"] += 1
     return {
         "status": "NAR_LOCAL_HEADER_SHAPE_ONLY",
         "month": month,
         "members": aggregate,
+        "flatOtherResultIntegrity": other_integrity,
         "flatFinishReconciliation": blank_reconciliation,
         "flatFinishRankAggregate": {
             "flatHorseRows": flat_horse_rows,
