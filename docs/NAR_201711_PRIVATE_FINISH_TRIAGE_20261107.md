@@ -11,6 +11,8 @@ derived individual race details are uploaded. All examples in tests are fictiona
 - Aggregate finish histograms: [Run 42255247406](https://github.com/tanaka456jp/HorseRacingPredictions/actions/runs/42255247406).
 - Ranking, headcount and payout reconciliation:
   [Run 42256361474](https://github.com/tanaka456jp/HorseRacingPredictions/actions/runs/42256361474).
+- Updated PC2 official-result integration (993 accepted / 103 unresolved):
+  [Run 42258871532](https://github.com/tanaka456jp/HorseRacingPredictions/actions/runs/42258871532).
 - Official NAR fields, 2017 historic-data caveat and **multiple payback rows on dead heats**:
   https://www.keiba.go.jp/pdf/manual/data_pdf_manual.pdf
 - Official NAR labels: 取消, 除外, 中止, 取止, 不成 and numeric 降:
@@ -21,11 +23,11 @@ derived individual race details are uploaded. All examples in tests are fictiona
 | Source denominator (races in the three official members) | 1,228 |
 | Predeclared Obihiro/banei out of flat scope | 132 |
 | Flat-source races in study scope | 1,096 |
-| Strictly complete results + one-row win/place settlement | 989 |
-| Flat races currently requiring adjudication | 107 |
-| Of the 107: blank-finish races | 103 |
-| Of the 107: rank-tie races without multi-row payout | 3 |
-| Of the 107: distinct multi-row payout | 1 |
+| Payout-verified flat results, including justified rank ties and multirow tickets | 993 |
+| Flat races currently requiring adjudication | 103 |
+| Of the original 107: blank-finish races, still unresolved | 103 |
+| Of the original 107: verified complete rank ties now accepted | 3 |
+| Of the original 107: verified distinct multi-row payout now accepted | 1 |
 
 ### Blank-finish diagnostics
 
@@ -59,16 +61,21 @@ The 66-column headered 2017-11 racelist is supported without shifting
 used columns. The parser recognizes official textual statuses, blank
 statuses, demotion markers and competition-style dead heats. It **never**
 converts an unspecified finish to last place, a loss, or a 100-yen refund.
-Distinct payback rows are identified as an official multirow settlement case,
-not silently deduplicated. Every race remains in the 1,228-race denominator.
+Distinct payback rows are merged only when their actual win/place payout
+values do not conflict and all winners and placers are accounted for.
+Exact duplicate rows, contradictory yen for the same ticket and missing
+paid winners still fail closed. In no case are ticket returns guessed or
+summed across identical winning tickets. Every race remains in the 1,228-race denominator.
 
 Current strict validator requires all final rank/settlement semantics to be
-known. Thus **989 strict acceptances, 132 prespecified out of scope and 107
-in-scope unresolved** is an accurate remaining HOLD, not a reason to train
-on the 989 successful races alone. The error labels now distinguish
-`NAR_OFFICIAL_BLANK_FINISH_STATUS_UNRESOLVED`,
-`NAR_DEAD_HEAT_PAYOUT_SETTLEMENT_UNRESOLVED`, and
-`NAR_OFFICIAL_MULTIROW_PAYOUT_SETTLEMENT_UNRESOLVED`.
+known. The initial result was 989 accepted / 107 unresolved; after validating
+complete competition-rank sequences and uniting only consistent official
+win/place payout values across distinct rows, **993 accepted, 132 prespecified
+out of scope, 103 in-scope unresolved** is the current honest result. These
+103 races remain in the denominator and prevent training or ROI on only the
+profitable-looking subset. Unknown finish statuses are explicitly marked
+`NAR_OFFICIAL_BLANK_FINISH_STATUS_UNRESOLVED`.
+
 
 To remove this HOLD safely, implement explicit per-horse settlement
 status/refund provenance and complete dead-heat ticket payouts, with tests
