@@ -283,7 +283,7 @@ def test_distinct_multiple_payback_rows_require_actual_dead_heat_settlement_revi
     alternate = rows[0].copy()
     alternate[4] = "2"
     sample["payback"] = _encode([rows[0], alternate])
-    with pytest.raises(UnsafeNarSource, match="NAR_OFFICIAL_MULTIROW_PAYOUT_SETTLEMENT_UNRESOLVED"):
+    with pytest.raises(UnsafeNarSource, match="NAR_PAYOUT_CONTRADICTS_FINAL_RESULTS"):
         normalize_nar_published_results(sample, month="202402")
 
 
@@ -320,3 +320,45 @@ def test_dead_heat_for_win_requires_both_winners_published_not_one_fake_ticket()
     sample["horselist"] = _encode(rows)
     with pytest.raises(UnsafeNarSource, match="NAR_PAYOUT_CONTRADICTS_FINAL_RESULTS"):
         normalize_nar_published_results(sample, month="202402")
+
+
+def test_official_multiline_winner_tie_merges_real_distinct_yen_payouts():
+    sample = _fixture(starters=8)
+    rows = list(csv.reader(StringIO(sample["horselist"])))
+    rows[1][31] = "1"  # 1,1,3,4,5,6,7,8
+    sample["horselist"] = _encode(rows)
+    pays = list(csv.reader(StringIO(sample["payback"])))
+    alternative = pays[0].copy()
+    alternative[4] = "2"
+    alternative[5] = "220"
+    sample["payback"] = _encode([pays[0], alternative])
+    normalized = normalize_nar_published_results(sample, month="202402")
+    race = normalized.races[0]
+    assert dict(race.finish_by_number)[1] == 1
+    assert dict(race.finish_by_number)[2] == 1
+    assert dict(race.win_return_by_number)[1] == 250
+    assert dict(race.win_return_by_number)[2] == 220
+    assert dict(race.place_return_by_number)[2] == 120
+    assert not normalized.audit.positive_ev_demonstrated
+
+
+def test_duplicate_ticket_different_yen_across_official_payout_rows_refused():
+    sample = _fixture(starters=8)
+    pays = list(csv.reader(StringIO(sample["payback"])))
+    alternate = pays[0].copy()
+    alternate[5] = "990"  # same winning horse, conflicting paid yen
+    sample["payback"] = _encode([pays[0], alternate])
+    with pytest.raises(UnsafeNarSource, match="NAR_OFFICIAL_MULTIROW_PAYOUT_CONFLICT"):
+        normalize_nar_published_results(sample, month="202402")
+
+
+def test_distinct_exotic_only_payback_row_cannot_modify_win_or_place():
+    sample = _fixture(starters=8)
+    pays = list(csv.reader(StringIO(sample["payback"])))
+    alternate = pays[0].copy()
+    alternate[17] = "99"  # unrelated exotic bet / different official row
+    sample["payback"] = _encode([pays[0], alternate])
+    normalized = normalize_nar_published_results(sample, month="202402")
+    race = normalized.races[0]
+    assert dict(race.win_return_by_number)[1] == 250
+    assert dict(race.place_return_by_number)[3] == 130
