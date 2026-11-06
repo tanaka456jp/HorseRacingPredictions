@@ -21,6 +21,7 @@ import pandas as pd
 
 from .modeling import CatBoostProbabilityModel
 from .nar_official_zip_probe import UnsafeNarSource
+from .nar_published_result_normalizer import _competition_rank_sequence
 from .nar_prior_day_features import NarAsOfResearchBatch, NarResearchTarget
 
 _FEATURES = (
@@ -146,7 +147,8 @@ def _check_races(frame: pd.DataFrame, minimum: int) -> int:
     for rid, group in frame.groupby("race_id", sort=False):
         finish = group["__finish_label"].tolist()
         n = len(finish)
-        if (not 5 <= n <= 18 or set(finish) != set(range(1, n + 1))
+        if (not 5 <= n <= 18 or _competition_rank_sequence(finish)
+                not in {"COMPLETE", "DEAD_HEAT"}
                 or group["horse_number"].nunique() != n
                 or group["race_day"].nunique() != 1):
             raise UnsafeNarSource("NAR_SCREENING_INCOMPLETE_RACE")
