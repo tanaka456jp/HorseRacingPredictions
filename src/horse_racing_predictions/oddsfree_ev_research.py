@@ -7,6 +7,7 @@ does NOT claim positive expected value, permit betting, train, or publish.
 """
 from __future__ import annotations
 
+from .nar_published_result_normalizer import _competition_rank_sequence
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from math import isfinite
@@ -160,8 +161,8 @@ def _race_result(pick: FrozenFour, final: FinalRaceSettlement) -> tuple[int, int
     if (not isinstance(ranks, Mapping) or not 5 <= len(ranks) <= 18
             or any(type(i) is not int or i < 1 or i > len(ranks)
                    for i in ranks.values())
-            or len(set(ranks.values())) != len(ranks)
-            or set(ranks.values()) != set(range(1, len(ranks) + 1))):
+            or _competition_rank_sequence(list(ranks.values()))
+               not in {"COMPLETE", "DEAD_HEAT"}):
         raise ValueError("FINAL_RESULTS_INCOMPLETE_OR_DUPLICATED")
     for mapping in (final.win_return_per_100_yen, final.place_return_per_100_yen):
         if not isinstance(mapping, Mapping) or set(mapping) != set(ranks):
