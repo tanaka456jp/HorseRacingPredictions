@@ -81,6 +81,51 @@ def _optional_number(value: str, error: str, *,
     return _numeric(value, error, maximum=maximum)
 
 
+# NAR's published glossary recognizes these as *statuses*, not finishing
+# positions. Blank results in historical CSVs have no specified cause:
+# neither a losing bet nor a refunded ticket can be inferred.
+_OFFICIAL_NON_RANK_FINISH_MARKERS = frozenset({
+    "取消", "出走取消", "除外", "競走除外",
+    "中止", "競走中止", "失格",
+    "取止", "競走取止", "競走取り止め",
+    "不成", "競走不成立",
+})
+
+
+def _official_finish_rank(cell: str) -> int:
+    """Accept proven numeric finishing places only; never invent refunds."""
+    raw = cell.strip()
+    if not raw:
+        raise UnsafeNarSource("NAR_OFFICIAL_BLANK_FINISH_STATUS_UNRESOLVED")
+    if raw in _OFFICIAL_NON_RANK_FINISH_MARKERS:
+        raise UnsafeNarSource("NAR_OFFICIAL_EXCEPTION_SETTLEMENT_UNRESOLVED")
+    # A demoted finishing place may require special payout checks. It must
+    # never be silently recoded as an ordinary numeric label.
+    if raw.endswith(("降", "降着")):
+        prefix = raw[:-1] if raw.endswith("降") else raw[:-2]
+        if prefix.isascii() and prefix.isdecimal() and 1 <= len(prefix) <= 2:
+            raise UnsafeNarSource("NAR_DEMOTED_FINISH_SETTLEMENT_UNRESOLVED")
+    return _numeric(raw, "NAR_FINISH_RANK_INVALID", minimum=1, maximum=18)
+
+
+def _competition_rank_sequence(ranks: list[int]) -> str:
+    """Conventional 1,1,3 / 1,2,2,4 ranking means a dead heat, not corruption."""
+    ordered = sorted(ranks)
+    if ordered == list(range(1, len(ordered) + 1)):
+        return "COMPLETE"
+    if not ordered or ordered[0] != 1:
+        return "INCOMPLETE"
+    previous = None
+    tied = False
+    for ordinal, position in enumerate(ordered, 1):
+        if position == previous:
+            tied = True
+        elif position != ordinal:
+            return "INCOMPLETE"
+        previous = position
+    return "DEAD_HEAT" if tied else "INCOMPLETE"
+
+
 def _race_key(row: list[str], month: str) -> RaceKey:
     track = row[0].strip()
     raw_date = row[1].strip()
@@ -194,8 +239,7 @@ def normalize_nar_published_results(
     for key, row in parsed["horselist"]:
         num = _numeric(row[5], "NAR_STARTER_NUMBER_INVALID",
                        minimum=1, maximum=18)
-        rank = _numeric(row[31], "NAR_FINISH_RANK_INVALID",
-                        minimum=1, maximum=18)
+        rank = _official_finish_rank(row[31])
         bag = entrants.setdefault(key, {})
         if num in bag:
             raise UnsafeNarSource("NAR_DUPLICATE_STARTER")
@@ -206,9 +250,15 @@ def normalize_nar_published_results(
     payouts: dict[RaceKey, list[str]] = {}
     for key, row in parsed["payback"]:
         if key in payouts:
-            # In NAR, an extra row can signify a dead heat. A standard
-            # two-ticket protocol must reject rather than pick one.
-            raise UnsafeNarSource("NAR_DEAD_HEAT_OR_DUPLICATE_PAYOUT")
+            # NAR's manual explicitly permits multiple *distinct* payback
+            # records per tied race. A single-row protocol must not choose
+            # the first and silently discard the other(s).
+            code = (
+                "NAR_IDENTICAL_DUPLICATE_PAYOUT_ROW"
+                if row == payouts[key]
+                else "NAR_OFFICIAL_MULTIROW_PAYOUT_SETTLEMENT_UNRESOLVED"
+            )
+            raise UnsafeNarSource(code)
         payouts[key] = row
 
     if not races or set(races) != set(entrants) or set(races) != set(payouts):
@@ -222,8 +272,11 @@ def normalize_nar_published_results(
         n = len(entrants_by_num)
         if not 5 <= n <= 18:
             raise UnsafeNarSource("NAR_UNSUPPORTED_FIELD_SIZE")
-        if set(entrants_by_num.values()) != set(range(1, n + 1)):
-            raise UnsafeNarSource("NAR_DEAD_HEAT_SCRATCH_OR_INCOMPLETE_RANKS")
+        rank_structure = _competition_rank_sequence(list(entrants_by_num.values()))
+        if rank_structure == "DEAD_HEAT":
+            raise UnsafeNarSource("NAR_DEAD_HEAT_PAYOUT_SETTLEMENT_UNRESOLVED")
+        if rank_structure != "COMPLETE":
+            raise UnsafeNarSource("NAR_FINISH_RANK_SEQUENCE_INCOMPLETE")
         declared = _numeric(races[key][26], "NAR_DECLARED_STARTERS_INVALID",
                             minimum=5, maximum=18)
         if declared != n:
