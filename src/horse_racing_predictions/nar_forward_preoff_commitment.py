@@ -158,7 +158,11 @@ def _canonical_bytes(
                 or generated < off - timedelta(days=7)):
             raise ValueError("NAR_FORWARD_PREOFF_CLOCK_SEQUENCE_INVALID")
         fit_day = _day(item.model_fit_through_day)
-        if fit_day >= day or not _SHA.fullmatch(item.model_source_sha256):
+        # The model cannot be trained on a result occurring after the
+        # forecast itself was supposedly generated. Demand one complete
+        # prior JST calendar day, rather than race-day refits.
+        if (fit_day >= generated.astimezone(_JST).date()
+                or not _SHA.fullmatch(item.model_source_sha256)):
             raise ValueError("NAR_FORWARD_MODEL_LINEAGE_INVALID")
         if item.market_odds_in_selection:
             raise ValueError("NAR_FORWARD_ODDS_FREE_SELECTION_REQUIRED")
