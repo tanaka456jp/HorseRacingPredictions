@@ -220,6 +220,15 @@ jobs:
                 [int]$form.unresolvedFlatRaces -ne
                 [int]$official.unresolvedFlatRaces -or
                 [int]$form.releasedTrainingRows -ne 0 -or
+                ([int]$form.targetRowsWithPriorStart +
+                 [int]$form.targetRowsWithoutPriorStart) -ne
+                [int]$form.historicalProjectedTargetRows -or
+                [int]$form.targetRowsWithPriorWin -gt
+                [int]$form.targetRowsWithPriorStart -or
+                [int]$form.targetRowsWithPriorTop3 -gt
+                [int]$form.targetRowsWithPriorStart -or
+                [int]$form.targetRowsWithNumericPriorFinish -gt
+                [int]$form.targetRowsWithPriorStart -or
                 $form.independentPreoffRosterVerified -ne $false) {
               Write-Host 'NAR_STATUS_AWARE_PRIOR_DAY_COUNT_INVALID'
               exit 2
@@ -243,6 +252,11 @@ jobs:
               historicalProjectedTargetRows = [int]$form.historicalProjectedTargetRows
               historicalStartedRows = [int]$form.historicalStartedRows
               historicalNumericFinishRows = [int]$form.historicalNumericFinishRows
+              targetRowsWithPriorStart = [int]$form.targetRowsWithPriorStart
+              targetRowsWithoutPriorStart = [int]$form.targetRowsWithoutPriorStart
+              targetRowsWithPriorWin = [int]$form.targetRowsWithPriorWin
+              targetRowsWithPriorTop3 = [int]$form.targetRowsWithPriorTop3
+              targetRowsWithNumericPriorFinish = [int]$form.targetRowsWithNumericPriorFinish
               unresolvedFlatRaces = [int]$form.unresolvedFlatRaces
               releasedTrainingRows = [int]$form.releasedTrainingRows
               staticReason = [string]$form.staticReason
