@@ -20,8 +20,9 @@ def forecast(*, day="2026-11-14", num=1, track="架空競馬場",
              scheduled_off_utc=None):
     race_id = f"NAR:{day.replace('-', '')}:{track}:{num:02d}"
     off = datetime.fromisoformat(day + "T15:00:00+09:00")
-    seen = off - timedelta(hours=5)
-    made = off - timedelta(hours=4)
+    # Friday freeze before Saturday races (JST), as actually intended.
+    seen = off - timedelta(days=1, hours=5)
+    made = off - timedelta(days=1, hours=4)
     return NarProspectiveForecast(
         race_id=race_id, race_day=day, scheduled_off_utc=scheduled_off_utc or off,
         generated_at_utc=generated_at_utc or made,
@@ -216,6 +217,7 @@ def test_private_salt_and_tampered_public_receipt_rejected():
 def test_manipulated_race_day_and_off_time_cannot_be_valid_commitment():
     p = forecast()
     with pytest.raises(ValueError, match="NAR_FORWARD_MANIFEST_RACE_DAY_MISMATCH"):
-        sealed([replace(p, race_day="2026-11-15")])
+        sealed([replace(p, race_day="2026-11-15")],
+               manifest={p.race_id: p.race_day})
     with pytest.raises(ValueError, match="NAR_FORWARD_PREOFF_CLOCK_SEQUENCE_INVALID"):
         sealed([replace(p, scheduled_off_utc=p.scheduled_off_utc + timedelta(days=1))])
