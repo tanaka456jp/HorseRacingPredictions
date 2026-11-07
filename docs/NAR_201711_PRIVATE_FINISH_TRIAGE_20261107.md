@@ -311,3 +311,27 @@ unresolved 2017-11 month cannot be passed to this ledger.
 Project decision stays **HOLD for actual profitability**, independent
 holdout and publication authorization. Data acquisition/provenance and
 fully verified future-time predictions are the gating work.
+
+### Broader four-root metadata crosscheck
+
+The independent, bounded PC2 D-root inventory
+[Run #42330495687](https://github.com/tanaka456jp/HorseRacingPredictions/actions/runs/42330495687)
+completed SUCCESS and confirms the primary 1-of-72 availability result:
+
+| Predeclared D-root ID | Recognized 2017-2022 months | Inspection |
+| --- | ---: | --- |
+| 1 | 1 | Bounded metadata scan |
+| 2 | 0 | Bounded metadata scan |
+| 3 | 0 | Directory absent |
+| 4 | 0 | Directory absent |
+
+No source bytes, exact file names, sensitive paths, holdout content,
+newly downloaded data or training work were involved. No alternative
+collection of the missing 71 monthly archives was found within these
+four predeclared D-root scopes. This is **not** a claim about every
+possible disk or cloud source; it explicitly bounds the inspected area.
+
+For evidence-based model development, the next critical dependency
+is acquiring and independently confirming permitted 2017-2022 monthly
+official race ZIPs. Publication/commercial rights and independent
+pre-off forecast timestamps remain separate gating requirements.
