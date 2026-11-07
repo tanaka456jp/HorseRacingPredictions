@@ -151,8 +151,10 @@ def _validated_race(
         number for number, (_, rank) in by_number.items()
         if rank is not None and rank <= cutoff
     }
-    if set(win) != winners or set(place) != placers:
-        raise UnsafeNarSource("NAR_STATUS_AWARE_PAYOUT_MISMATCH")
+    if set(win) != winners:
+        raise UnsafeNarSource("NAR_STATUS_AWARE_WIN_PAYOUT_MISMATCH")
+    if set(place) != placers:
+        raise UnsafeNarSource("NAR_STATUS_AWARE_PLACE_PAYOUT_MISMATCH")
 
     def theoretical_return(status: str, n: int, actual: Mapping[int, int]) -> int | None:
         if status in {"SCRATCH_NOT_OFFERED", "DISQUALIFIED_REVIEW"}:
