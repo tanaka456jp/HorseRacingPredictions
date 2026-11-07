@@ -4,15 +4,25 @@ from __future__ import annotations
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 import json
+import importlib.util
+from pathlib import Path
 
 import pytest
 
 from horse_racing_predictions.nar_forward_hosted_witness import (
     validate_nar_github_hosted_receipt,
 )
-from scripts.anchor_nar_gh_hosted_receipt import (
-    create_hosted_receipt_from_event, main,
-)
+
+# Repo scripts are intentionally NOT packaged in the installable library.
+# Load the exact reviewed CLI path rather than relying on tests/ being able
+# to import a top-level 'scripts' namespace on all CI/Python entrypoints.
+_PATH = Path(__file__).resolve().parents[1] / "scripts" / "anchor_nar_gh_hosted_receipt.py"
+_SPEC = importlib.util.spec_from_file_location("nar_forward_receipt_cli_fixture", _PATH)
+assert _SPEC is not None and _SPEC.loader is not None
+receipt_cli = importlib.util.module_from_spec(_SPEC)
+_SPEC.loader.exec_module(receipt_cli)
+create_hosted_receipt_from_event = receipt_cli.create_hosted_receipt_from_event
+main = receipt_cli.main
 
 OFF = datetime(2026, 11, 14, 6, 0, tzinfo=timezone.utc)
 NOW = OFF - timedelta(days=1)
@@ -159,11 +169,10 @@ def test_untrusted_runner_environment_rejected_before_echoing_digest():
 def test_main_accepts_github_event_fixture_no_raw_content_echo(tmp_path, monkeypatch, capsys):
     event = tmp_path / "dispatch.json"
     event.write_text(json.dumps({"inputs": INPUTS}), encoding="utf-8")
-    import scripts.anchor_nar_gh_hosted_receipt as module
     for key, value in ENV.items():
         monkeypatch.setenv(key, value)
     monkeypatch.setenv("GITHUB_EVENT_PATH", str(event))
-    monkeypatch.setattr(module, "create_hosted_receipt_from_event",
+    monkeypatch.setattr(receipt_cli, "create_hosted_receipt_from_event",
         lambda data, env, now: create_hosted_receipt_from_event(data, env, NOW))
     assert main() == 0
     out = json.loads(capsys.readouterr().out)
