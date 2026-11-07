@@ -22,8 +22,6 @@ import re
 from types import MappingProxyType
 from typing import Mapping, Sequence
 
-from .nar_economic_settlement_adapter import nar_canonical_race_id
-
 _JST = timezone(timedelta(hours=9))
 _FIRST_PROSPECTIVE = date(2026, 11, 7)
 _MAX_FORECASTS = 400
@@ -241,12 +239,19 @@ def verify_nar_prospective_batch(
             or commitment.registered_flat_races != len(expected_races)
             or commitment.locked_forecasts != len(forecasts)
             or commitment.missing_forecasts != 0
+            or commitment.predicted_races_contain_final_outcomes
             or commitment.freeze_time_independently_verified
+            or commitment.prior_to_result_publication_proven
+            or commitment.source_rights_verified
+            or commitment.actual_wagers_proven
+            or commitment.protected_historical_holdout_opened
             or commitment.positive_expected_value_demonstrated):
         raise ValueError("NAR_FORWARD_COMMITMENT_CONTRACT_INVALID")
     again = seal_nar_prospective_batch(
         expected_races, forecasts, private_salt=private_salt,
     )
+    if commitment.distinct_race_days != again.distinct_race_days:
+        raise ValueError("NAR_FORWARD_COMMITMENT_CONTRACT_INVALID")
     return NarForwardCommitmentVerification(
         sha256_matches_private_snapshot=hmac.compare_digest(
             again.sha256_digest, commitment.sha256_digest,
