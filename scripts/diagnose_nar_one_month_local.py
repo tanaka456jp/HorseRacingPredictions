@@ -24,6 +24,9 @@ from horse_racing_predictions.nar_monthly_coverage_audit import (
 from horse_racing_predictions.nar_official_exception_audit import (
     audit_nar_official_exceptions,
 )
+from horse_racing_predictions.nar_status_aware_training_labels import (
+    derive_nar_status_aware_outcome_labels,
+)
 
 _STATIC = re.compile(r"NAR_[A-Z0-9_]{1,90}\Z")
 
@@ -79,7 +82,9 @@ def diagnose_nar_month(
 
     try:
         coverage = audit_nar_monthly_coverage(texts, month=expected_month).summary
-        official = audit_nar_official_exceptions(texts, month=expected_month).audit
+        status_report = audit_nar_official_exceptions(texts, month=expected_month)
+        official = status_report.audit
+        labels = derive_nar_status_aware_outcome_labels(status_report).audit
     except (UnsafeNarSource, OSError, ValueError, RuntimeError,
             UnicodeError, TypeError) as exc:
         return safe_failure("CSV_SCHEMA_OR_MONTH", exc)
@@ -113,6 +118,24 @@ def diagnose_nar_month(
             "completeInterpretation": official.complete_flat_outcome_interpretation,
             "trainingAuthorized": False,
             "economicRoiAuthorized": False,
+            "positiveEvDemonstrated": False,
+            "sourceBytesExported": False,
+        },
+        "statusAwareLabelAudit": {
+            "sourceRaces": labels.source_races,
+            "flatRaces": labels.in_scope_flat_races,
+            "validatedFlatRaces": labels.validated_flat_races,
+            "unresolvedFlatRaces": labels.unresolved_flat_races,
+            "observedRosterRows": labels.observed_roster_rows,
+            "labeledRunnerRows": labels.labeled_runner_rows,
+            "excludedScratchRows": labels.excluded_scratch_rows,
+            "excludedRefundedRows": labels.excluded_refunded_rows,
+            "unknownDisqualificationRows": labels.unknown_disqualification_rows,
+            "officialStartedRows": labels.official_started_rows,
+            "officialFinishedRows": labels.official_finished_rows,
+            "preEventAvailabilityProven": False,
+            "modelTrainingAuthorized": False,
+            "realizedRoiAuthorized": False,
             "positiveEvDemonstrated": False,
             "sourceBytesExported": False,
         },
