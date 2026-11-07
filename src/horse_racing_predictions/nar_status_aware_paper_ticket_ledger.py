@@ -74,10 +74,11 @@ def _verify_status_race(race: NarStatusAwareRace) -> dict[str, str]:
             or not 4 <= len(roster) <= 18
             or set(roster) != set(ranks) or set(roster) != set(win)
             or set(roster) != set(place)
-            or not 4 <= race.offered_field_size <= 18
+            or not 2 <= race.offered_field_size <= 18
             or not 2 <= race.actual_starting_horses <= race.offered_field_size):
         raise UnsafeNarSource("NAR_PAPER_SETTLEMENT_ROSTER_INVALID")
-    cutoff = 2 if race.offered_field_size <= 7 else 3
+    cutoff = (0 if race.offered_field_size <= 4 else
+              2 if race.offered_field_size <= 7 else 3)
     started = sold = 0
     for n, status in roster.items():
         rank = ranks[n]
