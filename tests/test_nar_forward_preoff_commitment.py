@@ -188,10 +188,24 @@ def test_private_salt_and_tampered_public_receipt_rejected():
     with pytest.raises(ValueError, match="NAR_FORWARD_STRONG_PRIVATE_SALT_REQUIRED"):
         sealed([p], salt=b"weak")
     proof=sealed([p])
-    corrupted=replace(proof, freeze_time_independently_verified=True)
+    for forbidden in (
+        "freeze_time_independently_verified",
+        "prior_to_result_publication_proven",
+        "source_rights_verified",
+        "actual_wagers_proven",
+        "positive_expected_value_demonstrated",
+        "protected_historical_holdout_opened",
+        "predicted_races_contain_final_outcomes",
+    ):
+        corrupted=replace(proof, **{forbidden:True})
+        with pytest.raises(ValueError, match="NAR_FORWARD_COMMITMENT_CONTRACT_INVALID"):
+            verify_nar_prospective_batch(
+                corrupted, {p.race_id: p.race_day}, [p], private_salt=SALT,
+            )
     with pytest.raises(ValueError, match="NAR_FORWARD_COMMITMENT_CONTRACT_INVALID"):
         verify_nar_prospective_batch(
-            corrupted, {p.race_id: p.race_day}, [p], private_salt=SALT,
+            replace(proof, distinct_race_days=999),
+            {p.race_id: p.race_day}, [p], private_salt=SALT,
         )
 
 
