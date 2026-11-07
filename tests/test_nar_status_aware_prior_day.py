@@ -72,6 +72,11 @@ def test_prior_history_correctly_skips_nonstarts_and_counts_dnf(
     }
     later = at_second_day[8].feature
     assert later.prior_starts == expected_starts
+    assert batch.audit.target_rows_with_prior_start == 7 + expected_starts
+    assert batch.audit.target_rows_without_prior_start == 8
+    assert batch.audit.target_rows_with_prior_win == 1
+    assert batch.audit.target_rows_with_prior_top3 == 3
+    assert batch.audit.target_rows_with_numeric_prior_finish == 7
     assert later.prior_wins == 0
     assert later.prior_top3 == 0
     assert later.prior_mean_finish == mean_rank
@@ -97,6 +102,11 @@ def test_top3_form_not_wrongly_derived_from_two_place_winners():
     )
     # The horse was third in a 7-runner race: no *place* dividend,
     # nevertheless its last result is a legitimate top-three finish.
+    assert batch.audit.target_rows_with_prior_start == 7
+    assert batch.audit.target_rows_without_prior_start == 7
+    assert batch.audit.target_rows_with_prior_win == 1
+    assert batch.audit.target_rows_with_prior_top3 == 3
+    assert batch.audit.target_rows_with_numeric_prior_finish == 7
     assert later.feature.prior_top3 == 1
     assert later.feature.prior_starts == 1
     assert later.feature.prior_mean_finish == 3
@@ -168,3 +178,17 @@ def test_later_month_cannot_run_before_earlier_month_and_rights_stay_unverified(
     )
     with pytest.raises(UnsafeNarSource, match="NAR_ASOF_SOURCE_MONTH_ORDER_OR_RIGHTS_INVALID"):
         reconstruct_nar_status_aware_prior_day([corrupted])
+
+def test_single_month_first_day_has_no_prior_day_history_and_no_ev_evidence():
+    month = _month(_fixture(month="201711", with_header=True))
+    result = reconstruct_nar_status_aware_prior_day([month])
+    a = result.audit
+    assert a.projected_target_rows == 8
+    assert a.target_rows_without_prior_start == 8
+    assert a.target_rows_with_prior_start == 0
+    assert a.target_rows_with_prior_win == 0
+    assert a.target_rows_with_prior_top3 == 0
+    assert a.target_rows_with_numeric_prior_finish == 0
+    assert not a.usable_for_training
+    assert not a.positive_expected_value_demonstrated
+
