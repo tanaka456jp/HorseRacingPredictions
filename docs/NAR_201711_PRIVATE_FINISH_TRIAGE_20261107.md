@@ -335,3 +335,57 @@ For evidence-based model development, the next critical dependency
 is acquiring and independently confirming permitted 2017-2022 monthly
 official race ZIPs. Publication/commercial rights and independent
 pre-off forecast timestamps remain separate gating requirements.
+
+
+## Future prospective score commitments (no outcome access)
+
+New in-memory source: `nar_forward_preoff_commitment.py`, with
+`tests/test_nar_forward_preoff_commitment.py`.
+
+Prospective date scope starts **2026-11-07** and deliberately refuses
+all 2025+ historical protected holdout or retrospectively supplied
+old races. It requires a *complete, predeclared flat-race manifest*,
+one immutable score/roster for every race, one source-model SHA256 and
+frozen fit-through day for the entire batch. The model fit cutoff
+must be before the **forecast generation day in Japan**. All event
+and observation timestamps must be timezone-aware and ordered.
+
+The canonical byte stream contains the complete manifest, private
+horse/race roster, all score values, precomputed top-three and
+outsider picks, prediction/scheduled-post clocks and source-model
+fingerprint. A separately held unpredictable private salt (minimum
+32 bytes, generated securely for actual use) protects the SHA256
+commitment against trivial guessing. Reordered JSON maps yield the
+same digest; changed scores/model/roster/clock/selection or missing
+races do not. The source identities and scores never appear in the
+public `NarPrivateForecastCommitment` repr or PC2 Actions logs.
+
+**Separation of actual proof:** A locally minted digest is only a
+*content integrity* check. It has NO independent timestamp.
+For a real prospective bet/forecast audit, a future independently
+dated GitHub Actions/notebook/witness record must attest the
+salted digest **before race off**, and the private source snapshot
+and random salt must be preserved immutably. Simply backdating
+`generated_at_utc` does not establish pre-off evidence. Authentic
+pre-off public racecard availability and official payout provenance
+still require independent verification.
+
+[PC2 Windows synthetic-only smoke #42341327653](https://github.com/tanaka456jp/HorseRacingPredictions/actions/runs/42341327653):
+SUCCESS; changed score rejected; 2 entirely fictional future races;
+0 real licensed source rows, 0 protected OOS reads, 0 provider requests,
+0 actual EV conclusions.
+
+[CI #42341332532](https://github.com/tanaka456jp/HorseRacingPredictions/actions/runs/42341332532):
+949 passed, 33 skipped after the 2026-11-07 freeze-contract tests.
+No real horse scores or historical data is checked into GitHub.
+
+The latest official NAR data-download manual includes a 2026-09-16
+revision note; it lists downloadable race results from **1998-01**,
+but historical odds downloads only from **2026-03**:
+https://www.keiba.go.jp/pdf/manual/data_pdf_manual.pdf
+This constrains retrospective market-informed studies and reinforces
+the need to capture *prospective* pre-off odds/snapshots separately.
+https://www.keiba.go.jp/terms.html applies to all sources.
+
+**No 2023-24 OOS or 2025-26 protected final holdout opened,
+no real model fitted and no positive net expected value established.**
