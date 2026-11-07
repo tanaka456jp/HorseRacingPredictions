@@ -89,3 +89,69 @@ Do not open the 2023-24 sealed OOS labels or 2025-26 final holdout.
 ticket-by-ticket cost-adjusted ROI, race-day bootstrap interval or positive
 out-of-sample EV has been measured from this month. Synthetic CI success
 establishes software behavior only, not model profitability.
+
+
+## 2026-11-07 official margin-status discovery (separate interpretation gate)
+
+**Important source-level finding:** The official 36-column horselist supplies
+special finish conditions in field **No. 34 `着差`** (zero-based index 33)
+when field No. 32 `着順` (index 31) is blank. The 114 blanks
+are **not** unclassifiable from the supplied 2017-11 ZIP: an aggregate-only,
+read-only PC2 probe found fixed official condition words in all 114 rows.
+
+[PC2 status-field evidence Run #42321966524](https://github.com/tanaka456jp/HorseRacingPredictions/actions/runs/42321966524):
+- 出走取消: **52 horse rows**, before-sale unoffered tickets, **not** 100-yen refunds.
+- 競走除外: **27 rows**, relevant sold tickets refundable.
+- 競走中止: **34 rows**, started and not eligible for a ticket refund.
+- 失格: **1 row**, flagged **DISQUALIFIED_REVIEW**, with no invented ticket return.
+- Unknown/other exception text in other fields: **0 rows**.
+
+Official descriptions: https://www.keiba.go.jp/beginner/step2.html
+CSV layout: https://www.keiba.go.jp/pdf/manual/data_pdf_manual.pdf
+
+The new `nar_official_exception_audit.py` is a **separate,
+status-aware result interpretation**, not an endorsement to train, bet or
+calculate realized ROI with retrospectively changed tickets.
+On the same original 1,228 races the aggregate
+[PC2 Run #42322938779](https://github.com/tanaka456jp/HorseRacingPredictions/actions/runs/42322938779)
+reported:
+
+| Result gate | Count |
+| --- | ---: |
+| Source races | 1,228 |
+| Venue-predeclared banei out of flat scope | 132 |
+| Flat races including exception-status cases | 1,096 |
+| Status-aware flat races with internally consistent published win/place returns | **1,095** |
+| Single status-aware inconsistent race | **1** |
+| Remaining mismatch category | `NAR_WIN_PAYOUT_BOTH_MISSING_AND_UNEXPECTED` |
+
+The anomalous race includes the lone 失格-status row (deduced solely from
+aggregate subtraction; no identity disclosed). Published winning-ticket
+horse numbers both omit a numeric-rank-first runner **and** include a
+different number. It may involve an official disqualification or subsequent
+results amendment; this hypothesis has **not** been established as its cause.
+Never recode the race's historical ranks to fit payout numbers, nor recode
+published payouts to fit ranks. A local independently permissible primary
+official final result and pari-mutuel settlement record is needed to reconcile
+the discrepancy.
+
+**Two clearly distinct readouts are deliberately retained:**
+
+- The existing **strict production/training intake** stays 993 accepted /
+  103 unresolved (plus 132 predeclared banei), because the original
+  `NarCompleteRace` / CatBoost chronological / frozen-wager APIs only
+  support completely ranked participant rosters. They cannot treat a
+  non-offered 取消 ticket as a refunded or losing ticket.
+- The new **post-result interpretation audit** provides 1,095 internally
+  reconciled flat races and 1 conflicting race, all still represented within
+  the 1,228-race source denominator. It returns a private, read-only
+  in-memory per-horse status with no evidence of contemporaneous pre-off
+  availability.
+
+A future end-to-end economic evaluator needs an independently frozen
+**purchased-ticket ledger** (offered, placed, refunded, settled, void),
+not just final-result CSV ranks. Until that and the remaining inconsistent
+win payout are verified, the 1,095 cases are **not** an approved 1,095-race
+profit sample. 2023-24 OOS and 2025-26 protected holdout remain sealed.
+There is no actual out-of-sample realized ROI or positive expected-value
+demonstration here.
