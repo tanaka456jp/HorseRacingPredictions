@@ -16,6 +16,8 @@ on:
       - "scripts/diagnose_nar_one_month_local.py"
       - "src/horse_racing_predictions/nar_status_aware_training_labels.py"
       - "tests/test_nar_status_aware_training_labels.py"
+      - "src/horse_racing_predictions/nar_status_aware_prior_day.py"
+      - "tests/test_nar_status_aware_prior_day.py"
   workflow_dispatch:
 
 permissions:
@@ -195,6 +197,36 @@ jobs:
             Write-Host 'NAR_STATUS_LABEL_AGGREGATE_CONTRACT_INVALID'
             exit 2
           }
+          $form = $doc.statusAwarePriorDayFormAudit
+          if ($null -eq $form -or
+              $form.status -cnotin @(
+                'NAR_STATUS_AWARE_FORM_INCOMPLETE_HISTORY_HOLD',
+                'NAR_STATUS_AWARE_FORM_DIAGNOSTIC_BLOCKED'
+              ) -or
+              $form.modelTrainingAuthorized -ne $false -or
+              $form.positiveEvDemonstrated -ne $false -or
+              $form.sourceRowsExported -ne $false) {
+            Write-Host 'NAR_STATUS_AWARE_PRIOR_DAY_CONTRACT_INVALID'
+            exit 2
+          }
+          if ($form.status -ceq 'NAR_STATUS_AWARE_FORM_INCOMPLETE_HISTORY_HOLD') {
+            if ([int]$form.historicalProjectedTargetRows -ne
+                [int]$labels.labeledRunnerRows -or
+                [int]$form.historicalStartedRows -ne
+                [int]$labels.officialStartedRows -or
+                [int]$form.historicalNumericFinishRows -ne
+                [int]$labels.officialFinishedRows -or
+                [int]$form.unresolvedFlatRaces -ne
+                [int]$official.unresolvedFlatRaces -or
+                [int]$form.releasedTrainingRows -ne 0 -or
+                $form.independentPreoffRosterVerified -ne $false) {
+              Write-Host 'NAR_STATUS_AWARE_PRIOR_DAY_COUNT_INVALID'
+              exit 2
+            }
+          } elseif ([string]$form.staticReason -cnotmatch '^NAR_[A-Z0-9_]{1,90}$') {
+            Write-Host 'NAR_STATUS_AWARE_PRIOR_DAY_ERROR_UNBOUNDED'
+            exit 2
+          }
           $safe = [ordered]@{
             schema = 'NAR.PC2.SinglePrivateMonthAggregate.v2'
             status = [string]$doc.status
@@ -205,6 +237,17 @@ jobs:
             predeclaredOutOfScopeRaces = [int]$doc.predeclaredOutOfScopeRaces
             unresolvedInScopeRaces = [int]$doc.unresolvedInScopeRaces
             staticReasonCounts = $reasons
+            statusAwarePriorDayForm = ([ordered]@{
+              status = [string]$form.status
+              historicalProjectedTargetRows = [int]$form.historicalProjectedTargetRows
+              historicalStartedRows = [int]$form.historicalStartedRows
+              historicalNumericFinishRows = [int]$form.historicalNumericFinishRows
+              unresolvedFlatRaces = [int]$form.unresolvedFlatRaces
+              releasedTrainingRows = [int]$form.releasedTrainingRows
+              staticReason = [string]$form.staticReason
+              modelTrainingAuthorized = $false
+              positiveEvDemonstrated = $false
+            })
             statusAwareLabels = ([ordered]@{
               observedRosterRows = [int]$labels.observedRosterRows
               labeledRunnerRows = [int]$labels.labeledRunnerRows
