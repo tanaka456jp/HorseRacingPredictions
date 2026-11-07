@@ -65,8 +65,39 @@ prove all original CSV records are internally consistent, free
 of known historical exceptions, legally reusable commercially,
 genuinely available before historical race start, or profitable.
 
-The separate 72-month read-only content/official-status preflight
-is [Run #42377327241](https://github.com/tanaka456jp/HorseRacingPredictions/actions/runs/42377327241).
+The separate full 72-month read-only content/official-status preflight
+[Run #42377327241](https://github.com/tanaka456jp/HorseRacingPredictions/actions/runs/42377327241)
+also completed **SUCCESS**. It processed real, private, authorized original
+monthly ZIPs on PC2 and emitted only aggregate status counts:
+
+| All-source denominator and outcomes | Exact count |
+| --- | ---: |
+| Months present, missing | **72**, **0** |
+| NAR original source races | **89,654** |
+| Predeclared banei/Obihiro races out of flat scope | **10,223** |
+| Flat-race research scope | **79,431** |
+| Previous strict numeric-rank only validated flat races | **69,484** |
+| Previous strict unresolved flat races | **9,947** |
+| Post-event official-status-and-payout reconciled flat races | **78,580** |
+| Still unresolved flat races under official-status reading | **851** |
+| Whole months with no status-aware unresolved flat races | **17** |
+| Whole months passing strict rank-only train gate | **0** |
+
+Arithmetic contracts: 89,654 = 10,223 + 79,431;
+79,431 = 78,580 + 851 = 69,484 + 9,947.
+The paired official-status interpretation newly resolves **9,096** races
+that the old, rank-only parser would have quarantined, but the
+remaining **851** must stay in the denominator and HOLD training/ROI
+authorization. The 72 strict-unresolved months refer to the
+*unchanged strict rank-only* gate, while the 17 fully status-aware
+months refer to the separate post-event interpretation.
+
+No forecasting model was fitted, no protected independent OOS was
+opened, no historical pre-off timeline was verified and no economic
+profitability was estimated by the preflight. Neither the full
+download nor 78,580 correctly interpreted historical results
+constitutes an after-cost positive-expectation demonstration.
+
 Any unresolved payout/rank/status conflict must remain in the
 full-source denominator and HOLD training authorization until
 reconciled under the preregistered policy.
