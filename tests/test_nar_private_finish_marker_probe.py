@@ -93,3 +93,54 @@ def test_predeclared_obihiro_rows_do_not_appear_in_flat_rank_histogram(tmp_path)
     assert stats["flatHorseRows"] == 0
     assert stats["horseRowsByFixedCategory"] == {}
     assert stats["flatRacesWithExceptionalRank"] == 0
+
+
+def test_context_only_reports_fixed_flags_never_source_text():
+    row = [""] * 36
+    row[32] = "競走中止"
+    row[33] = "取消"
+    row[34] = "38.9"
+    row[35] = "8"
+    sig, indicators = module._blank_finish_context(row)
+    assert sig == "1111"
+    assert indicators == {"TIME": "DID_NOT_FINISH", "MARGIN": "SCRATCH"}
+    assert not any("取消" in value or "中止" in value
+                   for value in indicators.values())
+
+
+def test_blank_rank_context_report_is_aggregate_only_fictional_zip(tmp_path):
+    dataset = _fixture(month="201711", with_header=True)
+    records = list(csv.reader(StringIO(dataset["horselist"])))
+    records[1][31] = ""
+    records[1][33] = "出走取消"
+    records[2][31] = ""
+    records[2][32] = "競走中止"
+    records[2][35] = ""
+    encoded = StringIO(newline="")
+    csv.writer(encoded).writerows(records)
+    path = _make_zip(
+        tmp_path, month="201711",
+        override={"horselist": encoded.getvalue()},
+    )
+    original_bytes = path.read_bytes()
+    report = module.inspect_header_shape(
+        path, month="201711", permission_confirmed=True
+    )
+    info = report["flatBlankContextEvidence"]
+    assert info["blankRowsByTimeMarginLast3fPopularityFlags"] == {
+        "0101": 1, "1000": 1,
+    }
+    assert info["blankRowsWithAnyExplicitOfficialMarkerInOtherFields"] == 2
+    assert info["explicitMarkersInOtherFieldsOnly"] == {
+        "MARGIN_SCRATCH": 1, "TIME_DID_NOT_FINISH": 1,
+    }
+    assert info["unknownStatusRows"] == 0
+    assert info["evidenceOnlyNotRefundOrLossClassification"]
+    assert info["noRawFieldContentsExported"]
+    serialized = json.dumps(report, ensure_ascii=False)
+    assert "出走取消" not in serialized
+    assert "競走中止" not in serialized
+    assert "架空" not in serialized
+    assert "20171114" not in serialized
+    assert str(path) not in serialized
+    assert path.read_bytes() == original_bytes
