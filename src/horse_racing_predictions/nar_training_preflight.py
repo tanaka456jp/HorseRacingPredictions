@@ -20,6 +20,7 @@ from .nar_private_manifest_inventory import (
 )
 from .nar_local_monthly_intake import _read_nar_local_csv_texts
 from .nar_monthly_coverage_audit import audit_nar_monthly_coverage
+from .nar_official_exception_audit import audit_nar_official_exceptions
 from .nar_official_zip_probe import UnsafeNarSource
 
 
@@ -32,6 +33,11 @@ class NarMonthDiagnostic:
     out_of_scope_banei_races: int
     unresolved_flat_races: int
     static_reasons: tuple[tuple[str, int], ...]
+    # Independently audited post-event official status/settlement, not
+    # released as pre-off training rows or an ROI denominator.
+    status_aware_validated_flat_races: int = 0
+    status_aware_unresolved_flat_races: int = 0
+    status_aware_reasons: tuple[tuple[str, int], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -47,6 +53,11 @@ class NarPreflightReport:
     out_of_scope_banei_races: int
     unresolved_flat_races: int
     diagnostic: tuple[NarMonthDiagnostic, ...]
+    # Parallel official-status interpretation never relaxes the separate
+    # rank-only training gate or the missing-month requirement.
+    status_aware_validated_flat_races: int = 0
+    status_aware_unresolved_flat_races: int = 0
+    months_status_aware_complete: int = 0
     user_permission_attested: bool = True
     all_months_study_eligible: bool = False
     actual_rights_independently_verified: bool = False
@@ -70,6 +81,7 @@ def diagnose_nar_training_folder(
     )
     detail: list[NarMonthDiagnostic] = []
     observed = accepted = banei = unresolved = complete = 0
+    status_accepted = status_unresolved = status_complete = 0
     for source in inventory.absolute_source_paths:
         month = source.name[:6]
         try:
@@ -79,12 +91,31 @@ def diagnose_nar_training_folder(
             if checked_month != month:
                 raise UnsafeNarSource("NAR_PREFLIGHT_MONTH_MISMATCH")
             coverage = audit_nar_monthly_coverage(texts, month=month).summary
+            # Read the *same* already-decoded private bytes only; never
+            # fetch a new source, open a held-out ZIP or expose horse IDs.
+            outcome = audit_nar_official_exceptions(texts, month=month).audit
+            if (outcome.source_races != coverage.observed_races
+                    or outcome.predeclared_banei_races !=
+                       coverage.predeclared_out_of_scope_races
+                    or outcome.in_scope_flat_races != (
+                        coverage.observed_races
+                        - coverage.predeclared_out_of_scope_races
+                    )
+                    or outcome.status_validated_flat_races
+                       + outcome.unresolved_flat_races
+                       != outcome.in_scope_flat_races
+                    or outcome.status_validated_flat_races <
+                       coverage.structurally_accepted_races):
+                raise UnsafeNarSource("NAR_PREFLIGHT_PARALLEL_AUDIT_DISAGREEMENT")
             reasons = coverage.exclusion_reasons
             is_valid = coverage.complete_month_for_research
             observed += coverage.observed_races
             accepted += coverage.structurally_accepted_races
             banei += coverage.predeclared_out_of_scope_races
             unresolved += coverage.unresolved_in_scope_races
+            status_accepted += outcome.status_validated_flat_races
+            status_unresolved += outcome.unresolved_flat_races
+            status_complete += int(outcome.complete_flat_outcome_interpretation)
             if is_valid:
                 complete += 1
             detail.append(NarMonthDiagnostic(
@@ -96,6 +127,9 @@ def diagnose_nar_training_folder(
                 out_of_scope_banei_races=coverage.predeclared_out_of_scope_races,
                 unresolved_flat_races=coverage.unresolved_in_scope_races,
                 static_reasons=reasons,
+                status_aware_validated_flat_races=outcome.status_validated_flat_races,
+                status_aware_unresolved_flat_races=outcome.unresolved_flat_races,
+                status_aware_reasons=outcome.unresolved_reason_counts,
             ))
         except (UnsafeNarSource, OSError, RuntimeError, UnicodeError) as exc:
             # Never print Python tracebacks and never reflect arbitrary
@@ -128,5 +162,8 @@ def diagnose_nar_training_folder(
         out_of_scope_banei_races=banei,
         unresolved_flat_races=unresolved,
         diagnostic=tuple(detail),
+        status_aware_validated_flat_races=status_accepted,
+        status_aware_unresolved_flat_races=status_unresolved,
+        months_status_aware_complete=status_complete,
         all_months_study_eligible=False,  # source rights/timing never certified
     )
