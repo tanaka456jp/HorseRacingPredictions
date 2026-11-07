@@ -152,7 +152,17 @@ def _validated_race(
         if rank is not None and rank <= cutoff
     }
     if set(win) != winners:
-        raise UnsafeNarSource("NAR_STATUS_AWARE_WIN_PAYOUT_MISMATCH")
+        # Disclose only a fixed mismatch *direction*. No horse number,
+        # race ID or source text is emitted into the aggregate report.
+        missing = bool(winners - set(win))
+        unexpected = bool(set(win) - winners)
+        if missing and unexpected:
+            code = "NAR_WIN_PAYOUT_BOTH_MISSING_AND_UNEXPECTED"
+        elif missing:
+            code = "NAR_WIN_PAYOUT_MISSING_RANK_ONE"
+        else:
+            code = "NAR_WIN_PAYOUT_TO_NON_RANK_ONE"
+        raise UnsafeNarSource(code)
     if set(place) != placers:
         raise UnsafeNarSource("NAR_STATUS_AWARE_PLACE_PAYOUT_MISMATCH")
 
