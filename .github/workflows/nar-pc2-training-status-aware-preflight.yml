@@ -1,0 +1,108 @@
+name: NAR PC2 Training Status-Aware Preflight (Private Aggregate Only)
+
+on:
+  push:
+    branches: ["feature/weekly-odds-free-note-20261021"]
+    paths:
+      - ".github/workflows/nar-pc2-training-status-aware-preflight.yml"
+      - "src/horse_racing_predictions/nar_training_preflight.py"
+      - "scripts/diagnose_nar_training_months_local.py"
+      - "tests/test_nar_training_preflight.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nar-pc2-status-aware-72-months
+  cancel-in-progress: false
+
+jobs:
+  pc2-private-month-diagnostic:
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 8
+    steps:
+      - name: Checkout source without cleaning non-repo private data
+        uses: actions/checkout@v4
+        with:
+          clean: false
+          persist-credentials: false
+      - name: Compare strict versus official-status read-only monthly counts
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:COMPUTERNAME -cne 'DESKTOP-MVV1FD4' -or
+              $env:GITHUB_REPOSITORY -cne 'tanaka456jp/HorseRacingPredictions' -or
+              $env:GITHUB_REF_NAME -cne 'feature/weekly-odds-free-note-20261021') {
+            Write-Host 'NAR_PRIVATE_STATUS_PREFLIGHT_UNTRUSTED_PC_OR_REF'
+            exit 2
+          }
+          $sourceFolder = 'D:\Development\HorseRacingPredictions\nar-personal'
+          $parents = @('D:\Development', 'D:\Development\HorseRacingPredictions', $sourceFolder)
+          foreach ($p in $parents) {
+            if (-not (Test-Path -LiteralPath $p -PathType Container) -or
+                ((Get-Item -LiteralPath $p -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+              Write-Host 'NAR_PRIVATE_STATUS_PREFLIGHT_SOURCE_HOLD'
+              exit 2
+            }
+          }
+          $script = Join-Path (Get-Location).Path 'scripts\diagnose_nar_training_months_local.py'
+          if (-not (Test-Path -LiteralPath $script -PathType Leaf)) {
+            Write-Host 'NAR_PRIVATE_STATUS_PREFLIGHT_SCRIPT_MISSING'
+            exit 2
+          }
+          $env:PYTHONDONTWRITEBYTECODE = '1'
+          $env:PYTHONPATH = Join-Path (Get-Location).Path 'src'
+          try {
+            # The CLI intentionally exits 3 on known absent months/strict
+            # anomalies; its aggregated JSON still contains valid evidence.
+            $raw = @(& python -B $script --local-nar-training-zip-directory $sourceFolder --confirm-personal-private-nar-permission 2>&1)
+            $code = $LASTEXITCODE
+            if ($code -notin @(0,3) -or $raw.Count -ne 1) {
+              throw 'NAR_PRIVATE_STATUS_PREFLIGHT_CLI_FAILED'
+            }
+            $d = [string]$raw[0] | ConvertFrom-Json
+            if ([int]$d.monthsPresent -le 0 -or
+                [int]$d.monthsPresent + [int]$d.monthsMissing -ne 72 -or
+                [int]$d.monthsStatusAwareComplete -gt [int]$d.monthsPresent -or
+                ([int]$d.acceptedFlatRaces + [int]$d.unresolvedFlatRaces +
+                 [int]$d.predeclaredBaneiOutOfScopeRaces) -ne [int]$d.observedRaces -or
+                ([int]$d.statusAwareValidatedFlatRaces + [int]$d.statusAwareUnresolvedFlatRaces +
+                 [int]$d.predeclaredBaneiOutOfScopeRaces) -ne [int]$d.observedRaces -or
+                [int]$d.statusAwareValidatedFlatRaces -lt [int]$d.acceptedFlatRaces -or
+                [int]$d.statusAwareUnresolvedFlatRaces -gt [int]$d.unresolvedFlatRaces -or
+                $d.statusAwareAnalysisIsPostEventOnly -ne $true -or
+                $d.modelTrainingAuthorized -ne $false -or
+                $d.realDataUploaded -ne $false -or
+                $d.trainingExecuted -ne $false -or
+                $d.actualRoiEvaluated -ne $false -or
+                $d.protectedHoldoutOpened -ne $false -or
+                $d.positiveEvDemonstrated -ne $false -or
+                $d.publicPostingAuthorized -ne $false) {
+              throw 'NAR_PRIVATE_STATUS_PREFLIGHT_COUNT_CONTRACT_INVALID'
+            }
+            # Output just a fixed allowlist, never the source ZIP names,
+            # source paths, horse identities, race IDs or source text.
+            [ordered]@{
+              schema = 'NAR.PC2.PrivateTrainingDualStatusAggregate.v1'
+              status = 'PRIVATE_POSTEVENT_DIAGNOSTIC_ONLY'
+              monthsPresent = [int]$d.monthsPresent
+              monthsMissing = [int]$d.monthsMissing
+              strictAcceptedFlat = [int]$d.acceptedFlatRaces
+              strictUnresolvedFlat = [int]$d.unresolvedFlatRaces
+              officialStatusValidatedFlat = [int]$d.statusAwareValidatedFlatRaces
+              officialStatusUnresolvedFlat = [int]$d.statusAwareUnresolvedFlatRaces
+              officialStatusCompleteMonths = [int]$d.monthsStatusAwareComplete
+              predeclaredOutOfScope = [int]$d.predeclaredBaneiOutOfScopeRaces
+              observedRaces = [int]$d.observedRaces
+              licensedSourceBytesUploaded = $false
+              preoffFeatureTimingProven = $false
+              modelTrainingAuthorized = $false
+              realizedRoiComputed = $false
+              independentOosOpened = $false
+              positiveExpectedValueDemonstrated = $false
+            } | ConvertTo-Json -Compress
+          } catch {
+            Write-Host 'NAR_PRIVATE_STATUS_PREFLIGHT_AGGREGATE_BLOCKED'
+            exit 2
+          }
