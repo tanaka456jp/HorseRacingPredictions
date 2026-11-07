@@ -141,7 +141,7 @@ def test_payback_contradiction_rejected_without_cherry_picking():
     assert report.audit.unresolved_flat_races == 1
     assert report.audit.status_validated_flat_races == 0
     assert report.audit.unresolved_reason_counts == (
-        ()=>{} 
+        ("NAR_WIN_PAYOUT_BOTH_MISSING_AND_UNEXPECTED", 1),
     )
 
 
