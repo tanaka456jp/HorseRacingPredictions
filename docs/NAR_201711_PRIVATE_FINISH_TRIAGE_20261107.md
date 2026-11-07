@@ -389,3 +389,74 @@ https://www.keiba.go.jp/terms.html applies to all sources.
 
 **No 2023-24 OOS or 2025-26 protected final holdout opened,
 no real model fitted and no positive net expected value established.**
+
+
+## GitHub-hosted blinded digest receipt preflight (2026-11-07 follow-up)
+
+The external-witness pipeline is now coded but **not deployed for
+production input**; Draft PR #142 is intentionally unmerged.
+
+Files:
+- `src/horse_racing_predictions/nar_forward_hosted_witness.py`
+  validates an exact `workflow_dispatch` input envelope and
+  structurally matches a later received public digest with the full
+  privately preserved forecast snapshot, *including the actual
+  earliest race off time*, count and original private salt.
+- `scripts/anchor_nar_gh_hosted_receipt.py` reads GitHub's own
+  `GITHUB_EVENT_PATH` JSON, rejects untrusted repositories, local
+  PC runners, non-`main` refs and reruns, and emits **only** a
+  strict public allowlist receipt.
+- `.github/workflows/nar-prospective-hosted-receipt.yml` runs
+  Python on **GitHub-hosted Ubuntu**, not a PC② clock, with
+  read-only permissions and no race ZIP or betting-account data.
+  No winner scores, runners, private salt, raw manifests, official
+  results, odds or payment details are transmitted. It enforces a
+  minimum five-minute host-clock margin before earliest scheduled off.
+- `tests/test_nar_forward_hosted_witness.py` covers malformed digests,
+  retrospective races, non-`main` refs, forged repo, reruns,
+  early/late clocks, private digest tampering, false first-off timing,
+  mismatch in registered race count, leaked source text, fabricated
+  rights/timestamp flags and an invented real-money claim.
+
+**GitHub limitation:** the `workflow_dispatch` event **requires the
+workflow file to be present on the repository's default branch**:
+https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#workflow_dispatch
+Until an explicitly reviewed deployment to `main`, the PR branch
+executes only the safe *fictional contract test on push*. Production
+digest reception on `main` is **not yet active**.
+
+A legitimate future receipt requires, in this order:
+
+1. Preserve a complete, timestamped private prospective race manifest,
+   racecard source evidence, model SHA, scores, all forecast clocks and
+   securely randomized private salt. Predict every predeclared race
+   BEFORE opening its outcome.
+2. Compute the salted complete-snapshot hash offline using
+   `seal_nar_prospective_batch`. Send **only the 64-character digest**,
+   earliest-off UTC, JST race date, race count, and the clearly
+   identified fictional/prospective mode to the hosted workflow.
+3. The hosted job records a bounded, typed digest receipt. A
+   `workflow_dispatch` run cannot be rerun to manufacture new early
+   proof: only `GITHUB_RUN_ATTEMPT=1` can pass.
+4. A future independent reviewer must retrieve the GitHub
+   Actions run's **server-created timestamp and event/input evidence**
+   directly from GitHub, cross-check the exact digest and workflow
+   source SHA, and retain the evidence before log retention expires.
+5. Separately verify the originally available roster, *actual official*
+   race start time, data rights and payouts. Locally comparing
+   self-supplied timestamps/receipts is **never** independent proof.
+6. Only after sufficient genuine, immutable prospective forecasts,
+   full denominators, independent race-day bootstrap and cost-adjusted
+   matched-benchmark analysis can net positive EV even be assessed.
+
+The two kinds of current tests (synthetic GitHub-hosted contract and
+PC② Windows fictional digest smoke) verify software functioning only.
+A salted digest alone and a GitHub-hosted **runner wall clock** alone
+are not an independent immutable cryptographic timestamp. The
+`NarForwardPrivateReceiptBinding` therefore always leaves external
+proof, official provenance, actual wagers, ROI and positive-EV
+authorizations **false**, even when the private hash and receipt match.
+
+The **71 missing training months**, the single 2017-11 official
+disqualification/payout discrepancy and absent independent live
+forecast/payout provenance still prevent any positive-EV conclusion.
