@@ -176,3 +176,23 @@ def test_extra_payout_to_nonwinner_is_rejected_without_retrospective_selection()
     assert audited.unresolved_reason_counts == (
         ("NAR_WIN_PAYOUT_TO_NON_RANK_ONE", 1),
     )
+
+
+def test_official_ticket_on_disqualified_runner_is_quarantined_for_adjudication():
+    # Fictional case: the archived final status says 失格 but a published
+    # winning return still names that number. Whether adjudication came
+    # after betting settlement is NOT knowable from this CSV alone.
+    data = _fixture(starters=8, month="201711", with_header=True)
+    rows = list(csv.reader(StringIO(data["horselist"])))
+    rows[1][31] = ""
+    rows[1][33] = "失格"
+    for i in range(2, 9):
+        rows[i][31] = str(i - 1)
+    data["horselist"] = _dump(rows)
+    report = audit_nar_official_exceptions(data, month="201711")
+    assert report.audit.unresolved_reason_counts == (
+        ("NAR_WIN_PAYOUT_TO_DISQUALIFIED_STATUS", 1),
+    )
+    assert not report.audit.complete_flat_outcome_interpretation
+    assert not report.audit.economic_roi_authorized
+    assert not report.audit.positive_ev_demonstrated
