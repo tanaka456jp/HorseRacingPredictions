@@ -11,6 +11,10 @@ import pytest
 
 from horse_racing_predictions.nar_forward_hosted_witness import (
     validate_nar_github_hosted_receipt,
+    reconcile_nar_hosted_receipt_with_private_forecasts,
+)
+from horse_racing_predictions.nar_forward_preoff_commitment import (
+    NarProspectiveForecast, seal_nar_prospective_batch,
 )
 
 # Repo scripts are intentionally NOT packaged in the installable library.
@@ -192,3 +196,111 @@ def test_main_blocks_invalid_json_without_echoing_path_or_source(tmp_path, monke
     assert "PRIVATE_RACE" not in body
     assert "secret" not in body
     assert "NAR_GH_HOSTED_DIGEST_RECEIPT_HOLD" in body
+
+
+def _pair_fictional_one_race():
+    forecast = NarProspectiveForecast(
+        race_id="NAR:20261114:架空試験場:01",
+        race_day="2026-11-14",
+        scheduled_off_utc=OFF,
+        generated_at_utc=NOW - timedelta(hours=1),
+        roster_observed_at_utc=NOW - timedelta(hours=2),
+        model_source_sha256="b" * 64,
+        model_fit_through_day="2026-11-12",
+        winner_scores={str(i): float(100 - i) for i in range(1, 9)},
+        outsider_scores={
+            str(i): float(10 if i == 5 else 1) for i in range(1, 9)
+        },
+    )
+    manifest = {forecast.race_id: forecast.race_day}
+    salt = bytes(range(32))  # TEST ONLY, not for real tickets.
+    private = seal_nar_prospective_batch(
+        manifest, [forecast], private_salt=salt,
+    )
+    receipt = _run(inputs={
+        **INPUTS, "commitment_digest": private.sha256_digest,
+        "registered_flat_races": "1",
+    })
+    return receipt, private, manifest, [forecast], salt
+
+
+def _bind(case):
+    receipt, private, manifest, forecasts, salt = case
+    return reconcile_nar_hosted_receipt_with_private_forecasts(
+        receipt=receipt, commitment=private, expected_races=manifest,
+        forecasts=forecasts, private_salt=salt,
+    )
+
+
+def test_private_forecast_digest_binds_to_host_receipt_without_ev_proof():
+    paired = _bind(_pair_fictional_one_race())
+    assert paired.salted_snapshot_hash_matches
+    assert paired.first_off_matches_full_private_calendar
+    assert paired.bound_flat_races == 1
+    assert paired.status == "FICTIONAL_SNAPSHOT_AND_RECEIPT_STRUCTURALLY_MATCH"
+    assert not paired.github_server_run_created_at_verified
+    assert not paired.github_dispatch_inputs_independently_verified
+    assert not paired.independent_proof_of_early_publication
+    assert not paired.legitimate_preoff_roster_proven
+    assert not paired.official_schedule_proven
+    assert not paired.roi_authorized
+    assert not paired.positive_expected_value_demonstrated
+    assert not paired.historical_protected_holdout_opened
+    assert "架空試験場" not in repr(paired)
+
+
+def test_private_binding_rejects_backdated_off_time_and_made_up_race_count():
+    case = _pair_fictional_one_race()
+    receipt, private, manifest, rows, salt = case
+    forged_time = replace(receipt,
+        scheduled_earliest_off_utc="2026-11-14T07:00:00Z")
+    with pytest.raises(ValueError, match="NAR_GH_PRIVATE_BINDING_OFF_TIME_NOT_EARLIEST"):
+        _bind((forged_time, private, manifest, rows, salt))
+    forged_day = replace(receipt, race_day_jst="2026-11-15")
+    with pytest.raises(ValueError, match="NAR_GH_PRIVATE_BINDING_OFF_TIME_NOT_EARLIEST"):
+        _bind((forged_day, private, manifest, rows, salt))
+    larger = replace(receipt, declared_flat_races=2)
+    with pytest.raises(ValueError, match="NAR_GH_PRIVATE_BINDING_DIGEST_OR_COVERAGE_MISMATCH"):
+        _bind((larger, private, manifest, rows, salt))
+
+
+def test_private_binding_detects_changed_frozen_score_and_salt():
+    receipt, private, manifest, rows, salt = _pair_fictional_one_race()
+    changed = replace(rows[0], winner_scores={
+        **rows[0].winner_scores, "1": 23.0,
+    })
+    with pytest.raises(ValueError, match="NAR_GH_PRIVATE_BINDING_DIGEST_OR_COVERAGE_MISMATCH"):
+        _bind((receipt, private, manifest, [changed], salt))
+    with pytest.raises(ValueError, match="NAR_GH_PRIVATE_BINDING_DIGEST_OR_COVERAGE_MISMATCH"):
+        _bind((receipt, private, manifest, rows, b"X" * 32))
+    forged_digest = replace(receipt, commitment_digest="f" * 64)
+    with pytest.raises(ValueError, match="NAR_GH_PRIVATE_BINDING_DIGEST_OR_COVERAGE_MISMATCH"):
+        _bind((forged_digest, private, manifest, rows, salt))
+
+
+def test_private_binding_rejects_public_receipt_host_clock_forgery():
+    case = _pair_fictional_one_race()
+    receipt, private, manifest, rows, salt = case
+    with pytest.raises(ValueError, match="NAR_GH_PRIVATE_BINDING_NOT_PREOFF"):
+        _bind((replace(receipt, host_logged_at_utc="2026-11-14T05:59:00Z"),
+               private, manifest, rows, salt))
+    with pytest.raises(ValueError, match="NAR_GH_PRIVATE_BINDING_HOST_CLOCK_INVALID"):
+        _bind((replace(receipt, host_logged_at_utc="bad"),
+               private, manifest, rows, salt))
+
+
+def test_private_binding_rejects_forged_real_wagers_and_provider_rights():
+    case = _pair_fictional_one_race()
+    receipt, private, manifest, rows, salt = case
+    for flag in (
+        "github_created_at_independently_verified",
+        "github_dispatch_input_independently_verified",
+        "private_snapshot_independently_verified",
+        "independently_attested_before_off",
+        "source_rights_verified",
+        "real_wagers_verified",
+        "positive_expected_value_demonstrated",
+    ):
+        with pytest.raises(ValueError, match="NAR_GH_PRIVATE_BINDING_UNVERIFIED_RECEIPT_REQUIRED"):
+            _bind((replace(receipt, **{flag: True}),
+                   private, manifest, rows, salt))
