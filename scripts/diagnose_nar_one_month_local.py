@@ -27,6 +27,10 @@ from horse_racing_predictions.nar_official_exception_audit import (
 from horse_racing_predictions.nar_status_aware_training_labels import (
     derive_nar_status_aware_outcome_labels,
 )
+from horse_racing_predictions.nar_status_aware_prior_day import (
+    reconstruct_nar_status_aware_prior_day,
+)
+from horse_racing_predictions.nar_published_result_normalizer import _parse
 
 _STATIC = re.compile(r"NAR_[A-Z0-9_]{1,90}\Z")
 
@@ -84,10 +88,59 @@ def diagnose_nar_month(
         coverage = audit_nar_monthly_coverage(texts, month=expected_month).summary
         status_report = audit_nar_official_exceptions(texts, month=expected_month)
         official = status_report.audit
-        labels = derive_nar_status_aware_outcome_labels(status_report).audit
+        label_batch = derive_nar_status_aware_outcome_labels(status_report)
+        labels = label_batch.audit
     except (UnsafeNarSource, OSError, ValueError, RuntimeError,
             UnicodeError, TypeError) as exc:
         return safe_failure("CSV_SCHEMA_OR_MONTH", exc)
+
+    # A separate retrospective form preflight must NEVER permit training.
+    # The 201711 historical payout conflict leaves one race unresolved;
+    # diagnostic mode may COUNT projections but releases NO runner targets.
+    try:
+        wanted = {(x.race_key, x.horse_number) for x in label_batch.labels}
+        identities = {}
+        for key, row in _parse(texts["horselist"], "horselist", expected_month):
+            horse_number = row[5].strip()
+            if not horse_number.isascii() or not horse_number.isdecimal():
+                continue
+            indexed = (key, int(horse_number))
+            if indexed in wanted:
+                if indexed in identities:
+                    raise UnsafeNarSource("NAR_ASOF_DUPLICATE_IDENTITY_ROW")
+                identities[indexed] = (row[6], row[10])
+        form = reconstruct_nar_status_aware_prior_day(
+            [(expected_month, label_batch, identities)],
+            allow_incomplete_diagnostic=True,
+        )
+        a = form.audit
+        if form.targets or not a.unresolved_flat_races:
+            # This particular private diagnostic is only allowed to see
+            # previously known, incomplete historic months.
+            raise UnsafeNarSource("NAR_ASOF_PRIVATE_DIAGNOSTIC_NOT_HELD")
+        form_status = {
+            "status": "NAR_STATUS_AWARE_FORM_INCOMPLETE_HISTORY_HOLD",
+            "historicalProjectedTargetRows": a.projected_target_rows,
+            "historicalStartedRows": a.historical_started_rows,
+            "historicalNumericFinishRows": a.historical_ranked_rows,
+            "unresolvedFlatRaces": a.unresolved_flat_races,
+            "releasedTrainingRows": len(form.targets),
+            "modelTrainingAuthorized": False,
+            "independentPreoffRosterVerified": False,
+            "positiveEvDemonstrated": False,
+            "sourceRowsExported": False,
+        }
+    except (UnsafeNarSource, OSError, ValueError, TypeError) as exc:
+        reason = str(exc) if isinstance(exc, UnsafeNarSource) else ""
+        if not _STATIC.fullmatch(reason):
+            reason = "NAR_ASOF_PRIVATE_DIAGNOSTIC_BLOCKED"
+        form_status = {
+            "status": "NAR_STATUS_AWARE_FORM_DIAGNOSTIC_BLOCKED",
+            "staticReason": reason,
+            "modelTrainingAuthorized": False,
+            "positiveEvDemonstrated": False,
+            "sourceRowsExported": False,
+        }
 
     # Strictly aggregate-only payload: no keys, names, bytes or path are kept.
     return {
@@ -121,6 +174,7 @@ def diagnose_nar_month(
             "positiveEvDemonstrated": False,
             "sourceBytesExported": False,
         },
+        "statusAwarePriorDayFormAudit": form_status,
         "statusAwareLabelAudit": {
             "sourceRaces": labels.source_races,
             "flatRaces": labels.in_scope_flat_races,
