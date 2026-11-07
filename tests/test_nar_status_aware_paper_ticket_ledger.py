@@ -20,10 +20,10 @@ from test_nar_official_exception_audit import _synthetic_with_status
 JST = timezone(timedelta(hours=9))
 
 
-def _forecast(*, top=1, outsider=4, month="201711"):
+def _forecast(*, top=1, outsider=4, month="201711", horses_count=8):
     # By construction: the first three top-scored horses cannot include the
     # separately chosen outsider, even if top/outsider numbers vary.
-    horses = [str(n) for n in range(1, 9)]
+    horses = [str(n) for n in range(1, horses_count + 1)]
     top_rest = [n for n in horses if n not in (str(top), str(outsider))][:2]
     score = {n: 1.0 for n in horses}
     score[str(top)] = 100.0
@@ -173,3 +173,34 @@ def test_false_source_approval_cannot_silently_unlock_real_money_roi():
     ))
     with pytest.raises(UnsafeNarSource, match="NAR_PAPER_UNRESOLVED_RACE_OR_RIGHTS_HOLD"):
         reconcile_nar_frozen_paper_ticket_options([_forecast()], forged)
+
+
+def test_four_offered_horses_do_not_acquire_invented_place_payouts():
+    import csv
+    from io import StringIO
+    case = _fixture(starters=5, month="201711", with_header=True)
+    horses = list(csv.reader(StringIO(case["horselist"])))
+    horses[5][31] = ""
+    horses[5][33] = "取消"
+    out = StringIO(newline="")
+    csv.writer(out).writerows(horses)
+    case["horselist"] = out.getvalue()
+    pays = list(csv.reader(StringIO(case["payback"])))
+    for index in (7, 8, 10, 11, 13, 14):
+        pays[1][index] = ""
+    out = StringIO(newline="")
+    csv.writer(out).writerows(pays)
+    case["payback"] = out.getvalue()
+    audited = audit_nar_official_exceptions(case, month="201711")
+    assert audited.audit.status_validated_flat_races == 1
+    race = audited.validated_races[0]
+    assert race.offered_field_size == 4
+    assert all(amount in (0, None) for _, amount in race.place_yen_by_number)
+    ledger = reconcile_nar_frozen_paper_ticket_options(
+        [_forecast(top=1, outsider=5, horses_count=5)], audited
+    )
+    assert ledger.audit.expected_tickets == 2
+    assert ledger.tickets[0].treatment == "PAID_WINNER"
+    assert ledger.tickets[1].treatment == "NOT_OFFERED_NO_STAKE"
+    assert ledger.tickets[1].hypothetical_stake_yen == 0
+    assert not ledger.audit.realized_roi_available
