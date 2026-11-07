@@ -47,17 +47,26 @@ def main() -> int:
         "acceptedFlatRaces": result.accepted_flat_races,
         "predeclaredBaneiOutOfScopeRaces": result.out_of_scope_banei_races,
         "unresolvedFlatRaces": result.unresolved_flat_races,
+        "statusAwareValidatedFlatRaces": result.status_aware_validated_flat_races,
+        "statusAwareUnresolvedFlatRaces": result.status_aware_unresolved_flat_races,
+        "monthsStatusAwareComplete": result.months_status_aware_complete,
         "perMonth": [
             {"month": d.month, "status": d.status,
              "observed": d.race_count, "acceptedFlat": d.accepted_flat_races,
              "baneiOutOfScope": d.out_of_scope_banei_races,
              "unresolvedFlat": d.unresolved_flat_races,
-             "reasons": dict(d.static_reasons)}
+             "reasons": dict(d.static_reasons),
+             "statusAwareValidatedFlat": d.status_aware_validated_flat_races,
+             "statusAwareUnresolvedFlat": d.status_aware_unresolved_flat_races,
+             "statusAwareReasons": dict(d.status_aware_reasons)}
             for d in result.diagnostic
         ],
         "realDataUploaded": False,
         "trainingExecuted": False,
         "actualRoiEvaluated": False,
+        "statusAwareAnalysisIsPostEventOnly": True,
+        "modelTrainingAuthorized": False,
+        "positiveEvDemonstrated": False,
         "protectedHoldoutOpened": False,
         "publicPostingAuthorized": False,
     }, ensure_ascii=False, sort_keys=True))
