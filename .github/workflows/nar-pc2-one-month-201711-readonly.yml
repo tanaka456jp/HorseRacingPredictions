@@ -14,6 +14,8 @@ on:
       - "tests/test_nar_official_exception_audit.py"
       - "src/horse_racing_predictions/nar_official_exception_audit.py"
       - "scripts/diagnose_nar_one_month_local.py"
+      - "src/horse_racing_predictions/nar_status_aware_training_labels.py"
+      - "tests/test_nar_status_aware_training_labels.py"
   workflow_dispatch:
 
 permissions:
@@ -169,6 +171,30 @@ jobs:
             }
             $officialReasons[$prop.Name] = [int]$prop.Value
           }
+          $labels = $doc.statusAwareLabelAudit
+          if ($null -eq $labels -or
+              [int]$labels.sourceRaces -ne [int]$doc.observedRaces -or
+              [int]$labels.flatRaces -ne [int]$official.flatRaces -or
+              [int]$labels.validatedFlatRaces -ne [int]$official.validatedFlatRaces -or
+              [int]$labels.unresolvedFlatRaces -ne [int]$official.unresolvedFlatRaces -or
+              ([int]$labels.labeledRunnerRows +
+               [int]$labels.excludedScratchRows +
+               [int]$labels.excludedRefundedRows +
+               [int]$labels.unknownDisqualificationRows) -ne
+              [int]$labels.observedRosterRows -or
+              ([int]$labels.officialFinishedRows +
+               [int]$officialStatuses.DNF_NO_REFUND +
+               [int]$officialStatuses.DISQUALIFIED_REVIEW) -ne
+              [int]$labels.officialStartedRows -or
+              [int]$labels.officialStartedRows -gt [int]$labels.observedRosterRows -or
+              $labels.preEventAvailabilityProven -ne $false -or
+              $labels.modelTrainingAuthorized -ne $false -or
+              $labels.realizedRoiAuthorized -ne $false -or
+              $labels.positiveEvDemonstrated -ne $false -or
+              $labels.sourceBytesExported -ne $false) {
+            Write-Host 'NAR_STATUS_LABEL_AGGREGATE_CONTRACT_INVALID'
+            exit 2
+          }
           $safe = [ordered]@{
             schema = 'NAR.PC2.SinglePrivateMonthAggregate.v2'
             status = [string]$doc.status
@@ -179,6 +205,18 @@ jobs:
             predeclaredOutOfScopeRaces = [int]$doc.predeclaredOutOfScopeRaces
             unresolvedInScopeRaces = [int]$doc.unresolvedInScopeRaces
             staticReasonCounts = $reasons
+            statusAwareLabels = ([ordered]@{
+              observedRosterRows = [int]$labels.observedRosterRows
+              labeledRunnerRows = [int]$labels.labeledRunnerRows
+              excludedScratchRows = [int]$labels.excludedScratchRows
+              excludedRefundedRows = [int]$labels.excludedRefundedRows
+              unknownDisqualificationRows = [int]$labels.unknownDisqualificationRows
+              officialStartedRows = [int]$labels.officialStartedRows
+              officialFinishedRows = [int]$labels.officialFinishedRows
+              preEventAvailabilityProven = $false
+              modelTrainingAuthorized = $false
+              realizedRoiAuthorized = $false
+            })
             officialStatusAware = ([ordered]@{
               flatRaces = [int]$official.flatRaces
               validatedFlatRaces = [int]$official.validatedFlatRaces
