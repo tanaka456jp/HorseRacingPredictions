@@ -121,13 +121,13 @@ def derive_nar_status_aware_outcome_labels(
                 if rank is not None or win != 0 or place != 0:
                     raise UnsafeNarSource("NAR_STATUS_LABEL_DNF_INVALID")
                 wl = pl = 0
-                started_flag = sold_flag = True
+                started_flag = offered_flag = True
                 numeric_rank = False
             elif status == "SCRATCH_NOT_OFFERED":
                 if rank is not None or win is not None or place is not None:
                     raise UnsafeNarSource("NAR_STATUS_LABEL_SCRATCH_INVALID")
                 wl = pl = None
-                started_flag = sold_flag = numeric_rank = False
+                started_flag = offered_flag = numeric_rank = False
                 scratch += 1
             elif status == "EXCLUDED_REFUND":
                 if rank is not None or win != 100 or place != 100:
@@ -140,7 +140,7 @@ def derive_nar_status_aware_outcome_labels(
                 if rank is not None or win is not None or place is not None:
                     raise UnsafeNarSource("NAR_STATUS_LABEL_DQ_INVALID")
                 wl = pl = None
-                started_flag = sold_flag = True
+                started_flag = offered_flag = True
                 numeric_rank = False
                 disputed += 1
             else:
@@ -151,7 +151,7 @@ def derive_nar_status_aware_outcome_labels(
             out.append(NarHistoricalOutcomeLabel(
                 race_key=race.race_key, horse_number=horse,
                 status=status, started_race=started_flag,
-                betting_option_offered=sold_flag,
+                betting_option_offered=offered_flag,
                 official_finish_rank=rank, win_label=wl,
                 place_label=pl, prior_start_increment=int(started_flag),
                 prior_numeric_rank_observed=numeric_rank,
