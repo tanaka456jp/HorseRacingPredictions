@@ -30,7 +30,7 @@ class _Response:
     def __init__(self, url, month, *, broken=False, missing_member=False,
                  content_type="application/zip", missing_name=False):
         self.url = url
-        self.body = BytesIO(b"INVALID" if broken else _fake_zip(
+        self.body = BytesIO((b"INVALID" * 40) if broken else _fake_zip(
             month, missing_member=missing_member))
         self.headers = {
             "Content-Type": content_type,
