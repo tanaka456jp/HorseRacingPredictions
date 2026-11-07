@@ -179,6 +179,10 @@ def test_generation_order_and_lineage_fail_closed():
         sealed([replace(p, model_source_sha256="tampered")])
     with pytest.raises(ValueError, match="NAR_FORWARD_MODEL_LINEAGE_INVALID"):
         sealed([replace(p, model_fit_through_day=p.race_day)])
+    with pytest.raises(ValueError, match="NAR_FORWARD_MODEL_LINEAGE_INVALID"):
+        sealed([replace(p, model_fit_through_day="2026-11-13")])
+    with pytest.raises(ValueError, match="NAR_FORWARD_MODEL_LINEAGE_INVALID"):
+        sealed([replace(p, model_fit_through_day="2026-11-14")])
     with pytest.raises(ValueError, match="NAR_FORWARD_ODDS_FREE_SELECTION_REQUIRED"):
         sealed([replace(p, market_odds_in_selection=True)])
 
