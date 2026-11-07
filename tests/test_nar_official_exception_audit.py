@@ -96,7 +96,7 @@ def test_sale_time_field_controls_place_cutoff_not_post_exclusion_field():
     result = audit_nar_official_exceptions(data, month="201711").audit
     assert result.status_validated_flat_races == 0
     assert result.unresolved_reason_counts == (
-        ("NAR_STATUS_AWARE_PAYOUT_MISMATCH", 1),
+        ("NAR_STATUS_AWARE_PLACE_PAYOUT_MISMATCH", 1),
     )
 
 
@@ -105,7 +105,7 @@ def test_scratch_before_sales_requires_changed_place_ticket_cutoff():
     result = audit_nar_official_exceptions(data, month="201711").audit
     assert result.status_validated_flat_races == 0
     assert result.unresolved_reason_counts == (
-        ("NAR_STATUS_AWARE_PAYOUT_MISMATCH", 1),
+        ("NAR_STATUS_AWARE_PLACE_PAYOUT_MISMATCH", 1),
     )
 
 
@@ -141,7 +141,7 @@ def test_payback_contradiction_rejected_without_cherry_picking():
     assert report.audit.unresolved_flat_races == 1
     assert report.audit.status_validated_flat_races == 0
     assert report.audit.unresolved_reason_counts == (
-        ("NAR_STATUS_AWARE_PAYOUT_MISMATCH", 1),
+        ("NAR_STATUS_AWARE_WIN_PAYOUT_MISMATCH", 1),
     )
 
 
