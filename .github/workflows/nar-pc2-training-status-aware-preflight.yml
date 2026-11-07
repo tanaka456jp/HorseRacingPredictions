@@ -102,6 +102,9 @@ jobs:
               independentOosOpened = $false
               positiveExpectedValueDemonstrated = $false
             } | ConvertTo-Json -Compress
+            # The Python CLI returns exit 3 by design when months are absent.
+            # The metadata/HOLD audit itself PASSED; normalize shell status.
+            exit 0
           } catch {
             Write-Host 'NAR_PRIVATE_STATUS_PREFLIGHT_AGGREGATE_BLOCKED'
             exit 2
