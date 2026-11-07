@@ -204,3 +204,24 @@ def test_four_offered_horses_do_not_acquire_invented_place_payouts():
     assert ledger.tickets[1].treatment == "NOT_OFFERED_NO_STAKE"
     assert ledger.tickets[1].hypothetical_stake_yen == 0
     assert not ledger.audit.realized_roi_available
+
+
+def test_official_winner_payout_on_disqualified_runner_blocks_all_paper_tickets():
+    # Mirrors only the STRUCTURE of the one private 2017-11 anomaly.
+    # No original runner/race names, payout values or identities are used.
+    import csv
+    from io import StringIO
+    case = _synthetic_with_status("失格")
+    pay = list(csv.reader(StringIO(case["payback"])))
+    pay[1][4] = "8"  # disqualified runner rather than numeric-rank winner
+    out = StringIO(newline="")
+    csv.writer(out).writerows(pay)
+    case["payback"] = out.getvalue()
+    audited = audit_nar_official_exceptions(case, month="201711")
+    assert audited.audit.unresolved_reason_counts == (
+        ("NAR_WIN_PAYOUT_TO_DISQUALIFIED_STATUS", 1),
+    )
+    with pytest.raises(UnsafeNarSource, match="NAR_PAPER_UNRESOLVED_RACE_OR_RIGHTS_HOLD"):
+        reconcile_nar_frozen_paper_ticket_options(
+            [_forecast(top=8, outsider=4)], audited,
+        )
