@@ -218,3 +218,96 @@ Official NAR semantics:
 ledger, 72 fully authenticated training months, independent locked OOS
 nor positive expected value has been established. A clean code CI
 does not override the private real-data HOLD.
+
+
+## 2026-11-07 training-month availability and historic-form coverage
+
+**PC2-only evidence, no manual guess and no licensed ZIP transfer:**
+
+[Run #42329558192](https://github.com/tanaka456jp/HorseRacingPredictions/actions/runs/42329558192)
+executed existing filename-only, bounded private folder inventory *after*
+the expected HOLD in the single 2017-11 ZIP stage. The two fixed
+allowlisted PC2 private D folders reported respectively:
+
+- Candidate folder #1: ABSENT; 0 / 72 historical training months.
+- Candidate folder #2: 1 / 72 historical training months;
+  **71 missing**, no duplicates and no unexpected training ZIPs.
+- No archive content was opened during the inventory. File names, paths,
+  horse/race details, personal source data and 2023+ sealed OOS ZIPs
+  were not exported.
+
+The remaining data requirement is primarily **71 additional 2017-2022
+monthly race ZIPs** (plus separate locked OOS provenance), not
+simply remediating one 2017-11 DQ payment discrepancy.
+
+The pre-existing PC2 private dashboard script was also improved so
+its 72 month-specific operator links point to the **selected year AND
+month**, rather than a year-only page that can default to the wrong
+month. The old hardcoded, unsubstantiated 'three old CSV' hint was removed.
+
+[Run #42329729197](https://github.com/tanaka456jp/HorseRacingPredictions/actions/runs/42329729197)
+confirmed the established offline validator and PC2 dashboard both
+completed successfully. Its ACL-protected output is local to PC2 at:
+
+`D:\Development\HorseRacingPredictions-PrivateReview\nar-training-72-month-manual-acquisition.html`
+
+Official monthly calendar and source documentation:
+https://www.keiba.go.jp/KeibaWeb/MonthlyConveneInfo/MonthlyConveneInfoTop
+https://www.keiba.go.jp/terms.html
+
+Only the operator may obtain material within the actual NAR permission
+scope; no new autonomous bulk scraping or downloaded archives are
+introduced by this milestone. Official site terms restrict unlicensed
+copying/republication. An operator-permitted *personal research* archive
+does not independently grant permission to publish race source data.
+
+### Real 2017-11 prior-day feature coverage
+
+[PC2 Run #42330190355](https://github.com/tanaka456jp/HorseRacingPredictions/actions/runs/42330190355)
+confirmed aggregate-only history coverage for the **11,376** labeled
+runner targets projected from the 1,095 reconciled races. There were:
+
+| Pre-target-day feature availability | Runner rows |
+| --- | ---: |
+| At least one earlier November start available to the one-month builder | **4,585** |
+| No earlier result *in this only available month* | **6,791** |
+| Earlier observed numeric finish | 4,582 |
+| Earlier observed win | 416 |
+| Earlier observed finish within top three | 1,361 |
+
+The 6,791/11,376 (59.7%) lacking history are a **truncation of the
+available training archive**, not genuine first-time racing horses.
+Consequently, attempting to train a history-driven model on only this
+month would impose artificial cold-start behavior on most cases.
+Even those with earlier records in November are missing January-October
+and still have incomplete long-term form.
+
+No 201711 training targets were released (zero), because the one
+unreconciled disqualification/paid-winner conflict remains and the
+chosen training window is not populated. Source year and private
+identifiers were not published.
+
+### Research-only paper tickets (new code)
+
+`nar_status_aware_paper_ticket_ledger.py` can reconcile
+*synthetic/preregistered in-memory* frozen score selections with a
+**fully** status- and payout-validated train-period month. The module
+distinguishes:
+
+- pre-sale scratch: ticket was **not offered**, zero stake incurred;
+- late exclusion: hypothetical 100-yen stake is returned;
+- race started but not finished: losing ticket (no refund);
+- disqualification: ticket settlement **unresolved**, never guessed;
+- finished: exactly the official recorded win/place yen, including
+  5-7-runner and 4-or-fewer-runner no-place-sale rules.
+
+The module rejects source-month payout contradictions and all 2023+
+protected evaluation input. Forecast timestamps are only validated
+syntactically and **do not prove** independent real pre-off issuance.
+Its paper ledger has **no observed purchase receipt, real ROI, positive
+EV, live betting authorization or new real-money evaluation**. The
+unresolved 2017-11 month cannot be passed to this ledger.
+
+Project decision stays **HOLD for actual profitability**, independent
+holdout and publication authorization. Data acquisition/provenance and
+fully verified future-time predictions are the gating work.
