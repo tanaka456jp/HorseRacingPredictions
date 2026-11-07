@@ -1,0 +1,82 @@
+name: NAR PC2 Private 72-Month Manual Acquisition Dashboard
+
+on:
+  push:
+    branches: ["feature/weekly-odds-free-note-20261021"]
+    paths:
+      - ".github/workflows/nar-pc2-private-month-acquisition-dashboard.yml"
+      - "scripts/create_pc2_nar_manual_acquisition_dashboard.ps1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nar-pc2-private-month-dashboard
+  cancel-in-progress: false
+
+jobs:
+  private-operator-dashboard:
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 5
+    steps:
+      - name: Checkout reviewed script without cleaning local private source
+        uses: actions/checkout@v4
+        with:
+          clean: false
+          persist-credentials: false
+      - name: Create only local ACL-protected manual acquisition dashboard
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:COMPUTERNAME -cne 'DESKTOP-MVV1FD4' -or
+              $env:GITHUB_REPOSITORY -cne 'tanaka456jp/HorseRacingPredictions' -or
+              $env:GITHUB_REF_NAME -cne 'feature/weekly-odds-free-note-20261021') {
+            Write-Host 'NAR_PRIVATE_DASHBOARD_WRONG_PC_OR_REF'
+            exit 2
+          }
+          $script = Join-Path (Get-Location).Path 'scripts\create_pc2_nar_manual_acquisition_dashboard.ps1'
+          if (-not (Test-Path -LiteralPath $script -PathType Leaf)) {
+            Write-Host 'NAR_PRIVATE_DASHBOARD_REVIEWED_SCRIPT_MISSING'
+            exit 2
+          }
+          try {
+            # Suppress the original private report and exception detail.
+            $lines = @(& $script 2>&1)
+            $doc = [string]::Join([Environment]::NewLine, $lines) | ConvertFrom-Json
+            if ($doc.schema -cne 'NAR.PC2.OfficialMonthlyOperatorDashboard.v1' -or
+                $doc.status -cne 'PRIVATE_MANUAL_ACQUISITION_DASHBOARD_READY' -or
+                [int]$doc.expectedMonths -ne 72 -or
+                ([int]$doc.candidateFilenameMonths +
+                 [int]$doc.missingFilenameMonths +
+                 [int]$doc.duplicateFilenameMonths +
+                 [int]$doc.invalidSizeFilenameMonths) -ne 72 -or
+                [int]$doc.providerRequests -ne 0 -or
+                [int]$doc.filesDownloaded -ne 0 -or
+                $doc.sourceContentsRead -ne $false -or
+                $doc.sourceDataUploaded -ne $false -or
+                $doc.protectedHoldoutOpened -ne $false -or
+                $doc.modelTrainingRun -ne $false -or
+                $doc.positiveEvDemonstrated -ne $false) {
+              throw 'NAR_PRIVATE_DASHBOARD_STATIC_CONTRACT_INVALID'
+            }
+            ([ordered]@{
+              schema = 'NAR.PC2.PrivateManualDashboardReceipt.v1'
+              status = 'CREATED_ON_PC2_PRIVATE_D_DRIVE'
+              requiredMonths = 72
+              candidateMonthZips = [int]$doc.candidateFilenameMonths
+              missingMonthZips = [int]$doc.missingFilenameMonths
+              duplicateMonthZips = [int]$doc.duplicateFilenameMonths
+              oversizedMonthZips = [int]$doc.invalidSizeFilenameMonths
+              manualOnlyNoNetworkDownload = $true
+              reportACLProtected = $true
+              rawPrivatePathOrArchiveExported = $false
+              sourceDataUploaded = $false
+              trainingExecuted = $false
+              positiveEvDemonstrated = $false
+            } | ConvertTo-Json -Compress)
+          } catch {
+            # Never include a private path or a system exception in CI logs.
+            Write-Host 'NAR_PC2_PRIVATE_MANUAL_DASHBOARD_CREATION_HOLD'
+            exit 2
+          }
