@@ -85,8 +85,10 @@ try {
     $duplicates = 0
     $oversized = 0
     foreach ($year in 2017..2022) {
-        $url = "https://www.keiba.go.jp/KeibaWeb/MonthlyConveneInfo/MonthlyConveneInfoTop?k_year=$year"
         foreach ($month in 1..12) {
+            # The month query is explicit; a year-only URL may default to
+            # an unrelated month. &amp; keeps the link valid in HTML.
+            $url = "https://www.keiba.go.jp/KeibaWeb/MonthlyConveneInfo/MonthlyConveneInfoTop?k_month=$month&amp;k_year=$year"
             $monthId = '{0}{1:D2}' -f $year, $month
             $sizes = if ($byMonth.ContainsKey($monthId)) { @($byMonth[$monthId]) } else { @() }
             if ($sizes.Count -eq 0) {
@@ -106,7 +108,7 @@ try {
                 $class = 'present'
                 $present++
             }
-            $rows.Add(('<tr><td>{0}年{1:D2}月</td><td class="{2}">{3}</td><td><a href="{4}" target="_blank" rel="noopener noreferrer">NAR公式の該当年を開く</a></td></tr>' -f $year,$month,$class,$status,$url))
+            $rows.Add(('<tr><td>{0}年{1:D2}月</td><td class="{2}">{3}</td><td><a href="{4}" target="_blank" rel="noopener noreferrer">NAR公式の該当月を開く</a></td></tr>' -f $year,$month,$class,$status,$url))
         }
     }
     $timestamp = [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ')
@@ -136,7 +138,7 @@ ZIPの中身・利用権限・来歴・事前時刻・モデル学習適格性�
     $body += ($rows -join [Environment]::NewLine)
     $body += @'
 </tbody></table>
-<p><small>調査は既存の専用Dフォルダ直下のみ。ZIP中身は未読込。未確認の古いCSV候補3件は別途審査が必要です。</small></p>
+<p><small>調査は既存の専用Dフォルダ直下のみ。ZIP中身は未読込。個別の例外データは別途照合が必要です。</small></p>
 </body></html>
 '@
     [IO.File]::WriteAllText($report, $body, [Text.UTF8Encoding]::new($false))
