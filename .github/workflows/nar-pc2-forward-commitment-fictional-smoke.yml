@@ -1,0 +1,85 @@
+name: NAR PC2 Future Forecast Commitment Smoke (Fictional Only)
+
+on:
+  push:
+    branches: ["feature/weekly-odds-free-note-20261021"]
+    paths:
+      - ".github/workflows/nar-pc2-forward-commitment-fictional-smoke.yml"
+      - "src/horse_racing_predictions/nar_forward_preoff_commitment.py"
+      - "scripts/smoke_nar_forward_commitment_fictional.py"
+      - "tests/test_nar_forward_preoff_commitment.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nar-pc2-future-digest-synthetic
+  cancel-in-progress: false
+
+jobs:
+  pc2-synthetic-digest:
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 6
+    steps:
+      - name: Checkout code without deleting local private NAR material
+        uses: actions/checkout@v4
+        with:
+          clean: false
+          persist-credentials: false
+      - name: Verify new forecast-digest code on Windows without private source
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:COMPUTERNAME -cne 'DESKTOP-MVV1FD4' -or
+              $env:GITHUB_REPOSITORY -cne 'tanaka456jp/HorseRacingPredictions' -or
+              $env:GITHUB_REF_NAME -cne 'feature/weekly-odds-free-note-20261021') {
+            Write-Host 'NAR_FUTURE_COMMITMENT_PC2_GUARD_FAILED'
+            exit 2
+          }
+          $src = Join-Path (Get-Location).Path 'src'
+          $script = Join-Path (Get-Location).Path 'scripts\smoke_nar_forward_commitment_fictional.py'
+          if (-not (Test-Path -LiteralPath $script -PathType Leaf) -or
+              -not (Test-Path -LiteralPath $src -PathType Container)) {
+            Write-Host 'NAR_FUTURE_COMMITMENT_SCRIPT_MISSING'
+            exit 2
+          }
+          $env:PYTHONPATH = $src
+          $env:PYTHONDONTWRITEBYTECODE = '1'
+          try {
+            $out = @(& python -B $script 2>&1)
+            if ($LASTEXITCODE -ne 0 -or $out.Count -ne 1) {
+              throw 'NAR_FUTURE_COMMITMENT_SMOKE_NOT_PASS'
+            }
+            $doc = [string]$out[0] | ConvertFrom-Json
+            if ($doc.schema -cne 'NAR.PC2.FictionalFutureCommitmentSmoke.v1' -or
+                $doc.result -cne 'PASS' -or
+                [int]$doc.fictionalRaceCount -ne 2 -or
+                $doc.privateSnapshotIntegrityVerified -ne $true -or
+                $doc.postFreezeScoreTamperingDetected -ne $true -or
+                $doc.thirdPartyTimestampVerified -ne $false -or
+                [int]$doc.realNARRecordsOpened -ne 0 -or
+                $doc.sourcePrivateFilesRead -ne $false -or
+                $doc.protectedHoldoutOpened -ne $false -or
+                [int]$doc.providerCalls -ne 0 -or
+                [int]$doc.realWagers -ne 0 -or
+                $doc.actualEvDemonstrated -ne $false -or
+                $doc.dataUploaded -ne $false) {
+              throw 'NAR_FUTURE_COMMITMENT_SMOKE_SCHEMA_INVALID'
+            }
+            # Aggregate-only allowlist: no input file, ID, salt, model score
+            # or digest value goes to GitHub Actions logs.
+            [ordered]@{
+              schema = 'NAR.PC2.FictionalFutureCommitmentSmoke.v1'
+              result = 'PASS'
+              fictionalRaceCount = 2
+              tamperingRejected = $true
+              thirdPartyTimestampVerified = $false
+              realPrivateSourceRead = $false
+              protectedHoldoutOpened = $false
+              actualEvDemonstrated = $false
+            } | ConvertTo-Json -Compress
+          } catch {
+            Write-Host 'NAR_FUTURE_COMMITMENT_PC2_SMOKE_HOLD'
+            exit 2
+          }
