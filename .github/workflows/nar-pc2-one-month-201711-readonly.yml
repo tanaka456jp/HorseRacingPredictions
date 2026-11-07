@@ -162,7 +162,14 @@ jobs:
           }
           $officialReasons = [ordered]@{}
           foreach ($prop in $official.staticReasonCounts.PSObject.Properties) {
-            if ($prop.Name -cnotmatch '^NAR_[A-Z0-9_]{1,90}
+            if ($prop.Name -cnotmatch '^NAR_[A-Z0-9_]{1,90}$' -or
+                [int]$prop.Value -lt 1) {
+              Write-Host 'NAR_STATUS_AWARE_REASON_CODE_INVALID'
+              exit 2
+            }
+            $officialReasons[$prop.Name] = [int]$prop.Value
+          }
+          $safe = [ordered]@{
             schema = 'NAR.PC2.SinglePrivateMonthAggregate.v2'
             status = [string]$doc.status
             month = '201711'
@@ -182,63 +189,6 @@ jobs:
               trainingAuthorized = $false
               economicRoiAuthorized = $false
             })
-            preEventSnapshotProven = $false
-            actualRightsIndependentlyVerified = $false
-            trainModelsRun = $false
-            independentOosOpened = $false
-            sourceBytesUploaded = $false
-            positiveEvDemonstrated = $false
-          }
-          $safe | ConvertTo-Json -Compress
-          if ($doc.status -ceq 'NAR_PRIVATE_MONTH_REQUIRES_COVERAGE_REVIEW') {
-            # Aggregate-only venue/surface triage; do not print any real
-            # source text or a venue label from the local CSV.
-            $probe = Join-Path (Get-Location).Path 'scripts\probe_nar_private_csv_header_shapes.py'
-            $probeLines = & python $probe --local-monthly-race-zip $source.FullName --expected-month '201711' --confirm-personal-private-nar-permission 2>&1
-            if ($LASTEXITCODE -eq 0) {
-              try {
-                $shapes = [string]::Join([Environment]::NewLine, @($probeLines)) | ConvertFrom-Json
-                if ($shapes.status -cne 'NAR_LOCAL_HEADER_SHAPE_ONLY' -or
-                    @($shapes.members).Count -ne 3 -or $shapes.sourceTextExported -ne $false) {
-                  throw 'NAR_LOCAL_PROBE_INVALID'
-                }
-                $context = $shapes.flatBlankContextEvidence
-                if ($null -eq $context -or
-                    $context.noRawFieldContentsExported -ne $true -or
-                    $context.evidenceOnlyNotRefundOrLossClassification -ne $true -or
-                    [int]$context.unknownStatusRows -lt 0 -or
-                    [int]$context.blankRowsWithAnyExplicitOfficialMarkerInOtherFields -lt 0 -or
-                    ([int]$context.unknownStatusRows +
-                     [int]$context.blankRowsWithAnyExplicitOfficialMarkerInOtherFields) -ne
-                    [int]$shapes.flatFinishReconciliation.blankHorseRows) {
-                  throw 'NAR_BLANK_STATUS_CONTEXT_CONTRACT_INVALID'
-                }
-                $shapes | ConvertTo-Json -Depth 5 -Compress
-              } catch {
-                Write-Host 'NAR_PRIVATE_COVERAGE_PROBE_OUTPUT_REJECTED'
-              }
-            } else {
-              Write-Host 'NAR_PRIVATE_COVERAGE_PROBE_NOT_AVAILABLE'
-            }
-          }
-          if ($code -ne 0) { exit 2 }
- -or
-                [int]$prop.Value -lt 1) {
-              Write-Host 'NAR_STATUS_AWARE_REASON_CODE_INVALID'
-              exit 2
-            }
-            $officialReasons[$prop.Name] = [int]$prop.Value
-          }
-          $safe = [ordered]@{
-            schema = 'NAR.PC2.SinglePrivateMonthAggregate.v2'
-            status = [string]$doc.status
-            month = '201711'
-            observedRaces = [int]$doc.observedRaces
-            parsedRaces = [int]$doc.acceptedFlatRaces
-            parsedStarters = [int]$doc.acceptedFlatStarters
-            predeclaredOutOfScopeRaces = [int]$doc.predeclaredOutOfScopeRaces
-            unresolvedInScopeRaces = [int]$doc.unresolvedInScopeRaces
-            staticReasonCounts = $reasons
             preEventSnapshotProven = $false
             actualRightsIndependentlyVerified = $false
             trainModelsRun = $false
