@@ -18,6 +18,7 @@ on:
       - "tests/test_nar_status_aware_training_labels.py"
       - "src/horse_racing_predictions/nar_status_aware_prior_day.py"
       - "tests/test_nar_status_aware_prior_day.py"
+      - "scripts/inspect_pc2_nar_training_zip_presence_readonly.ps1"
   workflow_dispatch:
 
 permissions:
@@ -310,3 +311,76 @@ jobs:
             }
           }
           if ($code -ne 0) { exit 2 }
+
+      - name: Verify 2017-2022 training ZIP presence without opening archives
+        if: ${{ always() }}
+        shell: powershell
+        run: |
+          # This independent check runs even when the 201711 data
+          # quality gate deliberately returns HOLD. No archive is opened.
+          $ErrorActionPreference = 'Stop'
+          if ($env:COMPUTERNAME -cne 'DESKTOP-MVV1FD4' -or
+              $env:GITHUB_REPOSITORY -cne 'tanaka456jp/HorseRacingPredictions' -or
+              $env:GITHUB_REF_NAME -cne 'feature/weekly-odds-free-note-20261021') {
+            Write-Host 'NAR_TRAINING_INVENTORY_WRONG_MACHINE_OR_REF'
+            exit 2
+          }
+          $script = Join-Path (Get-Location).Path 'scripts\inspect_pc2_nar_training_zip_presence_readonly.ps1'
+          if (-not (Test-Path -LiteralPath $script -PathType Leaf)) {
+            Write-Host 'NAR_TRAINING_INVENTORY_REVIEWED_SCRIPT_MISSING'
+            exit 2
+          }
+          try {
+            $raw = @(& $script 2>&1)
+            $report = [string]::Join([Environment]::NewLine, $raw) | ConvertFrom-Json
+            if ($report.schema -cne 'NAR.PC2.TrainingZIPNamesOnly.v1' -or
+                $report.pc2Verified -ne $true -or
+                @($report.candidates).Count -ne 2 -or
+                $report.realNARRowsProcessed -ne 0 -or
+                $report.finishedRacePayoutsRead -ne $false -or
+                $report.historicalHoldoutOpened -ne $false -or
+                $report.sourceRecordsUploaded -ne $false -or
+                $report.trainingExecuted -ne $false -or
+                $report.roiComputed -ne $false -or
+                $report.filesChanged -ne $false) {
+              throw 'NAR_TRAINING_INVENTORY_REPORT_INVALID'
+            }
+            $locations = @()
+            foreach ($item in $report.candidates) {
+              $found = [int]$item.trainingMonthsObservedByName
+              $missing = [int]$item.trainingMonthsMissingByName
+              if ([int]$item.rootId -notin @(1,2) -or
+                  $found -lt 0 -or $found -gt 72 -or
+                  $missing -ne 72 - $found -or
+                  [string]$item.status -cnotin @(
+                    'ABSENT', 'FILENAMES_ONLY', 'REPARSE_POINT_BLOCKED',
+                    'TOO_MANY_ENTRIES_BLOCKED'
+                  ) -or
+                  $item.zipContentsOpened -ne $false) {
+                throw 'NAR_TRAINING_INVENTORY_COUNT_INVALID'
+              }
+              $locations += [ordered]@{
+                rootId = [int]$item.rootId
+                status = [string]$item.status
+                trainingMonthsFoundByFilename = $found
+                trainingMonthsMissingByFilename = $missing
+                duplicateMonthZipCount = [int]$item.duplicateTrainingMonthZips
+                outOfTrainingPeriodZipCount = [int]$item.outOfPeriodMonthlyZips
+              }
+            }
+            ([ordered]@{
+              schema = 'NAR.PC2.TrainingSourceReadinessAggregate.v1'
+              pc2Verified = $true
+              requiredTrainingMonths = 72
+              locations = $locations
+              zipContentsOpened = $false
+              privatePathsOrFilenamesExported = $false
+              trainingExecuted = $false
+              ROIComputed = $false
+              protectedHoldoutOpened = $false
+            } | ConvertTo-Json -Depth 5 -Compress)
+          } catch {
+            # Never print an exception, path, ZIP name or private contents.
+            Write-Host 'NAR_TRAINING_INVENTORY_SAFE_REPORT_BLOCKED'
+            exit 2
+          }
