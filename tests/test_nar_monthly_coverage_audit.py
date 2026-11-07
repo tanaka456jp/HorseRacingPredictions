@@ -1,0 +1,220 @@
+"""Only invented NAR race CSV rows: full-month denominator and exclusions."""
+from __future__ import annotations
+
+import csv
+from io import StringIO
+
+import pytest
+
+from horse_racing_predictions.nar_monthly_coverage_audit import (
+    audit_nar_monthly_coverage,
+)
+from horse_racing_predictions.nar_official_zip_probe import UnsafeNarSource
+from test_nar_published_result_normalizer import _fixture
+
+
+def _encode(rows):
+    file = StringIO(newline="")
+    csv.writer(file).writerows(rows)
+    return file.getvalue()
+
+
+def _second_race(*, race_number="4", bad_win=False, tie=False):
+    parts = _fixture()
+    for kind, text in list(parts.items()):
+        rows = list(csv.reader(StringIO(text)))
+        for row in rows:
+            row[2] = race_number
+        if kind == "payback" and bad_win:
+            rows[0][4] = "2"
+        if kind == "horselist" and tie:
+            rows[1][31] = "1"
+        parts[kind] = _encode(rows)
+    return parts
+
+
+def _combine(a, b):
+    return {kind: a[kind] + b[kind] for kind in ("racelist", "horselist", "payback")}
+
+
+def test_all_races_valid_preserves_full_denominator():
+    dataset = _combine(_fixture(), _second_race())
+    report = audit_nar_monthly_coverage(dataset, month="202402")
+    summary = report.summary
+    assert summary.observed_races == 2
+    assert summary.structurally_accepted_races == 2
+    assert summary.structurally_accepted_starters == 16
+    assert summary.excluded_races == 0
+    assert summary.exclusion_reasons == ()
+    assert report.exclusions == ()
+    assert summary.complete_month_for_research
+    assert not summary.valid_economic_roi_sample
+    assert not summary.approved_for_model_training
+    assert not summary.positive_ev_demonstrated
+    assert not summary.publication_authorized
+
+
+def test_corrupt_payback_does_not_disappear_from_denominator():
+    data = _combine(_fixture(), _second_race(bad_win=True))
+    report = audit_nar_monthly_coverage(data, month="202402")
+    summary = report.summary
+    assert summary.observed_races == 2
+    assert summary.structurally_accepted_races == 1
+    assert summary.structurally_accepted_starters == 8
+    assert summary.excluded_races == 1
+    assert summary.exclusion_reasons == (
+        ("NAR_PAYOUT_CONTRADICTS_FINAL_RESULTS", 1),
+    )
+    assert not summary.complete_month_for_research
+    assert not summary.valid_economic_roi_sample
+    assert not summary.positive_ev_demonstrated
+    assert "架空馬" not in repr(report)
+    assert "架空競馬場" not in repr(report)
+    assert "20240214" not in repr(report)
+
+
+def test_missing_payback_keeps_race_in_source_denominator():
+    first = _fixture()
+    second = _second_race()
+    second["payback"] = ""
+    report = audit_nar_monthly_coverage(_combine(first, second), month="202402")
+    assert report.summary.observed_races == 2
+    assert report.summary.excluded_races == 1
+    assert report.summary.exclusion_reasons == (
+        ("NAR_RACE_COVERAGE_MISMATCH", 1),
+    )
+
+
+def test_payback_row_with_no_matching_racelist_is_also_counted():
+    first = _fixture()
+    orphan = _second_race(race_number="7")
+    data = _combine(first, _second_race())
+    data["payback"] += orphan["payback"]
+    report = audit_nar_monthly_coverage(data, month="202402")
+    assert report.summary.observed_races == 3
+    assert report.summary.excluded_races == 1
+    assert report.summary.exclusion_reasons == (
+        ("NAR_RACE_COVERAGE_MISMATCH", 1),
+    )
+
+
+def test_dead_heat_rejected_without_optimistic_roi_selection():
+    data = _combine(_fixture(), _second_race(tie=True))
+    report = audit_nar_monthly_coverage(data, month="202402")
+    assert report.summary.excluded_races == 1
+    assert report.summary.exclusion_reasons == (
+        ("NAR_PAYOUT_CONTRADICTS_FINAL_RESULTS", 1),
+    )
+    assert report.summary.status == "NAR_MONTH_HAS_EXCLUSIONS_RESEARCH_ROI_BLOCKED"
+
+
+def test_duplicate_payback_is_a_named_exclusion():
+    data = _fixture()
+    data["payback"] += data["payback"]
+    report = audit_nar_monthly_coverage(data, month="202402")
+    assert report.summary.exclusion_reasons == (
+        ("NAR_IDENTICAL_DUPLICATE_PAYOUT_ROW", 1),
+    )
+
+
+def test_schema_corruption_still_refuses_entire_source():
+    data = _fixture()
+    data["payback"] = "BAD\n"
+    with pytest.raises(UnsafeNarSource, match="NAR_CSV_SCHEMA_DRIFT"):
+        audit_nar_monthly_coverage(data, month="202402")
+
+
+def test_protected_year_rejected_before_race_audit():
+    with pytest.raises(UnsafeNarSource, match="NAR_PROTECTED_OR_INVALID_DATE"):
+        audit_nar_monthly_coverage(_fixture(month="202502"), month="202502")
+
+
+def test_obihiro_variant_is_predeclared_outside_flat_scope_not_invalid_payout():
+    flat = _fixture()
+    banei = _second_race(race_number="4", bad_win=True)
+    for kind in ("racelist", "horselist", "payback"):
+        rows = list(csv.reader(StringIO(banei[kind])))
+        for row in rows:
+            row[0] = "帯広ば"
+        if kind == "racelist":
+            rows[0][21] = "ばんえい"
+        banei[kind] = _encode(rows)
+    result = audit_nar_monthly_coverage(_combine(flat, banei), month="202402")
+    summary = result.summary
+    assert summary.observed_races == 2
+    assert summary.structurally_accepted_races == 1
+    assert summary.predeclared_out_of_scope_races == 1
+    assert summary.unresolved_in_scope_races == 0
+    assert summary.exclusion_reasons == (
+        ("NAR_PREDECLARED_BANEI_OUT_OF_SCOPE", 1),
+    )
+    assert summary.complete_month_for_research
+    assert not summary.approved_for_model_training
+
+
+def test_obihiro_venue_name_containing_banei_only_does_not_drop_flat_venue():
+    flat = _fixture()
+    second = _second_race(race_number="4")
+    report = audit_nar_monthly_coverage(_combine(flat, second), month="202402")
+    assert report.summary.structurally_accepted_races == 2
+    assert report.summary.predeclared_out_of_scope_races == 0
+
+
+def test_blank_finish_retains_full_month_denominator_with_static_reason():
+    first = _fixture()
+    other = _second_race()
+    rows = list(csv.reader(StringIO(other["horselist"])))
+    rows[1][31] = ""  # non-starter or missing-result reason is unknown
+    other["horselist"] = _encode(rows)
+    report = audit_nar_monthly_coverage(_combine(first, other), month="202402")
+    assert report.summary.observed_races == 2
+    assert report.summary.structurally_accepted_races == 1
+    assert report.summary.unresolved_in_scope_races == 1
+    assert report.summary.exclusion_reasons == (
+        ("NAR_OFFICIAL_BLANK_FINISH_STATUS_UNRESOLVED", 1),
+    )
+    assert not report.summary.complete_month_for_research
+    assert not report.summary.valid_economic_roi_sample
+    assert not report.summary.positive_ev_demonstrated
+
+
+def test_payout_verified_dead_heat_is_accepted_without_posthoc_exclusion():
+    sample = _fixture(starters=8)
+    rows = list(csv.reader(StringIO(sample["horselist"])))
+    rows[4][31] = "4"
+    sample["horselist"] = _encode(rows)
+    result = audit_nar_monthly_coverage(sample, month="202402")
+    assert result.summary.observed_races == 1
+    assert result.summary.structurally_accepted_races == 1
+    assert result.summary.unresolved_in_scope_races == 0
+    assert result.summary.exclusion_reasons == ()
+    assert not result.summary.valid_economic_roi_sample
+
+
+def test_distinct_multiline_win_paybacks_are_not_outcome_selected_or_dropped():
+    data = _fixture(starters=8)
+    horses = list(csv.reader(StringIO(data["horselist"])))
+    horses[1][31] = "1"
+    data["horselist"] = _encode(horses)
+    payback = list(csv.reader(StringIO(data["payback"])))
+    second = payback[0].copy()
+    second[4], second[5] = "2", "240"
+    data["payback"] = _encode([payback[0], second])
+    report = audit_nar_monthly_coverage(data, month="202402")
+    assert report.summary.observed_races == 1
+    assert report.summary.structurally_accepted_races == 1
+    assert report.summary.exclusion_reasons == ()
+    assert not report.summary.valid_economic_roi_sample
+
+
+def test_official_multirow_conflicting_yen_is_never_combined():
+    data = _fixture(starters=8)
+    payback = list(csv.reader(StringIO(data["payback"])))
+    other = payback[0].copy()
+    other[5] = "999"
+    data["payback"] = _encode([payback[0], other])
+    report = audit_nar_monthly_coverage(data, month="202402")
+    assert report.summary.exclusion_reasons == (
+        ("NAR_OFFICIAL_MULTIROW_PAYOUT_CONFLICT", 1),
+    )
+    assert not report.summary.complete_month_for_research

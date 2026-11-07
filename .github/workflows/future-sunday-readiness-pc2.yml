@@ -1,0 +1,126 @@
+name: Future Sunday Local Input Readiness (No Publishing)
+
+on:
+  push:
+    branches: ["feature/weekly-odds-free-note-20261021"]
+    paths:
+      - 'src/horse_racing_predictions/future_sunday_readiness.py'
+      - 'tests/test_future_sunday_readiness.py'
+      - 'scripts/inspect_future_sunday_local.py'
+      - 'scripts/inspect_pc2_approved_source_inventory_readonly.ps1'
+      - '.github/workflows/future-sunday-readiness-pc2.yml'
+  workflow_dispatch:
+    inputs:
+      race_date:
+        description: "Optional upcoming JRA Sunday YYYY-MM-DD (empty = nearest upcoming Sunday)"
+        type: string
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: future-sunday-pc2-local-readonly
+  cancel-in-progress: false
+
+jobs:
+  local-pc2-check:
+    name: PC2 metadata only - no network/source/release calls
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 10
+    steps:
+      - name: Checkout without removing existing ignored D data
+        uses: actions/checkout@v4
+        with:
+          clean: false
+          persist-credentials: false
+      - name: Evaluate nearest upcoming Sunday without accessing JV-Link
+        shell: powershell
+        env:
+          REQUESTED_RACE_DATE: ${{ inputs.race_date || '' }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Path artifacts -Force | Out-Null
+          $out = 'artifacts/future_sunday_readiness.json'
+          $blocked = [ordered]@{
+            status = 'BLOCKED'
+            blockers = @('PC2_ENVIRONMENT_NOT_CONFIRMED')
+            modelComputed = $false
+            publicationAuthorized = $false
+            notePostAttempted = $false
+            providerAccessAttempted = $false
+            usageKeyRead = $false
+            rawDataUploaded = $false
+          }
+          # The old runner DISPLAY name is not proof of physical PC identity.
+          if ($env:COMPUTERNAME -ne 'DESKTOP-MVV1FD4') {
+            $blocked | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $out -Encoding UTF8
+            Get-Content -LiteralPath $out
+            exit 0
+          }
+          $jst = [TimeZoneInfo]::ConvertTimeBySystemTimeZoneId(
+            [DateTimeOffset]::UtcNow, 'Tokyo Standard Time'
+          )
+          $daysUntilSunday = (7 - [int]$jst.DayOfWeek) % 7
+          if ($daysUntilSunday -eq 0 -and $jst.TimeOfDay -ge [TimeSpan]::FromHours(8)) {
+            $daysUntilSunday = 7
+          }
+          $date = $jst.Date.AddDays($daysUntilSunday).ToString('yyyy-MM-dd')
+          if (-not [string]::IsNullOrWhiteSpace($env:REQUESTED_RACE_DATE)) {
+            if ($env:REQUESTED_RACE_DATE -notmatch '^\d{4}-\d{2}-\d{2}$') {
+              $blocked.blockers = @('INVALID_RACE_DATE_ARGUMENT')
+              $blocked | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $out -Encoding UTF8
+              Get-Content -LiteralPath $out
+              exit 0
+            }
+            $date = $env:REQUESTED_RACE_DATE
+          }
+          $folder = 'approved-sunday-' + $date.Replace('-', '')
+          $bundle = Join-Path 'D:\HorseRacingPredictions' $folder
+          $env:PYTHONPATH = Join-Path (Get-Location).Path 'src'
+          $launcher = Get-Command py -ErrorAction SilentlyContinue
+          if ($null -eq $launcher) {
+            $blocked.blockers = @('PC2_PYTHON_LAUNCHER_MISSING')
+            $blocked | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $out -Encoding UTF8
+          } else {
+            # CLI always uses actual wall time. A BLOCKED status is a valid
+            # local diagnostic; model/data/provenance are NEVER uploaded.
+            try {
+              $raw = & py -3 scripts/inspect_future_sunday_local.py `
+                --race-date $date --bundle-dir $bundle 2>$null
+              if ($null -eq $raw -or @($raw).Count -eq 0) {
+                throw 'no sanitized diagnostic'
+              }
+              $obj = ($raw -join [Environment]::NewLine) | ConvertFrom-Json
+              if ($obj.publicationAuthorized -ne $false -or
+                  $obj.notePostAttempted -ne $false -or
+                  $obj.providerAccessAttempted -ne $false) {
+                throw 'read-only diagnosis authorization invariant'
+              }
+              ($obj | ConvertTo-Json -Depth 7) |
+                Set-Content -LiteralPath $out -Encoding UTF8
+            } catch {
+              $blocked.blockers = @('PC2_READONLY_PROBE_FAILED')
+              $blocked | ConvertTo-Json -Depth 4 |
+                Set-Content -LiteralPath $out -Encoding UTF8
+            }
+          }
+          Get-Content -LiteralPath $out
+      - name: Inspect only explicit approved PC2 D-drive source paths
+        if: always()
+        shell: powershell
+        run: |
+          & .\scripts\inspect_pc2_approved_source_inventory_readonly.ps1 `
+            -OutputPath 'artifacts/approved_source_inventory.json'
+
+      - name: Retain sanitized blocked/readiness reasons only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: future-sunday-local-diagnostic-metadata
+          path: |
+            artifacts/future_sunday_readiness.json
+            artifacts/approved_source_inventory.json
+          retention-days: 7
+          if-no-files-found: warn
