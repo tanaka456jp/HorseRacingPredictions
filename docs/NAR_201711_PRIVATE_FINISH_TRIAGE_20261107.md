@@ -157,3 +157,64 @@ win payout are verified, the 1,095 cases are **not** an approved 1,095-race
 profit sample. 2023-24 OOS and 2025-26 protected holdout remain sealed.
 There is no actual out-of-sample realized ROI or positive expected-value
 demonstration here.
+
+
+## Chronological outcome-label and historical-form preflight
+
+The status-aware interpretation is now connected to a **separate,
+non-authorizing** supervised-label audit:
+`nar_status_aware_training_labels.py`.
+Labels are post-event targets, NEVER pre-off model features.
+
+- Finished: labeled from **official published 100-yen returns**.
+- DNF (中止): counts as a genuine prior start and zero for win/place targets;
+  a fictional numeric finishing position must NOT be invented.
+- Scratch (取消): before-sale, no ticket was offered; no target and no
+  historical start.
+- Excluded (除外): purchased tickets are refund-eligible; no win/place
+  target and no historical start. Receipt purchase is **not** inferred.
+- Disqualified (失格): start counts, outcome target is unresolved and
+  requires separate official adjudication. Real 2017-11 disqualification
+  is on the sole quarantined race, not the reconciled subset.
+
+[PC2 Run #42325094194](https://github.com/tanaka456jp/HorseRacingPredictions/actions/runs/42325094194)
+verified the actual **201711** aggregate:
+
+| Category | Source-derived count |
+| --- | ---: |
+| Original races (including banei) | 1,228 |
+| Flat in-scope races | 1,096 |
+| Strict original fully-ranked settlement races | 993 |
+| New status-aware payout-consistent races | **1,095** |
+| Status-aware races quarantined for contradictory DQ win payout | **1** |
+| Horse entries among the 1,095 reconciled flat races | **11,455** |
+| Finished with numeric rank | 11,342 |
+| Did-not-finish starter with a *valid losing* label | 34 |
+| **Labeled win/place outcomes** | **11,376** |
+| Pre-sale scratched / no purchase option | 52 |
+| Late excluded / refund-eligible option | 27 |
+| Unknown labels included as zero losses | **0** |
+
+The historical-form projector
+`nar_status_aware_prior_day.py` computes prior starts, wins,
+top-three finishes, observed-rank mean and days since last start using
+**only results before the current date**. Historic top-three form is
+determined by rank, **not** by the place payout threshold (place
+payouts cover only top two in 5-7-runner races). DNF increments starts
+but never adds a made-up rank to the mean.
+
+[PC2 Run #42325539111](https://github.com/tanaka456jp/HorseRacingPredictions/actions/runs/42325539111)
+verified that 11,376 post-event target rows can be *projected* from
+the 1,095 reconciled flat races with 11,342 observed numeric ranks.
+Because **one flat race remains unresolved**, the projector
+releases **zero training rows**. This is expected fail-closed behavior,
+not model accuracy or a real-money profitability test.
+
+Official NAR semantics:
+- https://www.keiba.go.jp/beginner/step2.html
+- https://www.keiba.go.jp/beginner/step6.html
+
+**Neither** a contemporary pre-off roster, genuine purchased-ticket
+ledger, 72 fully authenticated training months, independent locked OOS
+nor positive expected value has been established. A clean code CI
+does not override the private real-data HOLD.
