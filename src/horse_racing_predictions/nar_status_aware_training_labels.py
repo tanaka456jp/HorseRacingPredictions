@@ -24,7 +24,7 @@ class NarHistoricalOutcomeLabel:
     horse_number: int = field(repr=False)
     status: str
     started_race: bool
-    ticket_sold_for_this_horse: bool
+    betting_option_offered: bool  # opportunity, never evidence of purchase
     official_finish_rank: int | None
     win_label: int | None
     place_label: int | None
@@ -103,6 +103,7 @@ def derive_nar_status_aware_outcome_labels(
                 set(statuses) != set(wins) or
                 set(statuses) != set(places)):
             raise UnsafeNarSource("NAR_STATUS_LABEL_ROSTER_MISMATCH")
+        before_row_count = rows
         for horse in sorted(statuses):
             status, rank = statuses[horse], ranks[horse]
             win, place = wins[horse], places[horse]
@@ -113,7 +114,7 @@ def derive_nar_status_aware_outcome_labels(
                     raise UnsafeNarSource("NAR_STATUS_LABEL_FINISH_INVALID")
                 wl, pl = int(win > 0), int(place > 0)
                 started_flag = True
-                sold_flag = True
+                offered_flag = True
                 numeric_rank = True
                 finished += 1
             elif status == "DNF_NO_REFUND":
@@ -133,7 +134,7 @@ def derive_nar_status_aware_outcome_labels(
                     raise UnsafeNarSource("NAR_STATUS_LABEL_EXCLUSION_INVALID")
                 wl = pl = None
                 started_flag = numeric_rank = False
-                sold_flag = True  # ticket MAY have been purchased; not proof
+                offered_flag = True  # ticket MAY have been purchased; not proof
                 excluded += 1
             elif status == "DISQUALIFIED_REVIEW":
                 if rank is not None or win is not None or place is not None:
@@ -150,13 +151,12 @@ def derive_nar_status_aware_outcome_labels(
             out.append(NarHistoricalOutcomeLabel(
                 race_key=race.race_key, horse_number=horse,
                 status=status, started_race=started_flag,
-                ticket_sold_for_this_horse=sold_flag,
+                betting_option_offered=sold_flag,
                 official_finish_rank=rank, win_label=wl,
                 place_label=pl, prior_start_increment=int(started_flag),
                 prior_numeric_rank_observed=numeric_rank,
             ))
-        if (sum(k[0] == race.race_key for k in out)
-                != len(statuses)):
+        if rows - before_row_count != len(statuses):
             raise UnsafeNarSource("NAR_STATUS_LABEL_RACE_COVERAGE_MISMATCH")
     if rows != labeled + scratch + excluded + disputed:
         raise UnsafeNarSource("NAR_STATUS_LABEL_ACCOUNTING_MISMATCH")
