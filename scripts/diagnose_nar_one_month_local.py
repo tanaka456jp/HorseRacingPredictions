@@ -21,6 +21,9 @@ from horse_racing_predictions.nar_local_monthly_intake import (
 from horse_racing_predictions.nar_monthly_coverage_audit import (
     audit_nar_monthly_coverage,
 )
+from horse_racing_predictions.nar_official_exception_audit import (
+    audit_nar_official_exceptions,
+)
 
 _STATIC = re.compile(r"NAR_[A-Z0-9_]{1,90}\Z")
 
@@ -76,6 +79,7 @@ def diagnose_nar_month(
 
     try:
         coverage = audit_nar_monthly_coverage(texts, month=expected_month).summary
+        official = audit_nar_official_exceptions(texts, month=expected_month).audit
     except (UnsafeNarSource, OSError, ValueError, RuntimeError,
             UnicodeError, TypeError) as exc:
         return safe_failure("CSV_SCHEMA_OR_MONTH", exc)
@@ -96,6 +100,22 @@ def diagnose_nar_month(
         "unresolvedInScopeRaces": coverage.unresolved_in_scope_races,
         "staticReasonCounts": dict(coverage.exclusion_reasons),
         "completeMonth": coverage.complete_month_for_research,
+        # New result-status interpretation is descriptive ONLY. It cannot
+        # override the strict model-training / frozen-ticket ROI HOLD.
+        "officialStatusAwareAudit": {
+            "sourceRaces": official.source_races,
+            "flatRaces": official.in_scope_flat_races,
+            "baneiRaces": official.predeclared_banei_races,
+            "validatedFlatRaces": official.status_validated_flat_races,
+            "unresolvedFlatRaces": official.unresolved_flat_races,
+            "horseStatusCounts": dict(official.status_horse_counts),
+            "staticReasonCounts": dict(official.unresolved_reason_counts),
+            "completeInterpretation": official.complete_flat_outcome_interpretation,
+            "trainingAuthorized": False,
+            "economicRoiAuthorized": False,
+            "positiveEvDemonstrated": False,
+            "sourceBytesExported": False,
+        },
         "actualRightsIndependentlyVerified": False,
         "preEventSnapshotVerified": False,
         "modelTrainingExecuted": False,
