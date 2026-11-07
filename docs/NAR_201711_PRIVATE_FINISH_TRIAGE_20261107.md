@@ -123,13 +123,15 @@ reported:
 | Flat races including exception-status cases | 1,096 |
 | Status-aware flat races with internally consistent published win/place returns | **1,095** |
 | Single status-aware inconsistent race | **1** |
-| Remaining mismatch category | `NAR_WIN_PAYOUT_BOTH_MISSING_AND_UNEXPECTED` |
+| Remaining mismatch category | `NAR_WIN_PAYOUT_TO_DISQUALIFIED_STATUS` |
 
-The anomalous race includes the lone 失格-status row (deduced solely from
-aggregate subtraction; no identity disclosed). Published winning-ticket
-horse numbers both omit a numeric-rank-first runner **and** include a
-different number. It may involve an official disqualification or subsequent
-results amendment; this hypothesis has **not** been established as its cause.
+The anomalous race includes the lone 失格-status row. The additional
+fixed-category PC2 probe [Run #42323190517](https://github.com/tanaka456jp/HorseRacingPredictions/actions/runs/42323190517)
+confirmed that **a published winning payout is attached to the very horse
+whose archived final status is 失格**, while the numeric-ranked winner lacks
+a corresponding published winning ticket. This is a verified disagreement
+between two official CSV fields, not proof of when or why the
+adjudication occurred. Do not alter ranks or actual payouts to conceal it.
 Never recode the race's historical ranks to fit payout numbers, nor recode
 published payouts to fit ranks. A local independently permissible primary
 official final result and pari-mutuel settlement record is needed to reconcile
