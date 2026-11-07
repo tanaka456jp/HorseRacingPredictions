@@ -13,6 +13,7 @@ from horse_racing_predictions.nar_training_preflight import (
 from horse_racing_predictions.nar_official_zip_probe import UnsafeNarSource
 from test_nar_local_monthly_intake import _make_zip
 from test_nar_published_result_normalizer import _fixture
+from test_nar_official_exception_audit import _synthetic_with_status
 
 
 def _bad_payback(month):
@@ -124,3 +125,65 @@ def test_no_network_or_user_identity_in_cli_output_contract():
     assert "raceId" not in source
     assert "requests." not in source
     assert "urllib." not in source
+
+
+def test_official_status_analysis_resolves_dnf_without_releasing_training(tmp_path):
+    """Two fictional monthly ZIPs, not NAR user archives."""
+    _make_zip(tmp_path, month="201711",
+              override=_synthetic_with_status("中止"))
+    _make_zip(tmp_path, month="201712")
+    report = diagnose_nar_training_folder(
+        tmp_path, personal_private_permission_confirmed=True,
+    )
+    assert report.months_present == 2
+    assert report.months_missing == 70
+    assert report.accepted_flat_races == 1
+    assert report.unresolved_flat_races == 1
+    assert report.status_aware_validated_flat_races == 2
+    assert report.status_aware_unresolved_flat_races == 0
+    assert report.months_structurally_accepted == 1
+    assert report.months_status_aware_complete == 2
+    assert report.diagnostic[0].status_aware_validated_flat_races == 1
+    assert report.diagnostic[0].status_aware_unresolved_flat_races == 0
+    assert report.diagnostic[0].status_aware_reasons == ()
+    assert not report.all_months_study_eligible
+    assert not report.actual_rights_independently_verified
+    assert not report.model_training_performed
+    assert not report.payouts_or_roi_evaluated
+    assert not report.data_sent_to_network
+    assert "架空" not in repr(report)
+
+
+def test_official_paid_disqualification_must_remain_unresolved(tmp_path):
+    """Never conceal the structural conflict observed in real 2017-11."""
+    case = _synthetic_with_status("失格")
+    pay = list(csv.reader(StringIO(case["payback"])))
+    pay[1][4] = "8"
+    out = StringIO(newline="")
+    csv.writer(out).writerows(pay)
+    case["payback"] = out.getvalue()
+    _make_zip(tmp_path, month="201711", override=case)
+    result = diagnose_nar_training_folder(
+        tmp_path, personal_private_permission_confirmed=True,
+    )
+    assert result.status_aware_validated_flat_races == 0
+    assert result.status_aware_unresolved_flat_races == 1
+    assert result.months_status_aware_complete == 0
+    assert result.diagnostic[0].status_aware_reasons == (
+        ("NAR_WIN_PAYOUT_TO_DISQUALIFIED_STATUS", 1),
+    )
+    assert not result.all_months_study_eligible
+    assert not result.payouts_or_roi_evaluated
+
+
+def test_parallel_status_reconciliation_all_72_fictional_months(tmp_path):
+    for year in range(2017, 2023):
+        for month in range(1, 13):
+            _make_zip(tmp_path, month=f"{year}{month:02d}")
+    report = diagnose_nar_training_folder(
+        tmp_path, personal_private_permission_confirmed=True,
+    )
+    assert report.status_aware_validated_flat_races == 72
+    assert report.status_aware_unresolved_flat_races == 0
+    assert report.months_status_aware_complete == 72
+    assert report.all_months_study_eligible is False
