@@ -129,7 +129,7 @@ def test_cannot_hide_dropped_race_or_duplicate_frozen_forecast():
     with pytest.raises(ValueError, match="NAR_FORWARD_DUPLICATE_OR_UNREGISTERED_FORECAST"):
         sealed([a, wrong], manifest=manifest)
     with pytest.raises(ValueError, match="NAR_FORWARD_MODEL_VERSION_CHANGED_WITHIN_BATCH"):
-        sealed([a, replace(b, model_sha="b"*64)], manifest=manifest)
+        sealed([a, replace(b, model_source_sha256="b"*64)], manifest=manifest)
 
 
 @pytest.mark.parametrize(("day", "fail"), [
