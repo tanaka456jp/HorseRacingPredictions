@@ -50,6 +50,11 @@ class NarStatusAwareAsOfAudit:
     no_target_disqualification_rows: int
     historical_started_rows: int
     historical_ranked_rows: int
+    target_rows_with_prior_start: int
+    target_rows_without_prior_start: int
+    target_rows_with_prior_win: int
+    target_rows_with_prior_top3: int
+    target_rows_with_numeric_prior_finish: int
     usable_for_training: bool = False
     independently_captured_preoff_roster: bool = False
     official_source_rights_verified: bool = False
@@ -94,6 +99,8 @@ def reconstruct_nar_status_aware_prior_day(
     previous_day: date | None = None
     count_months = source = validated = unresolved = ignored = disputed = 0
     started = ranked = 0
+    prior_starts_seen = no_prior_starts = prior_win_seen = 0
+    prior_podium_seen = prior_finish_seen = 0
 
     for month, batch, identities in months:
         if (type(month) is not str or len(month) != 6
@@ -183,6 +190,13 @@ def reconstruct_nar_status_aware_prior_day(
                             label.win_label not in (0, 1) or
                             label.place_label not in (0, 1)):
                         raise UnsafeNarSource("NAR_ASOF_SUPERVISED_LABEL_INVALID")
+                    # Aggregate-only diagnostic of *historical feature
+                    # availability*, never current-race rank/market data.
+                    prior_starts_seen += int(previous.starts > 0)
+                    no_prior_starts += int(previous.starts == 0)
+                    prior_win_seen += int(previous.wins > 0)
+                    prior_podium_seen += int(previous.top3 > 0)
+                    prior_finish_seen += int(previous.ranked > 0)
                     targets.append(NarStatusAwareAsOfTarget(
                         race_key=label.race_key, horse_number=label.horse_number,
                         horse_identity=identity, feature=features,
@@ -225,6 +239,8 @@ def reconstruct_nar_status_aware_prior_day(
 
     if not count_months:
         raise UnsafeNarSource("NAR_ASOF_NO_MONTHS")
+    if prior_starts_seen + no_prior_starts != len(targets):
+        raise UnsafeNarSource("NAR_ASOF_HISTORICAL_FEATURE_COVERAGE_INVALID")
     return NarStatusAwareAsOfBatch(
         audit=NarStatusAwareAsOfAudit(
             months=count_months, source_flat_races=source,
@@ -233,6 +249,11 @@ def reconstruct_nar_status_aware_prior_day(
             no_target_scratch_or_exclusion_rows=ignored,
             no_target_disqualification_rows=disputed,
             historical_started_rows=started, historical_ranked_rows=ranked,
+            target_rows_with_prior_start=prior_starts_seen,
+            target_rows_without_prior_start=no_prior_starts,
+            target_rows_with_prior_win=prior_win_seen,
+            target_rows_with_prior_top3=prior_podium_seen,
+            target_rows_with_numeric_prior_finish=prior_finish_seen,
         ),
         targets=tuple(targets) if unresolved == 0 else (),
     )
