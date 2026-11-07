@@ -460,3 +460,26 @@ authorizations **false**, even when the private hash and receipt match.
 The **71 missing training months**, the single 2017-11 official
 disqualification/payout discrepancy and absent independent live
 forecast/payout provenance still prevent any positive-EV conclusion.
+
+
+### PC2 integration receipt-binding proof
+
+The private source-free, *fictional only* cross-environment smoke
+`scripts/smoke_nar_gh_receipt_binding_fictional.py` is connected to the
+existing PC② workflow, rather than accessing any live NAR data.
+[Windows PC② Run #42365879724](https://github.com/tanaka456jp/HorseRacingPredictions/actions/runs/42365879724)
+completed **SUCCESS** for both steps:
+
+- Existing forward private-snapshot salted-hash consistency.
+- New hosted-receipt/private-snapshot binding: exactly 2 fictional
+  future races; original hash matched, a changed score was rejected,
+  and a forged *later earliest-off time* was rejected.
+
+The Windows runner neither made an actual GitHub dispatch, nor
+validated GitHub server `created_at`, nor read a single real NAR
+horse record. The standalone hosted contract smoke is
+[Run #42365672637](https://github.com/tanaka456jp/HorseRacingPredictions/actions/runs/42365672637)
+SUCCESS. The common CI for that code was 979 passed / 33 skipped,
+[Run #42365677648](https://github.com/tanaka456jp/HorseRacingPredictions/actions/runs/42365677648).
+Actual prospective pre-race proof and real cost-adjusted OOS EV
+remain **NOT demonstrated**.
