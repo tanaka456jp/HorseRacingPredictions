@@ -483,3 +483,69 @@ SUCCESS. The common CI for that code was 979 passed / 33 skipped,
 [Run #42365677648](https://github.com/tanaka456jp/HorseRacingPredictions/actions/runs/42365677648).
 Actual prospective pre-race proof and real cost-adjusted OOS EV
 remain **NOT demonstrated**.
+
+
+## 2026-11-07 PC2 parallel 72-month preflight: status-aware denominator
+
+A **new private 2017–2022 training-folder diagnostic** computes two
+**explicitly separate** aggregate monthly result interpretations over the
+SAME licensed, operator-provided local ZIP bytes:
+
+1. The previously established **rank-only strict** official normalizer
+   remains the unchanged production training/ROI gate.
+2. The *additional, post-event only* `audit_nar_official_exceptions`
+   recognizes NAR official margin-status labels for pre-sale scratches,
+   ticket-refunded exclusions, DNF and disqualification.
+   Status-aware results **do not become released training targets**,
+   inferred live tickets or forward-looking features.
+
+The diagnostic is implemented in
+`src/horse_racing_predictions/nar_training_preflight.py` and
+`scripts/diagnose_nar_training_months_local.py`. Its source ZIP
+directory must be expressly permission-attested and contain only
+2017–2022 historical training ZIPs. It has no external requests, no
+file modifications, no 2023–2024 independent OOS opening and no
+2025–2026 protected holdout opening.
+
+[PC2 Win Run #42367627705](https://github.com/tanaka456jp/HorseRacingPredictions/actions/runs/42367627705)
+**SUCCESS** and aggregate-only:
+
+| Complete monthly source categories | Rank-only strict | Official-status post-event |
+| --- | ---: | ---: |
+| 2017-11 flat races individually reconciled | 993 | **1,095** |
+| In-scope flat races requiring review | 103 | **1** |
+| Predeclared banei out of scope | 132 | 132 |
+| Whole month ready for model training | No | **No** |
+| Model fit / actual OOS ROI / positive EV | None | **None** |
+
+All **1,228** original races remain in the correct denominator;
+exactly **1,096** are predeclared in-scope flat races.
+The additional status-aware check resolves **102 of the 103**
+formerly unclassifiable flat races, without reinterpreting the
+remaining **one** disqualified/winning payout contradiction.
+The integrity interpretation coverage for flat races is
+**1,095/1,096 = 99.91%**, not model accuracy or realized betting ROI.
+
+[PC2 training ZIP inventory from same run](https://github.com/tanaka456jp/HorseRacingPredictions/actions/runs/42367627705)
+still reports **1/72 present, 71/72 absent**. No amount of relabeling
+the one downloaded month can substitute for missing training years,
+authentic historical pre-race availability or independent forward OOS
+predictions. The study remains HOLD, and it would be wrong to report
+the accepted 1,095 historical results as a profitable pre-registered
+out-of-sample betting strategy.
+
+[Main CI #42367631376](https://github.com/tanaka456jp/HorseRacingPredictions/actions/runs/42367631376)
+passed **982 tests (33 skipped, one unrelated warning)**, including
+new synthetic-only monthly-status contrast and 72-month scenarios.
+
+The initial PC2 audit
+[Run #42367530704](https://github.com/tanaka456jp/HorseRacingPredictions/actions/runs/42367530704)
+produced identical correct aggregates but the workflow inherited the
+diagnostic CLI's **intentional nonzero exit 3** when 71 months were
+missing, so GitHub marked the workflow as failed. The workflow
+subsequently normalized only that expected diagnostic-HOLD exit, not
+source errors or failed counts, and rerun
+[#42367627705](https://github.com/tanaka456jp/HorseRacingPredictions/actions/runs/42367627705)
+now correctly reports SUCCESS for the *audit*, while the
+*training-readiness status* remains HOLD. No missing ZIP was created
+or copied.
