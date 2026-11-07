@@ -141,7 +141,7 @@ def test_payback_contradiction_rejected_without_cherry_picking():
     assert report.audit.unresolved_flat_races == 1
     assert report.audit.status_validated_flat_races == 0
     assert report.audit.unresolved_reason_counts == (
-        ("NAR_STATUS_AWARE_WIN_PAYOUT_MISMATCH", 1),
+        ()=>{} 
     )
 
 
@@ -153,3 +153,26 @@ def test_status_report_is_not_open_authorization_to_fit_or_sell():
     assert not audit.training_authorized
     assert not audit.economic_roi_authorized
     assert not audit.positive_ev_demonstrated
+
+
+def test_tied_winner_payout_missing_one_is_named_without_horse_identity():
+    data = _fixture(starters=8, month="201711", with_header=True)
+    rows = list(csv.reader(StringIO(data["horselist"])))
+    rows[2][31] = "1"
+    data["horselist"] = _dump(rows)
+    audited = audit_nar_official_exceptions(data, month="201711").audit
+    assert audited.unresolved_reason_counts == (
+        ("NAR_WIN_PAYOUT_MISSING_RANK_ONE", 1),
+    )
+
+
+def test_extra_payout_to_nonwinner_is_rejected_without_retrospective_selection():
+    data = _fixture(starters=8, month="201711", with_header=True)
+    rows = list(csv.reader(StringIO(data["payback"])))
+    extra = rows[1].copy()
+    extra[4], extra[5] = "2", "250"
+    data["payback"] = _dump([rows[0], rows[1], extra])
+    audited = audit_nar_official_exceptions(data, month="201711").audit
+    assert audited.unresolved_reason_counts == (
+        ("NAR_WIN_PAYOUT_TO_NON_RANK_ONE", 1),
+    )
