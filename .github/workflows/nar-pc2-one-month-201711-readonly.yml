@@ -10,6 +10,7 @@ on:
       - "src/horse_racing_predictions/nar_monthly_coverage_audit.py"
       - "tests/test_nar_monthly_coverage_audit.py"
       - "tests/test_nar_published_result_normalizer.py"
+      - "tests/test_nar_private_finish_marker_probe.py"
   workflow_dispatch:
 
 permissions:
@@ -157,6 +158,17 @@ jobs:
                 if ($shapes.status -cne 'NAR_LOCAL_HEADER_SHAPE_ONLY' -or
                     @($shapes.members).Count -ne 3 -or $shapes.sourceTextExported -ne $false) {
                   throw 'NAR_LOCAL_PROBE_INVALID'
+                }
+                $context = $shapes.flatBlankContextEvidence
+                if ($null -eq $context -or
+                    $context.noRawFieldContentsExported -ne $true -or
+                    $context.evidenceOnlyNotRefundOrLossClassification -ne $true -or
+                    [int]$context.unknownStatusRows -lt 0 -or
+                    [int]$context.blankRowsWithAnyExplicitOfficialMarkerInOtherFields -lt 0 -or
+                    ([int]$context.unknownStatusRows +
+                     [int]$context.blankRowsWithAnyExplicitOfficialMarkerInOtherFields) -ne
+                    [int]$shapes.flatFinishReconciliation.blankHorseRows) {
+                  throw 'NAR_BLANK_STATUS_CONTEXT_CONTRACT_INVALID'
                 }
                 $shapes | ConvertTo-Json -Depth 5 -Compress
               } catch {
