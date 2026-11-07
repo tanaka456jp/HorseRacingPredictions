@@ -206,7 +206,12 @@ def reconstruct_nar_status_aware_prior_day(
                     state = history.setdefault(identity, _State())
                     state.starts += 1
                     state.wins += int(label.win_label == 1)
-                    state.top3 += int(label.place_label == 1)
+                    # Top-3 form is a FINISH metric, not a place
+                    # dividend: 5-7 starters pay only top 2 for place.
+                    state.top3 += int(
+                        label.official_finish_rank is not None
+                        and label.official_finish_rank <= 3
+                    )
                     if label.prior_numeric_rank_observed:
                         if type(label.official_finish_rank) is not int:
                             raise UnsafeNarSource("NAR_ASOF_NUMERIC_HISTORY_INVALID")
