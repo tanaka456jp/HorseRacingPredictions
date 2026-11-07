@@ -15,7 +15,13 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 import re
-from typing import Mapping
+from typing import Mapping, Sequence
+import hmac
+
+from .nar_forward_preoff_commitment import (
+    NarPrivateForecastCommitment, NarProspectiveForecast,
+    verify_nar_prospective_batch,
+)
 
 _REPO = "tanaka456jp/HorseRacingPredictions"
 _REF = "refs/heads/main"
@@ -135,4 +141,98 @@ def validate_nar_github_hosted_receipt(
         declared_flat_races=int(raw_count),
         fictional_demo=demo == "true",
         within_host_clock_lead_window=True,
+    )
+
+
+@dataclass(frozen=True)
+class NarForwardPrivateReceiptBinding:
+    """Private content and hosted metadata compare, never external clock proof."""
+
+    status: str
+    bound_flat_races: int
+    first_off_matches_full_private_calendar: bool
+    salted_snapshot_hash_matches: bool
+    github_server_run_created_at_verified: bool = False
+    github_dispatch_inputs_independently_verified: bool = False
+    independent_proof_of_early_publication: bool = False
+    legitimate_preoff_roster_proven: bool = False
+    official_schedule_proven: bool = False
+    roi_authorized: bool = False
+    positive_expected_value_demonstrated: bool = False
+    historical_protected_holdout_opened: bool = False
+
+
+def reconcile_nar_hosted_receipt_with_private_forecasts(
+    *,
+    receipt: NarGitHubHostedReceipt,
+    commitment: NarPrivateForecastCommitment,
+    expected_races: Mapping[str, str],
+    forecasts: Sequence[NarProspectiveForecast],
+    private_salt: bytes,
+) -> NarForwardPrivateReceiptBinding:
+    """Block selective or late schedule claims when private snapshot is opened.
+
+    Github run metadata must later be fetched independently from the
+    Github REST API. Neither this private function nor a locally supplied
+    receipt dataclass can certify that an external record really existed
+    before the first off time.
+    """
+    if (not isinstance(receipt, NarGitHubHostedReceipt)
+            or not isinstance(commitment, NarPrivateForecastCommitment)
+            or receipt.schema != "NAR.GitHubHostedDigestReceipt.v1"
+            or receipt.github_repository != _REPO
+            or receipt.github_ref != _REF
+            or receipt.github_run_attempt != 1
+            or receipt.github_run_id <= 0
+            or receipt.run_url != (
+                f"https://github.com/{_REPO}/actions/runs/{receipt.github_run_id}"
+            )
+            or not receipt.within_host_clock_lead_window
+            or receipt.github_created_at_independently_verified
+            or receipt.github_dispatch_input_independently_verified
+            or receipt.private_snapshot_independently_verified
+            or receipt.independently_attested_before_off
+            or receipt.official_schedule_independently_verified
+            or receipt.source_rights_verified
+            or receipt.real_wagers_verified
+            or receipt.positive_expected_value_demonstrated
+            or receipt.historical_holdout_opened):
+        raise ValueError("NAR_GH_PRIVATE_BINDING_UNVERIFIED_RECEIPT_REQUIRED")
+    verified = verify_nar_prospective_batch(
+        commitment, expected_races, forecasts, private_salt=private_salt,
+    )
+    if (not verified.sha256_matches_private_snapshot
+            or not hmac.compare_digest(receipt.commitment_digest,
+                                       commitment.sha256_digest)
+            or receipt.declared_flat_races != len(expected_races)
+            or receipt.declared_flat_races != commitment.locked_forecasts):
+        raise ValueError("NAR_GH_PRIVATE_BINDING_DIGEST_OR_COVERAGE_MISMATCH")
+    if not forecasts:
+        raise ValueError("NAR_GH_PRIVATE_BINDING_EMPTY_FORECAST")
+    first_off = min(item.scheduled_off_utc.astimezone(timezone.utc)
+                    for item in forecasts)
+    first_day = first_off.astimezone(_JST).date().isoformat()
+    if (receipt.scheduled_earliest_off_utc !=
+            first_off.isoformat().replace("+00:00", "Z")
+            or receipt.race_day_jst != first_day):
+        raise ValueError("NAR_GH_PRIVATE_BINDING_OFF_TIME_NOT_EARLIEST")
+    try:
+        recorded = datetime.fromisoformat(
+            receipt.host_logged_at_utc.replace("Z", "+00:00")
+        )
+    except (TypeError, ValueError):
+        raise ValueError("NAR_GH_PRIVATE_BINDING_HOST_CLOCK_INVALID") from None
+    if (recorded.tzinfo is None
+            or recorded.astimezone(timezone.utc)
+               >= first_off - timedelta(minutes=5)
+            or recorded.astimezone(timezone.utc)
+               < first_off - timedelta(days=7)):
+        raise ValueError("NAR_GH_PRIVATE_BINDING_NOT_PREOFF")
+    return NarForwardPrivateReceiptBinding(
+        status=("FICTIONAL_SNAPSHOT_AND_RECEIPT_STRUCTURALLY_MATCH"
+                if receipt.fictional_demo else
+                "PRIVATE_SNAPSHOT_MATCHES_UNVERIFIED_GITHUB_RECEIPT_METADATA"),
+        bound_flat_races=len(expected_races),
+        first_off_matches_full_private_calendar=True,
+        salted_snapshot_hash_matches=True,
     )
