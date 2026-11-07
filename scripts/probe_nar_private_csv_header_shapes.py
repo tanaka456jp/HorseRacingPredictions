@@ -62,6 +62,29 @@ def _safe_finish_bucket(value: str) -> str:
             return "DEMOTED"
     return "OTHER_TEXT"
 
+
+# These are literal NAR finish markers. The 36-field horselist has no
+# dedicated scratch/refund status field: a marker found in a time/margin
+# field is a clue for review, *never* settlement authorization.
+_EXPLICIT_MARKER_CATEGORIES = frozenset(_FINISH_MARKERS.values())
+
+
+def _blank_finish_context(row: list[str]) -> tuple[str, dict[str, str]]:
+    """Allowlisted shape-only indicators from the official 36-column row.
+
+    The signature is four Boolean flags, not free text, and cannot identify
+    any private horse, date or race. No monetary classification is inferred.
+    """
+    present = tuple(bool(row[index].strip()) for index in (32, 33, 34, 35))
+    signature = "".join("1" if flag else "0" for flag in present)
+    candidate_markers = {}
+    for field, index in (("TIME", 32), ("MARGIN", 33), ("LAST3F", 34)):
+        category = _safe_finish_bucket(row[index])
+        if category in _EXPLICIT_MARKER_CATEGORIES:
+            candidate_markers[field] = category
+    return signature, candidate_markers
+
+
 def inspect_header_shape(path: Path, *, month: str, permission_confirmed: bool) -> dict:
     if permission_confirmed is not True:
         raise UnsafeNarSource("NAR_PERSONAL_RESEARCH_PERMISSION_REQUIRED")
@@ -80,6 +103,9 @@ def inspect_header_shape(path: Path, *, month: str, permission_confirmed: bool) 
     flat_rank_profiles = {}  # race-keyed only in ephemeral memory
     flat_declared_counts = {}
     flat_payback_rows = {}
+    blank_context_signatures = {}
+    blank_status_indicators = {}
+    blank_explicit_indicator_rows = 0
     with ZipFile(path) as zf:
         for kind in sorted(_EXPECTED_WIDTH):
             exact_name = f"{month}_{kind}.csv"
@@ -120,6 +146,17 @@ def inspect_header_shape(path: Path, *, month: str, permission_confirmed: bool) 
                         profile["blank"] += 1
                         profile["blankTime"] += bool(row[32].strip())
                         profile["blankPopularity"] += bool(row[35].strip())
+                        signature, markers = _blank_finish_context(row)
+                        blank_context_signatures[signature] = (
+                            blank_context_signatures.get(signature, 0) + 1
+                        )
+                        if markers:
+                            blank_explicit_indicator_rows += 1
+                        for field, marker in markers.items():
+                            safe = f"{field}_{marker}"
+                            blank_status_indicators[safe] = (
+                                blank_status_indicators.get(safe, 0) + 1
+                            )
                     flat_finish_counts[category] = flat_finish_counts.get(category, 0) + 1
                     if category != "NUMERIC_RANK":
                         # Keys exist *only* in process memory. Never serialize.
@@ -253,6 +290,22 @@ def inspect_header_shape(path: Path, *, month: str, permission_confirmed: bool) 
         "status": "NAR_LOCAL_HEADER_SHAPE_ONLY",
         "month": month,
         "members": aggregate,
+        "flatBlankContextEvidence": {
+            "blankRowsByTimeMarginLast3fPopularityFlags": dict(
+                sorted(blank_context_signatures.items())
+            ),
+            "blankRowsWithAnyExplicitOfficialMarkerInOtherFields":
+                blank_explicit_indicator_rows,
+            "explicitMarkersInOtherFieldsOnly": dict(
+                sorted(blank_status_indicators.items())
+            ),
+            "unknownStatusRows": (
+                sum(blank_context_signatures.values())
+                - blank_explicit_indicator_rows
+            ),
+            "evidenceOnlyNotRefundOrLossClassification": True,
+            "noRawFieldContentsExported": True,
+        },
         "flatOtherResultIntegrity": other_integrity,
         "flatFinishReconciliation": blank_reconciliation,
         "flatFinishRankAggregate": {
