@@ -157,7 +157,17 @@ def _validated_race(
         missing = bool(winners - set(win))
         unexpected = bool(set(win) - winners)
         if missing and unexpected:
-            code = "NAR_WIN_PAYOUT_BOTH_MISSING_AND_UNEXPECTED"
+            # A paid ticket on a runner whose archived *final* status is
+            # disqualified may reflect later adjudication. We can identify
+            # that structural conflict, but NOT infer its chronology.
+            unexpected_paid = set(win) - winners
+            if any(
+                by_number[n][0] == "DISQUALIFIED_REVIEW"
+                for n in unexpected_paid if n in by_number
+            ):
+                code = "NAR_WIN_PAYOUT_TO_DISQUALIFIED_STATUS"
+            else:
+                code = "NAR_WIN_PAYOUT_BOTH_MISSING_AND_UNEXPECTED"
         elif missing:
             code = "NAR_WIN_PAYOUT_MISSING_RANK_ONE"
         else:
