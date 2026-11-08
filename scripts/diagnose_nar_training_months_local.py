@@ -15,6 +15,9 @@ from horse_racing_predictions.nar_training_preflight import (
     diagnose_nar_training_folder,
 )
 from horse_racing_predictions.nar_official_zip_probe import UnsafeNarSource
+from horse_racing_predictions.nar_historical_anomaly_triage import (
+    triage_historical_nar_anomalies,
+)
 
 
 def main() -> int:
@@ -29,6 +32,11 @@ def main() -> int:
                 args.confirm_personal_private_nar_permission
             ),
         )
+        # Only the complete original training period is eligible for
+        # aggregated root-cause triage; never select a profitable subset.
+        triage = (triage_historical_nar_anomalies(result)
+                  if result.months_present == 72 and result.months_missing == 0
+                  else None)
     except (UnsafeNarSource, OSError, ValueError, RuntimeError, TypeError):
         print(json.dumps({
             "status": "NAR_DIAGNOSTIC_BLOCKED_UNTRUSTED_FOLDER_OR_PERMISSION",
@@ -50,6 +58,30 @@ def main() -> int:
         "statusAwareValidatedFlatRaces": result.status_aware_validated_flat_races,
         "statusAwareUnresolvedFlatRaces": result.status_aware_unresolved_flat_races,
         "monthsStatusAwareComplete": result.months_status_aware_complete,
+        "anomalyTriage": ({
+            "schema": "NAR.HistoricalAnomalyTriage.v1",
+            "status": triage.status,
+            "fullPeriodFlatRaceDenominator": triage.flat_races,
+            "strictUnresolvedFlat": triage.strict_unresolved_flat,
+            "statusAwareUnresolvedFlat": triage.status_aware_unresolved_flat,
+            "newlyInterpretedFlat": triage.newly_interpreted_flat,
+            "byYear": [
+                {
+                    "year": y.year, "months": y.source_months,
+                    "flat": y.total_flat_races,
+                    "strictUnresolved": y.strict_unresolved_flat,
+                    "statusUnresolved": y.status_aware_unresolved_flat,
+                    "statusReconciled": y.status_aware_reconciled_flat,
+                    "statusCompleteMonths": y.status_complete_months,
+                } for y in triage.by_year
+            ],
+            "byReason": dict(triage.by_reason),
+            "byCategory": dict(triage.by_category),
+            "sourceRecordsExported": False,
+            "individualRaceIdsExported": False,
+            "trainingRowsReleased": 0,
+            "positiveEvDemonstrated": False,
+        } if triage is not None else None),
         "perMonth": [
             {"month": d.month, "status": d.status,
              "observed": d.race_count, "acceptedFlat": d.accepted_flat_races,
