@@ -62,6 +62,7 @@ class NarPreflightReport:
     status_aware_unresolved_flat_races: int = 0
     months_status_aware_complete: int = 0
     ambiguous_finish_pattern_counts: tuple[tuple[str, int], ...] = ()
+    unrecognized_marker_profile_counts: tuple[tuple[str, int], ...] = ()
     user_permission_attested: bool = True
     all_months_study_eligible: bool = False
     actual_rights_independently_verified: bool = False
