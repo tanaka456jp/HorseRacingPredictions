@@ -88,6 +88,7 @@ jobs:
             $byYear = @()
             $reasonTotals = [ordered]@{}
             $categoryTotals = [ordered]@{}
+            $blankShapeTotals = [ordered]@{}
             if ([int]$d.monthsPresent -eq 72 -and [int]$d.monthsMissing -eq 0) {
               $t = $d.anomalyTriage
               if ($null -eq $t -or
@@ -166,6 +167,27 @@ jobs:
                   $categorySum -ne [int]$d.statusAwareUnresolvedFlatRaces) {
                 throw 'NAR_PC2_TRIAGE_REASON_TOTALS_CONFLICT'
               }
+              # The 752 unknown-finish cases are not necessarily all
+              # empty fields. Reject any source-derived arbitrary words.
+              $approvedFinishShapes = @(
+                'KNOWN_RACE_CANCEL_OR_NON_ESTABLISHED_MARKER',
+                'UNRECOGNIZED_NONEMPTY_STATUS_MARKER',
+                'BOTH_FIELDS_BLANK_ONE_HORSE',
+                'BOTH_FIELDS_BLANK_TWO_OR_THREE_HORSES',
+                'BOTH_FIELDS_BLANK_FOUR_OR_MORE_HORSES'
+              )
+              $blankShapeSum = 0
+              foreach ($p in $t.ambiguousFinishShapes.PSObject.Properties) {
+                if ($approvedFinishShapes -cnotcontains $p.Name -or
+                    [int]$p.Value -le 0) {
+                  throw 'NAR_PC2_TRIAGE_UNSAFE_FINISH_SHAPE'
+                }
+                $blankShapeTotals[$p.Name] = [int]$p.Value
+                $blankShapeSum += [int]$p.Value
+              }
+              if ($blankShapeSum -ne [int]$t.byReason.NAR_BLANK_WITHOUT_OFFICIAL_STATUS) {
+                throw 'NAR_PC2_TRIAGE_FINISH_SHAPE_SUM_CONFLICT'
+              }
             }
             # Output just a fixed allowlist, never the source ZIP names,
             # source paths, horse identities, race IDs or source text.
@@ -185,6 +207,7 @@ jobs:
               statusAwareUnresolvedByYear = $byYear
               statusAwareUnresolvedByReason = $reasonTotals
               statusAwareUnresolvedByCategory = $categoryTotals
+              ambiguousFinishShapes = $blankShapeTotals
               licensedSourceBytesUploaded = $false
               preoffFeatureTimingProven = $false
               modelTrainingAuthorized = $false
