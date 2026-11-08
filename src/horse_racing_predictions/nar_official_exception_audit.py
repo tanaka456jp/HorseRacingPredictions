@@ -35,6 +35,11 @@ _MARKERS = {
     "失格": "DISQUALIFIED_REVIEW",
 }
 _RETURN_UNKNOWN = None
+# Known NAR result words that are NOT horse-level finished/loser statuses.
+# They require separate race-level refund provenance before interpretation.
+_CANCEL_OR_NON_ESTABLISHED_MARKERS = frozenset({
+    "取止", "競走取止", "競走取り止め", "不成", "競走不成立",
+})
 
 
 @dataclass(frozen=True)
@@ -63,6 +68,9 @@ class NarOfficialExceptionAudit:
     status_horse_counts: tuple[tuple[str, int], ...]
     unresolved_reason_counts: tuple[tuple[str, int], ...]
     complete_flat_outcome_interpretation: bool
+    # Exclusively aggregate categories for the original blank/unknown-status
+    # error. No private margin text, race key or horse identity is exposed.
+    ambiguous_finish_pattern_counts: tuple[tuple[str, int], ...] = ()
     training_authorized: bool = False
     economic_roi_authorized: bool = False
     positive_ev_demonstrated: bool = False
@@ -223,6 +231,7 @@ def audit_nar_official_exceptions(
     accepted = []
     reasons: Counter[str] = Counter()
     status_counts: Counter[str] = Counter()
+    ambiguous_finish_patterns: Counter[str] = Counter()
     banei = flat = 0
     for key in keys:
         if "帯広" in key[0]:
@@ -241,7 +250,32 @@ def audit_nar_official_exceptions(
             )
         except UnsafeNarSource as exc:
             # All messages are fixed identifiers; never copy a CSV cell.
-            reasons[str(exc)] += 1
+            reason = str(exc)
+            reasons[reason] += 1
+            if reason == "NAR_BLANK_WITHOUT_OFFICIAL_STATUS":
+                unknown = [
+                    row for row in groups["horselist"][key]
+                    if (not row[31].strip()
+                        and row[33].strip() not in _MARKERS)
+                ]
+                if not unknown:
+                    raise UnsafeNarSource(
+                        "NAR_AMBIGUOUS_STATUS_TRIAGE_INTERNAL_CONFLICT"
+                    )
+                raw_markers = [row[33].strip() for row in unknown]
+                if any(x in _CANCEL_OR_NON_ESTABLISHED_MARKERS
+                       for x in raw_markers):
+                    shape = "KNOWN_RACE_CANCEL_OR_NON_ESTABLISHED_MARKER"
+                elif any(x for x in raw_markers):
+                    # Do NOT echo the arbitrary source label.
+                    shape = "UNRECOGNIZED_NONEMPTY_STATUS_MARKER"
+                elif len(unknown) == 1:
+                    shape = "BOTH_FIELDS_BLANK_ONE_HORSE"
+                elif len(unknown) <= 3:
+                    shape = "BOTH_FIELDS_BLANK_TWO_OR_THREE_HORSES"
+                else:
+                    shape = "BOTH_FIELDS_BLANK_FOUR_OR_MORE_HORSES"
+                ambiguous_finish_patterns[shape] += 1
             continue
         accepted.append(race)
         status_counts.update(s for _, s in race.status_by_number)
@@ -261,6 +295,9 @@ def audit_nar_official_exceptions(
             status_horse_counts=tuple(sorted(status_counts.items())),
             unresolved_reason_counts=tuple(sorted(reasons.items())),
             complete_flat_outcome_interpretation=not unresolved,
+            ambiguous_finish_pattern_counts=tuple(sorted(
+                ambiguous_finish_patterns.items()
+            )),
         ),
         validated_races=tuple(accepted),
     )
