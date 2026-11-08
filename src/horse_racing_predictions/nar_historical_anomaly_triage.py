@@ -17,6 +17,13 @@ from .nar_training_preflight import NarPreflightReport
 _STATIC_REASON = re.compile(r"NAR_[A-Z0-9_]{1,96}\Z")
 _EXPECTED = tuple(f"{year}{month:02d}" for year in range(2017, 2023)
                   for month in range(1, 13))
+_FINISH_SHAPES = frozenset({
+    "KNOWN_RACE_CANCEL_OR_NON_ESTABLISHED_MARKER",
+    "UNRECOGNIZED_NONEMPTY_STATUS_MARKER",
+    "BOTH_FIELDS_BLANK_ONE_HORSE",
+    "BOTH_FIELDS_BLANK_TWO_OR_THREE_HORSES",
+    "BOTH_FIELDS_BLANK_FOUR_OR_MORE_HORSES",
+})
 _CATEGORY_BY_REASON = {
     "NAR_STATUS_AWARE_PLACE_PAYOUT_MISMATCH": "PLACE_TICKET_RULE_REVIEW",
     "NAR_WIN_PAYOUT_TO_DISQUALIFIED_STATUS": "DQ_SETTLEMENT_PRIMARY_SOURCE",
@@ -56,6 +63,7 @@ class NarHistoricalAnomalyTriage:
     by_year: tuple[NarAnomalyByYear, ...]
     by_reason: tuple[tuple[str, int], ...]
     by_category: tuple[tuple[str, int], ...]
+    ambiguous_finish_shapes: tuple[tuple[str, int], ...] = ()
     # Anomaly explanations are POST-EVENT diagnostics, never labels
     # authorized for real ROI or permissive subset selection.
     source_records_exported: bool = False
@@ -83,6 +91,7 @@ def triage_historical_nar_anomalies(
 
     reasons: Counter[str] = Counter()
     categories: Counter[str] = Counter()
+    finish_shapes: Counter[str] = Counter()
     years: list[NarAnomalyByYear] = []
     strict_total = status_total = validated = total_flat = complete = 0
 
@@ -108,6 +117,15 @@ def triage_historical_nar_anomalies(
                     or sum(n for _, n in item.status_aware_reasons)
                        != item.status_aware_unresolved_flat_races):
                 raise UnsafeNarSource("NAR_TRIAGE_RACE_DENOMINATOR_CONFLICT")
+            for shape, n in item.ambiguous_finish_pattern_counts:
+                if shape not in _FINISH_SHAPES or type(n) is not int or n <= 0:
+                    raise UnsafeNarSource("NAR_TRIAGE_UNSAFE_FINISH_PATTERN")
+                finish_shapes[shape] += n
+            if (sum(n for _, n in item.ambiguous_finish_pattern_counts)
+                    != dict(item.status_aware_reasons).get(
+                        "NAR_BLANK_WITHOUT_OFFICIAL_STATUS", 0
+                    )):
+                raise UnsafeNarSource("NAR_TRIAGE_AMBIGUOUS_STATUS_COUNT_CONFLICT")
             for reason, n in item.status_aware_reasons:
                 if (type(reason) is not str
                         or not _STATIC_REASON.fullmatch(reason)
@@ -140,6 +158,9 @@ def triage_historical_nar_anomalies(
             or validated + status_total != total_flat
             or complete != report.months_status_aware_complete
             or sum(reasons.values()) != status_total
+            or finish_shapes != Counter(dict(report.ambiguous_finish_pattern_counts))
+            or sum(finish_shapes.values()) != reasons.get(
+                "NAR_BLANK_WITHOUT_OFFICIAL_STATUS", 0)
             or sum(categories.values()) != status_total
             or strict_total < status_total):
         raise UnsafeNarSource("NAR_TRIAGE_ALL_PERIOD_TOTALS_CONFLICT")
@@ -156,4 +177,7 @@ def triage_historical_nar_anomalies(
         by_year=tuple(years),
         by_reason=tuple(sorted(reasons.items(), key=lambda x: (-x[1], x[0]))),
         by_category=tuple(sorted(categories.items(), key=lambda x: (-x[1], x[0]))),
+        ambiguous_finish_shapes=tuple(sorted(
+            finish_shapes.items(), key=lambda x: (-x[1], x[0])
+        )),
     )
