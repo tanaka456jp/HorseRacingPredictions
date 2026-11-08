@@ -116,6 +116,10 @@ class NarOfficialExceptionAudit:
     # Unknown margin labels are counted by fixed token families only,
     # without printing actual licensed source strings.
     unrecognized_marker_profile_counts: tuple[tuple[str, int], ...] = ()
+    unknown_marker_rank_evidence: tuple[tuple[str, int], ...] = ()
+    unknown_marker_win_payout_evidence: tuple[tuple[str, int], ...] = ()
+    unknown_marker_distinct_text_values_in_month: int = 0
+    unknown_marker_largest_single_value_frequency_in_month: int = 0
     training_authorized: bool = False
     economic_roi_authorized: bool = False
     positive_ev_demonstrated: bool = False
@@ -278,6 +282,9 @@ def audit_nar_official_exceptions(
     status_counts: Counter[str] = Counter()
     ambiguous_finish_patterns: Counter[str] = Counter()
     unrecognized_profiles: Counter[str] = Counter()
+    unrecognized_raw_frequency: Counter[str] = Counter()
+    unknown_rank_shape: Counter[str] = Counter()
+    unknown_win_payout_shape: Counter[str] = Counter()
     banei = flat = 0
     for key in keys:
         if "帯広" in key[0]:
@@ -318,6 +325,20 @@ def audit_nar_official_exceptions(
                     for marker in raw_markers:
                         if marker and marker not in _CANCEL_OR_NON_ESTABLISHED_MARKERS:
                             unrecognized_profiles[_unknown_status_profile(marker)] += 1
+                            # Kept only within this one in-memory private
+                            # monthly function. Raw text never returned.
+                            unrecognized_raw_frequency[marker] += 1
+                    if any(row[31].strip() for row in groups["horselist"][key]):
+                        unknown_rank_shape["SOME_NUMERIC_FINAL_RANK"] += 1
+                    else:
+                        unknown_rank_shape["NO_NUMERIC_FINAL_RANK"] += 1
+                    # Inspect only presence of the official single-win
+                    # payback fields, not the private payout numbers.
+                    if any(row[4].strip() and row[5].strip()
+                           for row in groups["payback"][key]):
+                        unknown_win_payout_shape["WIN_PAYBACK_FIELDS_PRESENT"] += 1
+                    else:
+                        unknown_win_payout_shape["WIN_PAYBACK_FIELDS_ABSENT"] += 1
                 elif len(unknown) == 1:
                     shape = "BOTH_FIELDS_BLANK_ONE_HORSE"
                 elif len(unknown) <= 3:
@@ -350,6 +371,18 @@ def audit_nar_official_exceptions(
             unrecognized_marker_profile_counts=tuple(sorted(
                 unrecognized_profiles.items()
             )),
+            unknown_marker_rank_evidence=tuple(sorted(
+                unknown_rank_shape.items()
+            )),
+            unknown_marker_win_payout_evidence=tuple(sorted(
+                unknown_win_payout_shape.items()
+            )),
+            unknown_marker_distinct_text_values_in_month=(
+                len(unrecognized_raw_frequency)
+            ),
+            unknown_marker_largest_single_value_frequency_in_month=(
+                max(unrecognized_raw_frequency.values(), default=0)
+            ),
         ),
         validated_races=tuple(accepted),
     )
