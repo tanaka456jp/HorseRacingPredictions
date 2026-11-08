@@ -196,3 +196,39 @@ def test_official_ticket_on_disqualified_runner_is_quarantined_for_adjudication(
     assert not report.audit.complete_flat_outcome_interpretation
     assert not report.audit.economic_roi_authorized
     assert not report.audit.positive_ev_demonstrated
+
+
+@pytest.mark.parametrize(("marker", "expected_shape"), [
+    ("", "BOTH_FIELDS_BLANK_ONE_HORSE"),
+    ("取止", "KNOWN_RACE_CANCEL_OR_NON_ESTABLISHED_MARKER"),
+    ("競走不成立", "KNOWN_RACE_CANCEL_OR_NON_ESTABLISHED_MARKER"),
+    ("未定義の状態", "UNRECOGNIZED_NONEMPTY_STATUS_MARKER"),
+])
+def test_unknown_finish_reason_is_safely_split_by_official_marker(marker, expected_shape):
+    fake = _synthetic_with_status(marker)
+    audit = audit_nar_official_exceptions(fake, month="201711").audit
+    assert audit.unresolved_reason_counts == (
+        ("NAR_BLANK_WITHOUT_OFFICIAL_STATUS", 1),
+    )
+    assert audit.ambiguous_finish_pattern_counts == ((expected_shape, 1),)
+    assert audit.status_validated_flat_races == 0
+    assert not audit.training_authorized
+    assert not audit.economic_roi_authorized
+
+
+@pytest.mark.parametrize(("n", "category"), [
+    (2, "BOTH_FIELDS_BLANK_TWO_OR_THREE_HORSES"),
+    (3, "BOTH_FIELDS_BLANK_TWO_OR_THREE_HORSES"),
+    (4, "BOTH_FIELDS_BLANK_FOUR_OR_MORE_HORSES"),
+])
+def test_multiple_horses_missing_rank_and_margin_remain_one_unresolved_race(n, category):
+    data = _fixture(starters=8, month="201711", with_header=True)
+    rows = list(csv.reader(StringIO(data["horselist"])))
+    for row in rows[-n:]:
+        row[31] = ""
+        row[33] = ""
+    data["horselist"] = _dump(rows)
+    report = audit_nar_official_exceptions(data, month="201711").audit
+    assert report.unresolved_flat_races == 1
+    assert report.ambiguous_finish_pattern_counts == ((category, 1),)
+    assert not report.economic_roi_authorized
