@@ -89,6 +89,7 @@ jobs:
             $reasonTotals = [ordered]@{}
             $categoryTotals = [ordered]@{}
             $blankShapeTotals = [ordered]@{}
+            $textProfileTotals = [ordered]@{}
             if ([int]$d.monthsPresent -eq 72 -and [int]$d.monthsMissing -eq 0) {
               $t = $d.anomalyTriage
               if ($null -eq $t -or
@@ -188,6 +189,30 @@ jobs:
               if ($blankShapeSum -ne [int]$t.byReason.NAR_BLANK_WITHOUT_OFFICIAL_STATUS) {
                 throw 'NAR_PC2_TRIAGE_FINISH_SHAPE_SUM_CONFLICT'
               }
+              $approvedProfiles = @(
+                'POSSIBLE_PRESTART_EXCLUSION_ABBREVIATION',
+                'POSSIBLE_SCRATCH_VARIANT',
+                'POSSIBLE_DNF_VARIANT',
+                'OTHER_RESULT_EXCEPTION_VARIANT',
+                'UNEXPECTED_NUMERIC_MARGIN',
+                'UNEXPECTED_PUNCTUATION_PLACEHOLDER',
+                'UNRECOGNIZED_TEXT_1_OR_2_CHARS',
+                'UNRECOGNIZED_TEXT_3_TO_5_CHARS',
+                'UNRECOGNIZED_TEXT_6_PLUS_CHARS'
+              )
+              $profileRows = 0
+              foreach ($p in $d.unrecognizedMarkerProfiles.PSObject.Properties) {
+                if ($approvedProfiles -cnotcontains $p.Name -or
+                    [int]$p.Value -le 0) {
+                  throw 'NAR_PC2_TRIAGE_UNKNOWN_MARKER_PROFILE_REJECTED'
+                }
+                $textProfileTotals[$p.Name] = [int]$p.Value
+                $profileRows += [int]$p.Value
+              }
+              if ($profileRows -lt [int]$blankShapeTotals.UNRECOGNIZED_NONEMPTY_STATUS_MARKER -or
+                  $profileRows -gt 18 * [int]$d.statusAwareUnresolvedFlatRaces) {
+                throw 'NAR_PC2_TRIAGE_UNKNOWN_MARKER_PROFILE_COUNT_INVALID'
+              }
             }
             # Output just a fixed allowlist, never the source ZIP names,
             # source paths, horse identities, race IDs or source text.
@@ -208,6 +233,7 @@ jobs:
               statusAwareUnresolvedByReason = $reasonTotals
               statusAwareUnresolvedByCategory = $categoryTotals
               ambiguousFinishShapes = $blankShapeTotals
+              unknownMarginTextProfiles = $textProfileTotals
               licensedSourceBytesUploaded = $false
               preoffFeatureTimingProven = $false
               modelTrainingAuthorized = $false
