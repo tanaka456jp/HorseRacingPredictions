@@ -16,6 +16,7 @@ from horse_racing_predictions.nar_training_preflight import (
 )
 from test_nar_local_monthly_intake import _make_zip
 from test_nar_official_exception_audit import _synthetic_with_status
+from test_nar_published_result_normalizer import _fixture
 
 
 @pytest.fixture(scope="module")
@@ -30,8 +31,16 @@ def synthetic_72_months(tmp_path_factory):
     for y in range(2017, 2023):
         for m in range(1, 13):
             mo = f"{y}{m:02d}"
-            _make_zip(folder, month=mo,
-                      override=conflict if mo == "201711" else None)
+            override = conflict if mo == "201711" else None
+            if mo == "201812":
+                ambiguous = _fixture(month=mo, starters=8, with_header=True)
+                horse = list(csv.reader(StringIO(ambiguous["horselist"])))
+                horse[-1][31] = ""
+                horse[-1][33] = ""
+                target = StringIO(newline="")
+                csv.writer(target).writerows(horse)
+                override = {"horselist": target.getvalue()}
+            _make_zip(folder, month=mo, override=override)
     return diagnose_nar_training_folder(
         folder, personal_private_permission_confirmed=True,
     )
@@ -41,15 +50,25 @@ def test_full_72_months_root_cause_is_counted_without_deleting_bad_race(syntheti
     report = triage_historical_nar_anomalies(synthetic_72_months)
     assert report.months_verified == 72
     assert report.flat_races == 72
-    assert report.strict_unresolved_flat == 1
-    assert report.status_aware_unresolved_flat == 1
+    assert report.strict_unresolved_flat == 2
+    assert report.status_aware_unresolved_flat == 2
     assert report.newly_interpreted_flat == 0
-    assert report.by_reason == (("NAR_WIN_PAYOUT_TO_DISQUALIFIED_STATUS", 1),)
-    assert report.by_category == (("DQ_SETTLEMENT_PRIMARY_SOURCE", 1),)
+    assert report.by_reason == (
+        ("NAR_BLANK_WITHOUT_OFFICIAL_STATUS", 1),
+        ("NAR_WIN_PAYOUT_TO_DISQUALIFIED_STATUS", 1),
+    )
+    assert report.by_category == (
+        ("DQ_SETTLEMENT_PRIMARY_SOURCE", 1),
+        ("FINAL_STATUS_PROVENANCE", 1),
+    )
+    assert report.ambiguous_finish_shapes == (
+        ("BOTH_FIELDS_BLANK_ONE_HORSE", 1),
+    )
     assert tuple(x.year for x in report.by_year) == tuple(range(2017, 2023))
     assert all(x.source_months == 12 for x in report.by_year)
     assert report.by_year[0].status_aware_unresolved_flat == 1
-    assert all(x.status_aware_unresolved_flat == 0 for x in report.by_year[1:])
+    assert report.by_year[1].status_aware_unresolved_flat == 1
+    assert all(x.status_aware_unresolved_flat == 0 for x in report.by_year[2:])
     assert sum(x.total_flat_races for x in report.by_year) == 72
     assert not report.source_records_exported
     assert not report.historical_protected_oos_opened
@@ -77,9 +96,12 @@ def test_status_aware_relief_differs_from_rank_only_without_release(synthetic_72
         months_with_unresolved_errors=original.months_with_unresolved_errors + 1,
     )
     found = triage_historical_nar_anomalies(tweaked)
-    assert found.strict_unresolved_flat == 2
-    assert found.status_aware_unresolved_flat == 1
+    assert found.strict_unresolved_flat == 3
+    assert found.status_aware_unresolved_flat == 2
     assert found.newly_interpreted_flat == 1
+    assert found.ambiguous_finish_shapes == (
+        ("BOTH_FIELDS_BLANK_ONE_HORSE", 1),
+    )
     assert found.training_rows_released == 0
 
 
@@ -122,7 +144,10 @@ def test_status_reason_sum_inconsistency_and_unsafe_code_blocked(synthetic_72_mo
     report = triage_historical_nar_anomalies(
         replace(original, diagnostic=tuple(bad)),
     )
-    assert report.by_category == (("UNKNOWN_REQUIRES_REVIEW", 1),)
+    assert report.by_category == (
+        ("FINAL_STATUS_PROVENANCE", 1),
+        ("UNKNOWN_REQUIRES_REVIEW", 1),
+    )
     bad[10] = replace(old, status_aware_reasons=(("NAR_LEAKED:PRIVATE_NAME", 1),))
     with pytest.raises(UnsafeNarSource, match="NAR_TRIAGE_UNSAFE_REASON_CODE"):
         triage_historical_nar_anomalies(replace(original, diagnostic=tuple(bad)))
