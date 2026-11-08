@@ -329,9 +329,9 @@ def audit_nar_official_exceptions(
                             # monthly function. Raw text never returned.
                             unrecognized_raw_frequency[marker] += 1
                     if any(row[31].strip() for row in groups["horselist"][key]):
-                        unknown_rank_shape["SOME_NUMERIC_FINAL_RANK"] += 1
+                        unknown_rank_shape["SOME_NONEMPTY_FINAL_RANK_CELL"] += 1
                     else:
-                        unknown_rank_shape["NO_NUMERIC_FINAL_RANK"] += 1
+                        unknown_rank_shape["NO_NONEMPTY_FINAL_RANK_CELL"] += 1
                     # Inspect only presence of the official single-win
                     # payback fields, not the private payout numbers.
                     if any(row[4].strip() and row[5].strip()
