@@ -232,3 +232,28 @@ def test_multiple_horses_missing_rank_and_margin_remain_one_unresolved_race(n, c
     assert report.unresolved_flat_races == 1
     assert report.ambiguous_finish_pattern_counts == ((category, 1),)
     assert not report.economic_roi_authorized
+
+
+@pytest.mark.parametrize(("marker", "profile"), [
+    ("発除", "POSSIBLE_PRESTART_EXCLUSION_ABBREVIATION"),
+    ("競除", "POSSIBLE_PRESTART_EXCLUSION_ABBREVIATION"),
+    ("取消し", "POSSIBLE_SCRATCH_VARIANT"),
+    ("落馬", "POSSIBLE_DNF_VARIANT"),
+    ("降着", "OTHER_RESULT_EXCEPTION_VARIANT"),
+    ("１２", "UNEXPECTED_NUMERIC_MARGIN"),
+    ("――", "UNEXPECTED_PUNCTUATION_PLACEHOLDER"),
+    ("仮", "UNRECOGNIZED_TEXT_1_OR_2_CHARS"),
+    ("仮名文字", "UNRECOGNIZED_TEXT_3_TO_5_CHARS"),
+    ("仮名で書かれた表示", "UNRECOGNIZED_TEXT_6_PLUS_CHARS"),
+])
+def test_unsupported_margin_label_never_leaks_value_or_automatically_refunds(marker, profile):
+    audit = audit_nar_official_exceptions(
+        _synthetic_with_status(marker), month="201711",
+    ).audit
+    assert audit.unresolved_flat_races == 1
+    assert audit.unrecognized_marker_profile_counts == ((profile, 1),)
+    assert audit.ambiguous_finish_pattern_counts == (
+        ("UNRECOGNIZED_NONEMPTY_STATUS_MARKER", 1),
+    )
+    assert not audit.economic_roi_authorized
+    assert marker not in repr(audit)
