@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
+import re
 from typing import Mapping
 
 from .nar_official_zip_probe import UnsafeNarSource
@@ -35,6 +36,47 @@ _MARKERS = {
     "失格": "DISQUALIFIED_REVIEW",
 }
 _RETURN_UNKNOWN = None
+# These labels are *possible* indicators, not proven NAR return rules.
+# Source marker text must not be surfaced in public Actions logs.
+_KNOWN_UNRESOLVED_SHORT_LABELS = {
+    "発除": "POSSIBLE_PRESTART_EXCLUSION_ABBREVIATION",
+    "競除": "POSSIBLE_PRESTART_EXCLUSION_ABBREVIATION",
+    "発走除外": "POSSIBLE_PRESTART_EXCLUSION_ABBREVIATION",
+    "出除": "POSSIBLE_PRESTART_EXCLUSION_ABBREVIATION",
+    "取消し": "POSSIBLE_SCRATCH_VARIANT",
+    "取": "POSSIBLE_SCRATCH_VARIANT",
+    "中": "POSSIBLE_DNF_VARIANT",
+    "落馬": "POSSIBLE_DNF_VARIANT",
+    "再騎": "OTHER_RESULT_EXCEPTION_VARIANT",
+    "降着": "OTHER_RESULT_EXCEPTION_VARIANT",
+    "タイムオーバー": "OTHER_RESULT_EXCEPTION_VARIANT",
+}
+
+
+def _unknown_status_profile(raw: str) -> str:
+    """Public-static structural class, never arbitrary source text."""
+    value = raw.strip()
+    if value in _KNOWN_UNRESOLVED_SHORT_LABELS:
+        return _KNOWN_UNRESOLVED_SHORT_LABELS[value]
+    if any(k in value for k in ("除外", "発除", "競除")):
+        return "POSSIBLE_PRESTART_EXCLUSION_ABBREVIATION"
+    if any(k in value for k in ("取消",)):
+        return "POSSIBLE_SCRATCH_VARIANT"
+    if any(k in value for k in ("中止", "落馬")):
+        return "POSSIBLE_DNF_VARIANT"
+    if any(k in value for k in ("失格", "降着")):
+        return "OTHER_RESULT_EXCEPTION_VARIANT"
+    if re.fullmatch(r"[0-9０-９]+(?:[.,．][0-9０-９]+)?", value):
+        return "UNEXPECTED_NUMERIC_MARGIN"
+    if value and all(ch in "-—―－ー*＊※・□△？?!" for ch in value):
+        return "UNEXPECTED_PUNCTUATION_PLACEHOLDER"
+    length = len(value)
+    if length <= 2:
+        return "UNRECOGNIZED_TEXT_1_OR_2_CHARS"
+    if length <= 5:
+        return "UNRECOGNIZED_TEXT_3_TO_5_CHARS"
+    return "UNRECOGNIZED_TEXT_6_PLUS_CHARS"
+
 # Known NAR result words that are NOT horse-level finished/loser statuses.
 # They require separate race-level refund provenance before interpretation.
 _CANCEL_OR_NON_ESTABLISHED_MARKERS = frozenset({
@@ -71,6 +113,9 @@ class NarOfficialExceptionAudit:
     # Exclusively aggregate categories for the original blank/unknown-status
     # error. No private margin text, race key or horse identity is exposed.
     ambiguous_finish_pattern_counts: tuple[tuple[str, int], ...] = ()
+    # Unknown margin labels are counted by fixed token families only,
+    # without printing actual licensed source strings.
+    unrecognized_marker_profile_counts: tuple[tuple[str, int], ...] = ()
     training_authorized: bool = False
     economic_roi_authorized: bool = False
     positive_ev_demonstrated: bool = False
@@ -232,6 +277,7 @@ def audit_nar_official_exceptions(
     reasons: Counter[str] = Counter()
     status_counts: Counter[str] = Counter()
     ambiguous_finish_patterns: Counter[str] = Counter()
+    unrecognized_profiles: Counter[str] = Counter()
     banei = flat = 0
     for key in keys:
         if "帯広" in key[0]:
@@ -269,6 +315,9 @@ def audit_nar_official_exceptions(
                 elif any(x for x in raw_markers):
                     # Do NOT echo the arbitrary source label.
                     shape = "UNRECOGNIZED_NONEMPTY_STATUS_MARKER"
+                    for marker in raw_markers:
+                        if marker and marker not in _CANCEL_OR_NON_ESTABLISHED_MARKERS:
+                            unrecognized_profiles[_unknown_status_profile(marker)] += 1
                 elif len(unknown) == 1:
                     shape = "BOTH_FIELDS_BLANK_ONE_HORSE"
                 elif len(unknown) <= 3:
@@ -297,6 +346,9 @@ def audit_nar_official_exceptions(
             complete_flat_outcome_interpretation=not unresolved,
             ambiguous_finish_pattern_counts=tuple(sorted(
                 ambiguous_finish_patterns.items()
+            )),
+            unrecognized_marker_profile_counts=tuple(sorted(
+                unrecognized_profiles.items()
             )),
         ),
         validated_races=tuple(accepted),
