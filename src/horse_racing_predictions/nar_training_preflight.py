@@ -12,6 +12,7 @@ cloud CI, bookmaker, note or model training.
 """
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -38,6 +39,7 @@ class NarMonthDiagnostic:
     status_aware_validated_flat_races: int = 0
     status_aware_unresolved_flat_races: int = 0
     status_aware_reasons: tuple[tuple[str, int], ...] = ()
+    ambiguous_finish_pattern_counts: tuple[tuple[str, int], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -58,6 +60,7 @@ class NarPreflightReport:
     status_aware_validated_flat_races: int = 0
     status_aware_unresolved_flat_races: int = 0
     months_status_aware_complete: int = 0
+    ambiguous_finish_pattern_counts: tuple[tuple[str, int], ...] = ()
     user_permission_attested: bool = True
     all_months_study_eligible: bool = False
     actual_rights_independently_verified: bool = False
@@ -82,6 +85,7 @@ def diagnose_nar_training_folder(
     detail: list[NarMonthDiagnostic] = []
     observed = accepted = banei = unresolved = complete = 0
     status_accepted = status_unresolved = status_complete = 0
+    ambiguous_patterns: Counter[str] = Counter()
     for source in inventory.absolute_source_paths:
         month = source.name[:6]
         try:
@@ -107,6 +111,12 @@ def diagnose_nar_training_folder(
                     or outcome.status_validated_flat_races <
                        coverage.structurally_accepted_races):
                 raise UnsafeNarSource("NAR_PREFLIGHT_PARALLEL_AUDIT_DISAGREEMENT")
+            if (sum(n for _, n in outcome.ambiguous_finish_pattern_counts)
+                    != dict(outcome.unresolved_reason_counts).get(
+                        "NAR_BLANK_WITHOUT_OFFICIAL_STATUS", 0
+                    )):
+                raise UnsafeNarSource("NAR_PREFLIGHT_AMBIGUOUS_SHAPE_COUNT_CONFLICT")
+            ambiguous_patterns.update(dict(outcome.ambiguous_finish_pattern_counts))
             reasons = coverage.exclusion_reasons
             is_valid = coverage.complete_month_for_research
             observed += coverage.observed_races
@@ -130,6 +140,9 @@ def diagnose_nar_training_folder(
                 status_aware_validated_flat_races=outcome.status_validated_flat_races,
                 status_aware_unresolved_flat_races=outcome.unresolved_flat_races,
                 status_aware_reasons=outcome.unresolved_reason_counts,
+                ambiguous_finish_pattern_counts=(
+                    outcome.ambiguous_finish_pattern_counts
+                ),
             ))
         except (UnsafeNarSource, OSError, RuntimeError, UnicodeError) as exc:
             # Never print Python tracebacks and never reflect arbitrary
@@ -165,5 +178,8 @@ def diagnose_nar_training_folder(
         status_aware_validated_flat_races=status_accepted,
         status_aware_unresolved_flat_races=status_unresolved,
         months_status_aware_complete=status_complete,
+        ambiguous_finish_pattern_counts=tuple(sorted(
+            ambiguous_patterns.items()
+        )),
         all_months_study_eligible=False,  # source rights/timing never certified
     )
