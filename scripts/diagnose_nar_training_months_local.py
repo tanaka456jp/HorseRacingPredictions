@@ -59,6 +59,16 @@ def main() -> int:
         "statusAwareUnresolvedFlatRaces": result.status_aware_unresolved_flat_races,
         "monthsStatusAwareComplete": result.months_status_aware_complete,
         "unrecognizedMarkerProfiles": dict(result.unrecognized_marker_profile_counts),
+        "unknownMarkerRankCellPresence": dict(result.unknown_marker_rank_evidence),
+        "unknownMarkerOfficialWinPaybackPresence": dict(
+            result.unknown_marker_win_payout_evidence
+        ),
+        "unknownMarkerDistinctValuesSummedAcrossMonths": (
+            result.unknown_marker_monthly_distinct_sum
+        ),
+        "unknownMarkerLargestSingleValueFrequencyWithinAnyMonth": (
+            result.unknown_marker_max_monthly_single_value_frequency
+        ),
         "anomalyTriage": ({
             "schema": "NAR.HistoricalAnomalyTriage.v1",
             "status": triage.status,
