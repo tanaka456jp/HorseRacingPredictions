@@ -40,6 +40,7 @@ class NarMonthDiagnostic:
     status_aware_unresolved_flat_races: int = 0
     status_aware_reasons: tuple[tuple[str, int], ...] = ()
     ambiguous_finish_pattern_counts: tuple[tuple[str, int], ...] = ()
+    unrecognized_marker_profile_counts: tuple[tuple[str, int], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -86,6 +87,7 @@ def diagnose_nar_training_folder(
     observed = accepted = banei = unresolved = complete = 0
     status_accepted = status_unresolved = status_complete = 0
     ambiguous_patterns: Counter[str] = Counter()
+    unrecognized_profiles: Counter[str] = Counter()
     for source in inventory.absolute_source_paths:
         month = source.name[:6]
         try:
@@ -117,6 +119,7 @@ def diagnose_nar_training_folder(
                     )):
                 raise UnsafeNarSource("NAR_PREFLIGHT_AMBIGUOUS_SHAPE_COUNT_CONFLICT")
             ambiguous_patterns.update(dict(outcome.ambiguous_finish_pattern_counts))
+            unrecognized_profiles.update(dict(outcome.unrecognized_marker_profile_counts))
             reasons = coverage.exclusion_reasons
             is_valid = coverage.complete_month_for_research
             observed += coverage.observed_races
@@ -142,6 +145,9 @@ def diagnose_nar_training_folder(
                 status_aware_reasons=outcome.unresolved_reason_counts,
                 ambiguous_finish_pattern_counts=(
                     outcome.ambiguous_finish_pattern_counts
+                ),
+                unrecognized_marker_profile_counts=(
+                    outcome.unrecognized_marker_profile_counts
                 ),
             ))
         except (UnsafeNarSource, OSError, RuntimeError, UnicodeError) as exc:
@@ -180,6 +186,9 @@ def diagnose_nar_training_folder(
         months_status_aware_complete=status_complete,
         ambiguous_finish_pattern_counts=tuple(sorted(
             ambiguous_patterns.items()
+        )),
+        unrecognized_marker_profile_counts=tuple(sorted(
+            unrecognized_profiles.items()
         )),
         all_months_study_eligible=False,  # source rights/timing never certified
     )
