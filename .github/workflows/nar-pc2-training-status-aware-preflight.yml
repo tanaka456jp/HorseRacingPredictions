@@ -90,6 +90,10 @@ jobs:
             $categoryTotals = [ordered]@{}
             $blankShapeTotals = [ordered]@{}
             $textProfileTotals = [ordered]@{}
+            $rankPresenceTotals = [ordered]@{}
+            $winPayoutPresenceTotals = [ordered]@{}
+            $monthlyDistinctSum = 0
+            $maximumMonthFrequency = 0
             if ([int]$d.monthsPresent -eq 72 -and [int]$d.monthsMissing -eq 0) {
               $t = $d.anomalyTriage
               if ($null -eq $t -or
@@ -213,6 +217,37 @@ jobs:
                   $profileRows -gt 18 * [int]$d.statusAwareUnresolvedFlatRaces) {
                 throw 'NAR_PC2_TRIAGE_UNKNOWN_MARKER_PROFILE_COUNT_INVALID'
               }
+              $unknownRaces = [int]$blankShapeTotals.UNRECOGNIZED_NONEMPTY_STATUS_MARKER
+              $rankTotal = 0
+              foreach ($p in $d.unknownMarkerRankCellPresence.PSObject.Properties) {
+                if ($p.Name -cnotin @(
+                      'NO_NONEMPTY_FINAL_RANK_CELL','SOME_NONEMPTY_FINAL_RANK_CELL'
+                    ) -or [int]$p.Value -le 0) {
+                  throw 'NAR_PC2_UNKNOWN_RANK_CELL_EVIDENCE_UNSAFE'
+                }
+                $rankPresenceTotals[$p.Name] = [int]$p.Value
+                $rankTotal += [int]$p.Value
+              }
+              $paybackTotal = 0
+              foreach ($p in $d.unknownMarkerOfficialWinPaybackPresence.PSObject.Properties) {
+                if ($p.Name -cnotin @(
+                      'WIN_PAYBACK_FIELDS_PRESENT','WIN_PAYBACK_FIELDS_ABSENT'
+                    ) -or [int]$p.Value -le 0) {
+                  throw 'NAR_PC2_UNKNOWN_PAYOUT_EVIDENCE_UNSAFE'
+                }
+                $winPayoutPresenceTotals[$p.Name] = [int]$p.Value
+                $paybackTotal += [int]$p.Value
+              }
+              $monthlyDistinctSum = [int]$d.unknownMarkerDistinctValuesSummedAcrossMonths
+              $maximumMonthFrequency = [int]$d.unknownMarkerLargestSingleValueFrequencyWithinAnyMonth
+              if ($rankTotal -ne $unknownRaces -or
+                  $paybackTotal -ne $unknownRaces -or
+                  $monthlyDistinctSum -le 0 -or
+                  $monthlyDistinctSum -gt $profileRows -or
+                  $maximumMonthFrequency -le 0 -or
+                  $maximumMonthFrequency -gt $profileRows) {
+                throw 'NAR_PC2_UNKNOWN_RACE_EVIDENCE_TOTALS_INVALID'
+              }
             }
             # Output just a fixed allowlist, never the source ZIP names,
             # source paths, horse identities, race IDs or source text.
@@ -234,6 +269,10 @@ jobs:
               statusAwareUnresolvedByCategory = $categoryTotals
               ambiguousFinishShapes = $blankShapeTotals
               unknownMarginTextProfiles = $textProfileTotals
+              unknownRankCellPresence = $rankPresenceTotals
+              unknownWinPaybackPresence = $winPayoutPresenceTotals
+              unknownMarginDistinctValuesSummedAcrossMonths = $monthlyDistinctSum
+              unknownMarginLargestFrequencyWithinOneMonth = $maximumMonthFrequency
               licensedSourceBytesUploaded = $false
               preoffFeatureTimingProven = $false
               modelTrainingAuthorized = $false
