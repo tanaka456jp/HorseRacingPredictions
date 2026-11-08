@@ -257,3 +257,52 @@ def test_unsupported_margin_label_never_leaks_value_or_automatically_refunds(mar
     )
     assert not audit.economic_roi_authorized
     assert marker not in repr(audit)
+
+
+def test_unknown_margin_with_other_ranked_horses_and_valid_win_payback_remains_hold():
+    audit = audit_nar_official_exceptions(
+        _synthetic_with_status("未確定"), month="201711",
+    ).audit
+    assert audit.unresolved_flat_races == 1
+    assert audit.unknown_marker_rank_evidence == (
+        ("SOME_NONEMPTY_FINAL_RANK_CELL", 1),
+    )
+    assert audit.unknown_marker_win_payout_evidence == (
+        ("WIN_PAYBACK_FIELDS_PRESENT", 1),
+    )
+    assert audit.unrecognized_marker_profile_counts == (
+        ("UNRECOGNIZED_TEXT_3_TO_5_CHARS", 1),
+    )
+    assert audit.unknown_marker_distinct_text_values_in_month == 1
+    assert audit.unknown_marker_largest_single_value_frequency_in_month == 1
+    assert not audit.economic_roi_authorized
+
+
+def test_entire_eight_runner_race_without_finish_ranks_or_win_payout_is_not_imputed():
+    # Same entirely fictional pending-result placeholder in every row.
+    data = _fixture(starters=8, month="201711", with_header=True)
+    horses = list(csv.reader(StringIO(data["horselist"])))
+    for horse in horses[1:]:
+        horse[31] = ""
+        horse[33] = "未確定"
+    data["horselist"] = _dump(horses)
+    pay = list(csv.reader(StringIO(data["payback"])))
+    pay[1][4] = ""
+    pay[1][5] = ""
+    data["payback"] = _dump(pay)
+    audit = audit_nar_official_exceptions(data, month="201711").audit
+    assert audit.unresolved_flat_races == 1
+    assert audit.unknown_marker_rank_evidence == (
+        ("NO_NONEMPTY_FINAL_RANK_CELL", 1),
+    )
+    assert audit.unknown_marker_win_payout_evidence == (
+        ("WIN_PAYBACK_FIELDS_ABSENT", 1),
+    )
+    assert audit.unrecognized_marker_profile_counts == (
+        ("UNRECOGNIZED_TEXT_3_TO_5_CHARS", 8),
+    )
+    assert audit.unknown_marker_distinct_text_values_in_month == 1
+    assert audit.unknown_marker_largest_single_value_frequency_in_month == 8
+    assert not audit.complete_flat_outcome_interpretation
+    assert not audit.training_authorized
+    assert not audit.economic_roi_authorized
