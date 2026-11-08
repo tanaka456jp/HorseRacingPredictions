@@ -58,6 +58,7 @@ def main() -> int:
         "statusAwareValidatedFlatRaces": result.status_aware_validated_flat_races,
         "statusAwareUnresolvedFlatRaces": result.status_aware_unresolved_flat_races,
         "monthsStatusAwareComplete": result.months_status_aware_complete,
+        "unrecognizedMarkerProfiles": dict(result.unrecognized_marker_profile_counts),
         "anomalyTriage": ({
             "schema": "NAR.HistoricalAnomalyTriage.v1",
             "status": triage.status,
