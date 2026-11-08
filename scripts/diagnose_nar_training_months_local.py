@@ -77,6 +77,7 @@ def main() -> int:
             ],
             "byReason": dict(triage.by_reason),
             "byCategory": dict(triage.by_category),
+            "ambiguousFinishShapes": dict(triage.ambiguous_finish_shapes),
             "sourceRecordsExported": False,
             "individualRaceIdsExported": False,
             "trainingRowsReleased": 0,
