@@ -6,6 +6,8 @@ on:
     paths:
       - ".github/workflows/nar-pc2-training-status-aware-preflight.yml"
       - "src/horse_racing_predictions/nar_training_preflight.py"
+      - "src/horse_racing_predictions/nar_historical_anomaly_triage.py"
+      - "tests/test_nar_historical_anomaly_triage.py"
       - "scripts/diagnose_nar_training_months_local.py"
       - "tests/test_nar_training_preflight.py"
   workflow_dispatch:
@@ -81,8 +83,150 @@ jobs:
                 $d.publicPostingAuthorized -ne $false) {
               throw 'NAR_PRIVATE_STATUS_PREFLIGHT_COUNT_CONTRACT_INVALID'
             }
-            # Output just a fixed allowlist, never the source ZIP names,
-            # source paths, horse identities, race IDs or source text.
+            # A complete 72-month audit must report six annual buckets
+            # and two exactly reconciled reason/category taxonomies.
+            # Malformed or unapproved free-text labels never reach logs.
+            $byYear = @()
+            $reasonTotals = [ordered]@{}
+            $categoryTotals = [ordered]@{}
+            if ([int]$d.monthsPresent -eq 72 -and [int]$d.monthsMissing -eq 0) {
+              $triage = $d.anomalyTriage
+              if ($null -eq $triage -or
+                  $triage.schema -cne 'NAR.HistoricalAnomalyTriage.v1' -or
+                  [int]$triage.fullPeriodFlatRaceDenominator -ne (
+                    [int]$d.observedRaces - [int]$d.predeclaredBaneiOutOfScopeRaces
+                  ) -or
+                  [int]$triage.strictUnresolvedFlat -ne [int]$d.unresolvedFlatRaces -or
+                  [int]$triage.statusAwareUnresolvedFlat -ne [int]$d.statusAwareUnresolvedFlatRaces -or
+                  [int]$triage.newlyInterpretedFlat -ne (
+                    [int]$d.unresolvedFlatRaces - [int]$d.statusAwareUnresolvedFlatRaces
+                  ) -or
+                  $triage.sourceRecordsExported -ne $false -or
+                  $triage.individualRaceIdsExported -ne $false -or
+                  [int]$triage.trainingRowsReleased -ne 0 -or
+                  $triage.positiveEvDemonstrated -ne $false -or
+                  @($triage.byYear).Count -ne 6) {
+                throw 'NAR_PRIVATE_TRIAGE_PROVENANCE_CONTRACT_INVALID'
+              }
+              $sumFlat = 0
+              $sumStrict = 0
+              $sumStatus = 0
+              $sumValid = 0
+              $sumCompleted = 0
+              $years = @($triage.byYear)
+              for ($i = 0; $i -lt 6; $i++) {
+                $y = $years[$i]
+                if ([int]$y.year -ne (2017 + $i) -or
+                    [int]$y.months -ne 12 -or
+                    [int]$y.flat -le 0 -or
+                    [int]$y.statusReconciled + [int]$y.statusUnresolved -ne [int]$y.flat -or
+                    [int]$y.statusCompleteMonths -gt 12 -or
+                    [int]$y.statusUnresolved -gt [int]$y.strictUnresolved) {
+                  throw 'NAR_PRIVATE_TRIAGE_ANNUAL_DENOMINATOR_INVALID'
+                }
+                $sumFlat += [int]$y.flat
+                $sumStrict += [int]$y.strictUnresolved
+                $sumStatus += [int]$y.statusUnresolved
+                $sumValid += [int]$y.statusReconciled
+                $sumCompleted += [int]$y.statusCompleteMonths
+                $byYear += [ordered]@{
+                  year = [int]$y.year
+                  flatRaces = [int]$y.flat
+                  strictUnresolved = [int]$y.strictUnresolved
+                  statusUnresolved = [int]$y.statusUnresolved
+                  statusValidated = [int]$y.statusReconciled
+                  statusCompleteMonths = [int]$y.statusCompleteMonths
+                }
+              }
+              if ($sumFlat -ne [int]$triage.fullPeriodFlatRaceDenominator -or
+                  $sumStrict -ne [int]$d.unresolvedFlatRaces -or
+                  $sumStatus -ne [int]$d.statusAwareUnresolvedFlatRaces -or
+                  $sumValid -ne [int]$d.statusAwareValidatedFlatRaces -or
+                  $sumCompleted -ne [int]$d.monthsStatusAwareComplete) {
+                throw 'NAR_PRIVATE_TRIAGE_ALL_YEAR_TOTALS_CONFLICT'
+              }
+              $reasonSum = 0
+              foreach ($p in $triage.byReason.PSObject.Properties) {
+                if ($p.Name -cnotmatch '^NAR_[A-Z0-9_]{1,96}
+              schema = 'NAR.PC2.PrivateTrainingDualStatusAggregate.v1'
+              status = 'PRIVATE_POSTEVENT_DIAGNOSTIC_ONLY'
+              monthsPresent = [int]$d.monthsPresent
+              monthsMissing = [int]$d.monthsMissing
+              monthsWithUnresolvedErrors = [int]$d.monthsRequiringReview
+              strictAcceptedFlat = [int]$d.acceptedFlatRaces
+              strictUnresolvedFlat = [int]$d.unresolvedFlatRaces
+              officialStatusValidatedFlat = [int]$d.statusAwareValidatedFlatRaces
+              officialStatusUnresolvedFlat = [int]$d.statusAwareUnresolvedFlatRaces
+              officialStatusCompleteMonths = [int]$d.monthsStatusAwareComplete
+              predeclaredOutOfScope = [int]$d.predeclaredBaneiOutOfScopeRaces
+              observedRaces = [int]$d.observedRaces
+              statusAwareUnresolvedByYear = $byYear
+              statusAwareUnresolvedByReason = $reasonTotals
+              statusAwareUnresolvedByCategory = $categoryTotals
+              licensedSourceBytesUploaded = $false
+              preoffFeatureTimingProven = $false
+              modelTrainingAuthorized = $false
+              realizedRoiComputed = $false
+              independentOosOpened = $false
+              positiveExpectedValueDemonstrated = $false
+            } | ConvertTo-Json -Compress
+            # The Python CLI returns exit 3 by design when months are absent.
+            # The metadata/HOLD audit itself PASSED; normalize shell status.
+            exit 0
+          } catch {
+            Write-Host 'NAR_PRIVATE_STATUS_PREFLIGHT_AGGREGATE_BLOCKED'
+            exit 2
+          }
+ -or
+                    [int]$p.Value -le 0) {
+                  throw 'NAR_PRIVATE_TRIAGE_REASON_UNSAFE'
+                }
+                $reasonTotals[$p.Name] = [int]$p.Value
+                $reasonSum += [int]$p.Value
+              }
+              $categorySum = 0
+              foreach ($p in $triage.byCategory.PSObject.Properties) {
+                if ($p.Name -cnotmatch '^[A-Z_]{4,50}
+              schema = 'NAR.PC2.PrivateTrainingDualStatusAggregate.v1'
+              status = 'PRIVATE_POSTEVENT_DIAGNOSTIC_ONLY'
+              monthsPresent = [int]$d.monthsPresent
+              monthsMissing = [int]$d.monthsMissing
+              monthsWithUnresolvedErrors = [int]$d.monthsRequiringReview
+              strictAcceptedFlat = [int]$d.acceptedFlatRaces
+              strictUnresolvedFlat = [int]$d.unresolvedFlatRaces
+              officialStatusValidatedFlat = [int]$d.statusAwareValidatedFlatRaces
+              officialStatusUnresolvedFlat = [int]$d.statusAwareUnresolvedFlatRaces
+              officialStatusCompleteMonths = [int]$d.monthsStatusAwareComplete
+              predeclaredOutOfScope = [int]$d.predeclaredBaneiOutOfScopeRaces
+              observedRaces = [int]$d.observedRaces
+              licensedSourceBytesUploaded = $false
+              preoffFeatureTimingProven = $false
+              modelTrainingAuthorized = $false
+              realizedRoiComputed = $false
+              independentOosOpened = $false
+              positiveExpectedValueDemonstrated = $false
+            } | ConvertTo-Json -Compress
+            # The Python CLI returns exit 3 by design when months are absent.
+            # The metadata/HOLD audit itself PASSED; normalize shell status.
+            exit 0
+          } catch {
+            Write-Host 'NAR_PRIVATE_STATUS_PREFLIGHT_AGGREGATE_BLOCKED'
+            exit 2
+          }
+ -or
+                    [int]$p.Value -le 0) {
+                  throw 'NAR_PRIVATE_TRIAGE_CATEGORY_UNSAFE'
+                }
+                $categoryTotals[$p.Name] = [int]$p.Value
+                $categorySum += [int]$p.Value
+              }
+              if ($reasonSum -ne [int]$d.statusAwareUnresolvedFlatRaces -or
+                  $categorySum -ne [int]$d.statusAwareUnresolvedFlatRaces) {
+                throw 'NAR_PRIVATE_TRIAGE_REASON_SUM_MISMATCH'
+              }
+            }
+            # Output only static error codes and aggregate years.
+            # Never copy per-month private events or source identities.
             [ordered]@{
               schema = 'NAR.PC2.PrivateTrainingDualStatusAggregate.v1'
               status = 'PRIVATE_POSTEVENT_DIAGNOSTIC_ONLY'
