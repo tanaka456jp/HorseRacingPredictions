@@ -41,6 +41,10 @@ class NarMonthDiagnostic:
     status_aware_reasons: tuple[tuple[str, int], ...] = ()
     ambiguous_finish_pattern_counts: tuple[tuple[str, int], ...] = ()
     unrecognized_marker_profile_counts: tuple[tuple[str, int], ...] = ()
+    unknown_marker_rank_evidence: tuple[tuple[str, int], ...] = ()
+    unknown_marker_win_payout_evidence: tuple[tuple[str, int], ...] = ()
+    unknown_marker_monthly_distinct_sum: int = 0
+    unknown_marker_max_monthly_single_value_frequency: int = 0
 
 
 @dataclass(frozen=True)
@@ -63,6 +67,10 @@ class NarPreflightReport:
     months_status_aware_complete: int = 0
     ambiguous_finish_pattern_counts: tuple[tuple[str, int], ...] = ()
     unrecognized_marker_profile_counts: tuple[tuple[str, int], ...] = ()
+    unknown_marker_rank_evidence: tuple[tuple[str, int], ...] = ()
+    unknown_marker_win_payout_evidence: tuple[tuple[str, int], ...] = ()
+    unknown_marker_monthly_distinct_sum: int = 0
+    unknown_marker_max_monthly_single_value_frequency: int = 0
     user_permission_attested: bool = True
     all_months_study_eligible: bool = False
     actual_rights_independently_verified: bool = False
@@ -89,6 +97,10 @@ def diagnose_nar_training_folder(
     status_accepted = status_unresolved = status_complete = 0
     ambiguous_patterns: Counter[str] = Counter()
     unrecognized_profiles: Counter[str] = Counter()
+    unknown_rank_evidence: Counter[str] = Counter()
+    unknown_win_evidence: Counter[str] = Counter()
+    unknown_distinct_monthly_sum = 0
+    unknown_max_monthly_frequency = 0
     for source in inventory.absolute_source_paths:
         month = source.name[:6]
         try:
@@ -121,6 +133,22 @@ def diagnose_nar_training_folder(
                 raise UnsafeNarSource("NAR_PREFLIGHT_AMBIGUOUS_SHAPE_COUNT_CONFLICT")
             ambiguous_patterns.update(dict(outcome.ambiguous_finish_pattern_counts))
             unrecognized_profiles.update(dict(outcome.unrecognized_marker_profile_counts))
+            n_nonempty = dict(outcome.ambiguous_finish_pattern_counts).get(
+                "UNRECOGNIZED_NONEMPTY_STATUS_MARKER", 0
+            )
+            if (sum(n for _, n in outcome.unknown_marker_rank_evidence) != n_nonempty
+                    or sum(n for _, n in outcome.unknown_marker_win_payout_evidence)
+                       != n_nonempty):
+                raise UnsafeNarSource("NAR_PREFLIGHT_UNKNOWN_MARKER_EVIDENCE_CONFLICT")
+            unknown_rank_evidence.update(dict(outcome.unknown_marker_rank_evidence))
+            unknown_win_evidence.update(dict(outcome.unknown_marker_win_payout_evidence))
+            unknown_distinct_monthly_sum += (
+                outcome.unknown_marker_distinct_text_values_in_month
+            )
+            unknown_max_monthly_frequency = max(
+                unknown_max_monthly_frequency,
+                outcome.unknown_marker_largest_single_value_frequency_in_month,
+            )
             reasons = coverage.exclusion_reasons
             is_valid = coverage.complete_month_for_research
             observed += coverage.observed_races
@@ -149,6 +177,16 @@ def diagnose_nar_training_folder(
                 ),
                 unrecognized_marker_profile_counts=(
                     outcome.unrecognized_marker_profile_counts
+                ),
+                unknown_marker_rank_evidence=outcome.unknown_marker_rank_evidence,
+                unknown_marker_win_payout_evidence=(
+                    outcome.unknown_marker_win_payout_evidence
+                ),
+                unknown_marker_monthly_distinct_sum=(
+                    outcome.unknown_marker_distinct_text_values_in_month
+                ),
+                unknown_marker_max_monthly_single_value_frequency=(
+                    outcome.unknown_marker_largest_single_value_frequency_in_month
                 ),
             ))
         except (UnsafeNarSource, OSError, RuntimeError, UnicodeError) as exc:
@@ -191,5 +229,13 @@ def diagnose_nar_training_folder(
         unrecognized_marker_profile_counts=tuple(sorted(
             unrecognized_profiles.items()
         )),
+        unknown_marker_rank_evidence=tuple(sorted(unknown_rank_evidence.items())),
+        unknown_marker_win_payout_evidence=tuple(sorted(
+            unknown_win_evidence.items()
+        )),
+        unknown_marker_monthly_distinct_sum=unknown_distinct_monthly_sum,
+        unknown_marker_max_monthly_single_value_frequency=(
+            unknown_max_monthly_frequency
+        ),
         all_months_study_eligible=False,  # source rights/timing never certified
     )
