@@ -209,7 +209,7 @@ def capture_once(*, directory: Path, now_utc: datetime) -> NarPreoffDailyAudit:
         source = original.read_bytes()
         saved_salt = bytes.fromhex(metadata["salt_hex_PRIVATE"])
         calculated = sha256(
-            b"NAR_OFFICIAL_DAILY_RACE_V1\\x00" + saved_salt + source
+            b"NAR_OFFICIAL_DAILY_RACE_V1" + bytes([0]) + saved_salt + source
         ).hexdigest()
         if (metadata.get("schema") != "NAR.OfficialDailyPreoffCapture.v1"
                 or metadata.get("source") != _OFFICIAL_RACE
