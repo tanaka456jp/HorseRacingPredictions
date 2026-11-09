@@ -192,3 +192,41 @@ def test_single_month_first_day_has_no_prior_day_history_and_no_ev_evidence():
     assert not a.usable_for_training
     assert not a.positive_expected_value_demonstrated
 
+
+
+def test_exploratory_partial_training_sample_requires_explicit_isolated_optin():
+    good = _fixture(month="201711", with_header=True)
+    bad = _fixture(month="201711", with_header=True)
+    both = _merge_days(good, bad)
+    pay = list(csv.reader(StringIO(both["payback"])))
+    pay[2][4] = "3"
+    out = StringIO(newline="")
+    csv.writer(out).writerows(pay)
+    both["payback"] = out.getvalue()
+    month = _month(both)
+
+    with pytest.raises(UnsafeNarSource, match="NAR_ASOF_DIAGNOSTIC_MODE_INVALID"):
+        reconstruct_nar_status_aware_prior_day(
+            [month], allow_explicit_exploratory_sample=True,
+        )
+    exploratory = reconstruct_nar_status_aware_prior_day(
+        [month], allow_incomplete_diagnostic=True,
+        allow_explicit_exploratory_sample=True,
+    )
+    assert exploratory.audit.source_flat_races == 2
+    assert exploratory.audit.validated_flat_races == 1
+    assert exploratory.audit.unresolved_flat_races == 1
+    assert len(exploratory.targets) == 8
+    assert not exploratory.audit.usable_for_training
+    assert not exploratory.audit.independently_captured_preoff_roster
+    assert not exploratory.audit.positive_expected_value_demonstrated
+    assert not exploratory.audit.source_rows_exported
+
+
+def test_7_runner_third_place_is_top3_label_even_without_place_payout():
+    one = _fixture(month="201711", starters=7, with_header=True)
+    batch = reconstruct_nar_status_aware_prior_day([_month(one)])
+    third = next(t for t in batch.targets if t.horse_number == 3)
+    assert third.target_top3 == 1
+    assert third.target_place == 0
+    assert third.target_win == 0
