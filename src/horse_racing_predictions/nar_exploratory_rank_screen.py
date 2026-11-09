@@ -36,6 +36,11 @@ class NarExploratoryRankingMetrics:
     tune_horses: int
     winner_top1_hit_rate_2022: float
     random_baseline_top1_expected_2022: float
+    smoothed_prior_win_baseline_top1_2022: float
+    top1_uplift_over_simple_form_2022: float
+    top1_uplift_day_bootstrap_ci95_lower: float
+    top1_uplift_day_bootstrap_ci95_upper: float
+    independent_2022_race_days: int
     winner_top1_worst_case_all_flat_2022: float
     winner_top1_best_case_all_flat_2022: float
     top3_picks_podium_precision_2022: float
@@ -168,12 +173,18 @@ def explore_nar_2017_2022_ranking_signal(
             or not np.isfinite(win.to_numpy(dtype=float)).all()
             or not np.isfinite(out.to_numpy(dtype=float)).all()):
         raise UnsafeNarSource("NAR_EXPLORATORY_SCORE_NOT_FINITE")
-    scored = no_label_features[["race_id", "horse_number"]].copy()
+    scored = no_label_features[["race_id", "horse_number", "past_starts",
+                                "past_win_rate"]].copy()
+    scored["race_day"] = tune["race_day"]
     scored["win_prediction"] = win
     scored["outsider_prediction"] = out
     labels = tune.set_index(["race_id", "horse_number"])[["__win", "__podium"]]
-    wins = overlap = outsiders = 0
+    wins = overlap = outsiders = simple_wins = 0
     random_expected = 0.0
+    # Race days, not horses or individual races, are sampled in CI.
+    # Purely descriptive post-hoc 2022 tuning uncertainty; not an
+    # independent holdout significance test.
+    race_day_paired_hits: dict[date, list[tuple[int, int]]] = {}
     for rid, g in scored.groupby("race_id", sort=False):
         g = g.sort_values(
             ["win_prediction", "horse_number"],
@@ -181,7 +192,23 @@ def explore_nar_2017_2022_ranking_signal(
         )
         top = g.horse_number.head(3).tolist()
         actual = labels.loc[rid]
-        wins += int(actual.loc[top[0], "__win"] == 1)
+        model_hit = int(actual.loc[top[0], "__win"] == 1)
+        wins += model_hit
+        # Explicit simple, odds-free comparator using strictly prior-day
+        # form only: Beta-smoothed past win fraction (wins+1)/(starts+10).
+        # No label, popularity or current result enters the choice.
+        simple = g.copy()
+        simple["smoothed_form"] = (
+            simple["past_win_rate"] * simple["past_starts"] + 1.0
+        ) / (simple["past_starts"] + 10.0)
+        simple = simple.sort_values(
+            ["smoothed_form", "horse_number"],
+            ascending=[False, True], kind="stable",
+        )
+        simple_hit = int(actual.loc[int(simple.horse_number.iloc[0]), "__win"] == 1)
+        simple_wins += simple_hit
+        day = g["race_day"].iloc[0]
+        race_day_paired_hits.setdefault(day, []).append((model_hit, simple_hit))
         overlap += sum(int(actual.loc[h, "__podium"] == 1) for h in top)
         random_expected += float(actual["__win"].sum()) / len(g)
         other = g.loc[~g.horse_number.isin(top)].sort_values(
@@ -199,12 +226,34 @@ def explore_nar_2017_2022_ranking_signal(
     if (unevaluable < 0 or n_fit > sum(flat_races_by_year[y] for y in range(2017, 2022))
             or n_fit + n_tune > batch.audit.validated_flat_races):
         raise UnsafeNarSource("NAR_EXPLORATORY_DENOMINATOR_LEAK_OR_SELECTION")
+    if sum(map(len, race_day_paired_hits.values())) != n_tune:
+        raise UnsafeNarSource("NAR_EXPLORATORY_DAY_BOOTSTRAP_DENOMINATOR_INVALID")
+    days = sorted(race_day_paired_hits)
+    day_arrays = np.asarray([
+        (len(race_day_paired_hits[d]),
+         sum(a for a, _ in race_day_paired_hits[d]),
+         sum(b for _, b in race_day_paired_hits[d]))
+        for d in days
+    ], dtype=np.float64)
+    if not len(days) or not np.isfinite(day_arrays).all():
+        raise UnsafeNarSource("NAR_EXPLORATORY_DAY_BOOTSTRAP_INVALID")
+    # Fixed-seed, paired whole-day resampling. Confidence intervals from
+    # the *tuning set* are descriptive only and must not be sold as OOS.
+    rng = np.random.default_rng(20261109)
+    draw = rng.integers(0, len(days), size=(1000, len(days)))
+    boot = day_arrays[draw].sum(axis=1)
+    paired_uplift = (boot[:, 1] - boot[:, 2]) / boot[:, 0]
+    ci_low, ci_high = (float(x) for x in np.quantile(
+        paired_uplift, [0.025, 0.975]
+    ))
     nums = (
         wins / n_tune, random_expected / n_tune, wins / total2022,
         (wins + unevaluable) / total2022, overlap / (3 * n_tune),
         outsiders / n_tune,
     )
-    if not all(isfinite(x) and 0 <= x <= 1 for x in nums):
+    if (not all(isfinite(x) and 0 <= x <= 1 for x in nums)
+            or not all(isfinite(x) for x in (ci_low, ci_high))
+            or ci_low > ci_high):
         raise UnsafeNarSource("NAR_EXPLORATORY_NONFINITE_METRIC")
 
     return NarExploratoryRankingMetrics(
@@ -217,6 +266,11 @@ def explore_nar_2017_2022_ranking_signal(
         fit_horses=len(fit), tune_horses=len(tune),
         winner_top1_hit_rate_2022=nums[0],
         random_baseline_top1_expected_2022=nums[1],
+        smoothed_prior_win_baseline_top1_2022=simple_wins / n_tune,
+        top1_uplift_over_simple_form_2022=(wins-simple_wins)/n_tune,
+        top1_uplift_day_bootstrap_ci95_lower=ci_low,
+        top1_uplift_day_bootstrap_ci95_upper=ci_high,
+        independent_2022_race_days=len(days),
         winner_top1_worst_case_all_flat_2022=nums[2],
         winner_top1_best_case_all_flat_2022=nums[3],
         top3_picks_podium_precision_2022=nums[4],
