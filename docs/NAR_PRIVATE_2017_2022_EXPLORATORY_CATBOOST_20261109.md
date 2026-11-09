@@ -169,3 +169,26 @@ EV or live staking. Do not retune the same 2022 sample until it looks
 profitable; that would intensify selection bias. Future analysis must
 prioritize independent advance forecasts and contemporaneous lawful odds,
 while leaving 2023–24 OOS and 2025–26 final holdout sealed.
+
+
+## Research go/no-go gate for the tested 2022 unconditional strategy
+
+The evaluation now explicitly classifies the fixed win-plus-place strategy
+as `REJECT_UNCONDITIONAL_2022_POLICY` only when the retrospective ROI is
+negative **and** the 2022 descriptive whole-day bootstrap upper limit
+is below zero. Otherwise it returns
+`RETROSPECTIVE_INCONCLUSIVE_NO_POSITIVE_EV_PROOF`; neither outcome
+certifies future expected value, nor changes production permissions.
+The pre-existing 2022 source and scenario are not reselected.
+The zero-fee combined policy's measured shortfall to break even is
+**654,220 yen** over 13,402 evaluable races; equivalently the observed
+combined payout would need a substantial uplift just to reach zero
+before any extra operating costs. The workflow asserts the known
+source-derived 2022 figures as regression controls and prints only
+summary decision metrics.
+
+**Continuing to tweak 2022 post-hoc until it becomes profitable is
+not authorized as independent evidence.** Prioritize prospective,
+independently timestamped legitimate pre-off runner/odds inputs and
+predeclared, no-cherry-pick paper-settlement measurement before
+opening any separately protected OOS or deploying funds.

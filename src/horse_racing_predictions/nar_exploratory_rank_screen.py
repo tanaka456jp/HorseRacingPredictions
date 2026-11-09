@@ -54,6 +54,11 @@ class NarExploratoryRankingMetrics:
     hypothetical_two_ticket_all_flat_adverse_missing_roi_2022: float | None = None
     hypothetical_two_ticket_day_ci95_lower: float | None = None
     hypothetical_two_ticket_day_ci95_upper: float | None = None
+    hypothetical_two_ticket_stake_yen_2022: int | None = None
+    hypothetical_two_ticket_paid_yen_2022: int | None = None
+    hypothetical_two_ticket_break_even_shortfall_yen_2022: int | None = None
+    hypothetical_two_ticket_gross_uplift_needed_2022: float | None = None
+    two_ticket_2022_research_decision: str = "NO_OFFICIAL_PAYOUT_EVALUATION"
     hypothetical_model_win_gross_yen_2022: int | None = None
     hypothetical_simple_form_win_gross_yen_2022: int | None = None
     hypothetical_model_win_roi_2022: float | None = None
@@ -110,6 +115,20 @@ def _row(target: Any) -> dict[str, Any]:
         "__podium": target.target_top3,
         "__place": target.target_place,  # Actual paid place != numeric top-three.
     }
+
+
+def _retrospective_two_ticket_decision(roi: float, descriptive_upper: float) -> str:
+    """Decision about the tested 2022 policy, never prospective EV.
+
+    On the 2022 selection sample, a negative day-bootstrap upper bound
+    means the unconditional policy is unsuitable for deployment.
+    The other branches are still insufficient to establish true EV.
+    """
+    if not isfinite(roi) or not isfinite(descriptive_upper):
+        raise UnsafeNarSource("NAR_EXPLORATORY_DECISION_NONFINITE")
+    if roi < 0 and descriptive_upper < 0:
+        return "REJECT_UNCONDITIONAL_2022_POLICY"
+    return "RETROSPECTIVE_INCONCLUSIVE_NO_POSITIVE_EV_PROOF"
 
 
 def explore_nar_2017_2022_ranking_signal(
@@ -376,7 +395,19 @@ def explore_nar_2017_2022_ranking_signal(
             combo_roi, adverse_combo, place_roi, combo_low, combo_high
         )) or combo_low > combo_high or adverse_combo > combo_roi):
             raise UnsafeNarSource("NAR_EXPLORATORY_TWO_TICKET_METRICS_INVALID")
+        combined_stake = 200 * n_tune
+        combined_paid = gross_model_win + gross_outsider_place
+        shortfall = max(0, combined_stake - combined_paid)
+        needed = (combined_stake / combined_paid - 1.0
+                  if combined_paid > 0 else None)
         economic.update(
+            hypothetical_two_ticket_stake_yen_2022=combined_stake,
+            hypothetical_two_ticket_paid_yen_2022=combined_paid,
+            hypothetical_two_ticket_break_even_shortfall_yen_2022=shortfall,
+            hypothetical_two_ticket_gross_uplift_needed_2022=needed,
+            two_ticket_2022_research_decision=_retrospective_two_ticket_decision(
+                combo_roi, combo_high,
+            ),
             hypothetical_outsider_place_gross_yen_2022=gross_outsider_place,
             hypothetical_outsider_place_roi_2022=place_roi,
             hypothetical_two_ticket_roi_2022=combo_roi,

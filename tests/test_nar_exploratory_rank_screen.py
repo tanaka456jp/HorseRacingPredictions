@@ -282,3 +282,47 @@ def test_fictional_seven_runner_third_place_is_not_paid():
             official_win_payouts_2022=_fictional_2022_official_win_returns(batch),
             official_place_payouts_2022=places,
         )
+
+
+def test_2022_unconditional_policy_gate_does_not_claim_future_ev():
+    from horse_racing_predictions.nar_exploratory_rank_screen import (
+        _retrospective_two_ticket_decision,
+    )
+    assert _retrospective_two_ticket_decision(
+        -0.244, -0.221
+    ) == "REJECT_UNCONDITIONAL_2022_POLICY"
+    assert _retrospective_two_ticket_decision(
+        -0.01, 0.01
+    ) == "RETROSPECTIVE_INCONCLUSIVE_NO_POSITIVE_EV_PROOF"
+    assert _retrospective_two_ticket_decision(
+        0.20, 0.30
+    ) == "RETROSPECTIVE_INCONCLUSIVE_NO_POSITIVE_EV_PROOF"
+    with pytest.raises(UnsafeNarSource, match="NAR_EXPLORATORY_DECISION_NONFINITE"):
+        _retrospective_two_ticket_decision(float("nan"), 0.0)
+    with pytest.raises(UnsafeNarSource, match="NAR_EXPLORATORY_DECISION_NONFINITE"):
+        _retrospective_two_ticket_decision(0.0, float("inf"))
+
+
+def test_fictional_two_ticket_break_even_gap_invariants():
+    pytest.importorskip("catboost")
+    batch, years = fictional_batch()
+    m = explore_nar_2017_2022_ranking_signal(
+        batch, flat_races_by_year=years, iterations=30,
+        official_win_payouts_2022=_fictional_2022_official_win_returns(batch),
+        official_place_payouts_2022=_fictional_2022_official_place_returns(batch),
+    )
+    assert m.hypothetical_two_ticket_stake_yen_2022 == 600
+    assert m.hypothetical_two_ticket_paid_yen_2022 == (
+        m.hypothetical_model_win_gross_yen_2022
+        + m.hypothetical_outsider_place_gross_yen_2022
+    )
+    assert m.hypothetical_two_ticket_break_even_shortfall_yen_2022 == max(
+        0, m.hypothetical_two_ticket_stake_yen_2022
+        - m.hypothetical_two_ticket_paid_yen_2022
+    )
+    if m.hypothetical_two_ticket_paid_yen_2022:
+        assert m.hypothetical_two_ticket_gross_uplift_needed_2022 == (
+            m.hypothetical_two_ticket_stake_yen_2022
+            / m.hypothetical_two_ticket_paid_yen_2022 - 1
+        )
+    assert not m.positive_expected_value_demonstrated
