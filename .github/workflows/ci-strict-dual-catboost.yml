@@ -18,6 +18,8 @@ on:
       - "src/horse_racing_predictions/nar_local_screening.py"
       - "scripts/screen_nar_local_2017_2022.py"
       - "tests/test_nar_local_screening.py"
+      - "src/horse_racing_predictions/nar_exploratory_rank_screen.py"
+      - "tests/test_nar_exploratory_rank_screen.py"
       - "src/horse_racing_predictions/nar_private_manifest_inventory.py"
       - "scripts/train_strict_dual_pre2025_local.py"
       - ".github/workflows/ci-strict-dual-catboost.yml"
@@ -38,6 +40,8 @@ on:
       - "src/horse_racing_predictions/nar_local_screening.py"
       - "scripts/screen_nar_local_2017_2022.py"
       - "tests/test_nar_local_screening.py"
+      - "src/horse_racing_predictions/nar_exploratory_rank_screen.py"
+      - "tests/test_nar_exploratory_rank_screen.py"
       - "src/horse_racing_predictions/nar_private_manifest_inventory.py"
       - "scripts/train_strict_dual_pre2025_local.py"
       - ".github/workflows/ci-strict-dual-catboost.yml"
@@ -68,4 +72,4 @@ jobs:
           python -m pip install --disable-pip-version-check -e ".[dev,research]"
       - name: Actually train and freeze independent CatBoost models on fictional pre-2025 races
         run: |
-          pytest -q tests/test_strict_dual_catboost_candidate.py tests/test_dual_candidate_private_preview.py tests/test_friday_predraw_dual_preview.py tests/test_friday_feature_projection.py tests/test_nar_private_catboost_screening.py tests/test_nar_local_screening.py -rs
+          pytest -q tests/test_strict_dual_catboost_candidate.py tests/test_dual_candidate_private_preview.py tests/test_friday_predraw_dual_preview.py tests/test_friday_feature_projection.py tests/test_nar_private_catboost_screening.py tests/test_nar_local_screening.py tests/test_nar_exploratory_rank_screen.py -rs
