@@ -146,7 +146,17 @@ jobs:
                 $d.original_private_zips_modified -ne $false -or
                 $d.no_prediction_or_source_details_logged -ne $true -or
                 [double]$d.winner_top1_worst_case_all_flat_2022 -gt [double]$d.winner_top1_hit_rate_2022 -or
-                [double]$d.winner_top1_best_case_all_flat_2022 -lt [double]$d.winner_top1_worst_case_all_flat_2022) {
+                [double]$d.winner_top1_best_case_all_flat_2022 -lt [double]$d.winner_top1_worst_case_all_flat_2022 -or
+                [double]$d.smoothed_prior_win_baseline_top1_2022 -lt 0 -or
+                [double]$d.smoothed_prior_win_baseline_top1_2022 -gt 1 -or
+                [int]$d.independent_2022_race_days -lt 5 -or
+                [int]$d.independent_2022_race_days -gt 366 -or
+                [double]$d.top1_uplift_day_bootstrap_ci95_lower -gt [double]$d.top1_uplift_day_bootstrap_ci95_upper -or
+                [math]::Abs(
+                  [double]$d.top1_uplift_over_simple_form_2022 - (
+                  [double]$d.winner_top1_hit_rate_2022 -
+                  [double]$d.smoothed_prior_win_baseline_top1_2022)
+                ) -gt 0.000000001) {
               throw 'NAR_EXPLORATORY_MODEL_RESULTS_INVALID'
             }
             # Only aggregate numbers, never horse/race keys or arrays.
@@ -160,6 +170,11 @@ jobs:
               tune2022MissingAndOther = [int]$d.unevaluable_tune_races_2022
               top1Accuracy2022 = [double]$d.winner_top1_hit_rate_2022
               randomBaseline2022 = [double]$d.random_baseline_top1_expected_2022
+              smoothedPriorWinFormBaseline = [double]$d.smoothed_prior_win_baseline_top1_2022
+              upliftOverPriorWinForm = [double]$d.top1_uplift_over_simple_form_2022
+              pairedDayBootstrap95Lower = [double]$d.top1_uplift_day_bootstrap_ci95_lower
+              pairedDayBootstrap95Upper = [double]$d.top1_uplift_day_bootstrap_ci95_upper
+              independentDays2022 = [int]$d.independent_2022_race_days
               worstCaseAllFlatTop1 = [double]$d.winner_top1_worst_case_all_flat_2022
               bestCaseAllFlatTop1 = [double]$d.winner_top1_best_case_all_flat_2022
               top3Overlap2022 = [double]$d.top3_picks_podium_precision_2022
