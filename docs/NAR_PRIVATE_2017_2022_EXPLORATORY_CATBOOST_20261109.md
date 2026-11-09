@@ -91,3 +91,24 @@ for untouched independent OOS or genuine prospective net EV.
 **Research outcome so far:** there is a genuine historical
 *rank-predictive signal*, but a **positive after-cost betting
 expectation has NOT been demonstrated**.
+
+
+## Post-event 2022 official win dividend sensitivity
+
+The PC② exploratory workflow now joins actual final 2022 official win
+dividends privately, strictly **after** fitting and scoring, to the same
+13,402 evaluable historical 2022 races and smoothed prior-win baseline.
+It models one hypothetical 100-yen WIN stake per evaluable race, subtracts
+stake from gross paid returns and reports an additional adverse-missingness
+sensitivity treating every unevaluable 2022 flat race as a 100-yen loss.
+Paired whole-day bootstrap estimates the retrospective model-minus-baseline
+return difference; it is descriptive only.
+
+This is **post-event historical simulation**, not verified advance prediction,
+actual purchases, extra transaction cost audit, independent OOS, or proven
+positive after-cost expected value. Source identities, individual results,
+model binaries and raw licensed files remain on PC②. Missing or contradictory
+selected official payout causes HOLD; it is never silently treated as zero.
+2023–2024 and 2025–2026 sealed periods are untouched.
+Quote aggregate returns only after a confirmed successful PC② run of the
+new commit, not on the strength of code or fictional tests.

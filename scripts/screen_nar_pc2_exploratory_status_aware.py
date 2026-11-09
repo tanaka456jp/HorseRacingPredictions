@@ -18,6 +18,7 @@ from pathlib import Path
 
 from horse_racing_predictions.nar_local_monthly_intake import _read_nar_local_csv_texts
 from horse_racing_predictions.nar_official_exception_audit import audit_nar_official_exceptions
+from horse_racing_predictions.nar_economic_settlement_adapter import nar_canonical_race_id
 from horse_racing_predictions.nar_official_zip_probe import UnsafeNarSource
 from horse_racing_predictions.nar_private_manifest_inventory import inventory_private_nar_training_directory
 from horse_racing_predictions.nar_published_result_normalizer import _parse
@@ -35,6 +36,8 @@ def screen_private_72_month_exploratory(
     )
     if (inventory.missing_months or len(inventory.absolute_source_paths) != 72):
         raise UnsafeNarSource("NAR_EXPLORATORY_72_MONTHS_REQUIRED")
+    # Post-race payout values are never model features; keep privately in memory.
+    official_2022_win_returns: dict[str, dict[int, int]] = {}
     annual: Counter[int] = Counter()
     totals: Counter[str] = Counter()
 
@@ -57,6 +60,21 @@ def screen_private_72_month_exploratory(
             totals["flat"] += a.in_scope_flat_races
             totals["validated"] += a.status_validated_flat_races
             totals["unresolved"] += a.unresolved_flat_races
+            if month.startswith("2022"):
+                for race in assessment.validated_races:
+                    rid = nar_canonical_race_id(race.race_key)
+                    if rid in official_2022_win_returns:
+                        raise UnsafeNarSource("NAR_EXPLORATORY_DUPLICATE_PAYOUT_RACE")
+                    statuses = dict(race.status_by_number)
+                    payouts = dict(race.win_yen_by_number)
+                    amounts = {}
+                    for number, status in statuses.items():
+                        if status in {"FINISHED", "DNF_NO_REFUND"}:
+                            value = payouts[number]
+                            if type(value) is not int or value < 0:
+                                raise UnsafeNarSource("NAR_EXPLORATORY_PAYOUT_INVALID")
+                            amounts[number] = value
+                    official_2022_win_returns[rid] = amounts
             labels = derive_nar_status_aware_outcome_labels(assessment)
             required = {(row.race_key, row.horse_number)
                         for row in labels.labels}
@@ -100,6 +118,7 @@ def screen_private_72_month_exploratory(
     )
     m = explore_nar_2017_2022_ranking_signal(
         form, flat_races_by_year=dict(annual), iterations=iterations,
+        official_win_payouts_2022=official_2022_win_returns,
     )
     result = {
         "schema": "NAR.PC2.Exploratory2022RankingSignal.v1",

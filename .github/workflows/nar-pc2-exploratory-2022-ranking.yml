@@ -142,6 +142,11 @@ jobs:
                 $d.independent_oos_2023_2024_opened -ne $false -or
                 $d.protected_final_holdout_opened -ne $false -or
                 $d.actual_after_cost_roi_verified -ne $false -or
+                $d.historical_official_win_payouts_reconciled -ne $true -or
+                $null -eq $d.hypothetical_model_win_roi_2022 -or
+                $null -eq $d.hypothetical_simple_form_win_roi_2022 -or
+                [double]$d.hypothetical_model_win_all_flat_adverse_missing_roi_2022 -gt [double]$d.hypothetical_model_win_roi_2022 -or
+                [double]$d.hypothetical_paired_day_roi_ci95_lower -gt [double]$d.hypothetical_paired_day_roi_ci95_upper -or
                 $d.positive_expected_value_demonstrated -ne $false -or
                 $d.original_private_zips_modified -ne $false -or
                 $d.no_prediction_or_source_details_logged -ne $true -or
@@ -169,6 +174,12 @@ jobs:
               tune2022Races = [int]$d.tune_races_2022
               tune2022MissingAndOther = [int]$d.unevaluable_tune_races_2022
               top1Accuracy2022 = [double]$d.winner_top1_hit_rate_2022
+            retrospectiveWinOnlyModelROI = [double]$d.hypothetical_model_win_roi_2022
+            retrospectiveWinOnlyFormROI = [double]$d.hypothetical_simple_form_win_roi_2022
+            retrospectiveWinOnlyAdverseAllFlatROI = [double]$d.hypothetical_model_win_all_flat_adverse_missing_roi_2022
+            retrospectiveWinOnlyModelMinusFormROI = [double]$d.hypothetical_model_minus_form_roi_2022
+            retrospectivePairedDayROI95Lower = [double]$d.hypothetical_paired_day_roi_ci95_lower
+            retrospectivePairedDayROI95Upper = [double]$d.hypothetical_paired_day_roi_ci95_upper
               randomBaseline2022 = [double]$d.random_baseline_top1_expected_2022
               smoothedPriorWinFormBaseline = [double]$d.smoothed_prior_win_baseline_top1_2022
               upliftOverPriorWinForm = [double]$d.top1_uplift_over_simple_form_2022

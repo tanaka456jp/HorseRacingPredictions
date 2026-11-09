@@ -174,3 +174,61 @@ def test_fixed_seed_race_day_bootstrap_is_deterministic_for_fictional_runs():
     )
     assert one == two
     assert not one.actual_after_cost_roi_verified
+
+
+def _fictional_2022_official_win_returns(batch):
+    amounts = {}
+    for target in batch.targets:
+        track, ymd, number = target.race_key
+        if ymd.startswith("2022"):
+            race_id = f"NAR:{ymd}:{track}:{number:02d}"
+            amounts.setdefault(race_id, {})[target.horse_number] = (
+                300 if target.target_win else 0
+            )
+    return amounts
+
+
+def test_retrospective_win_only_official_payouts_do_not_prove_ev():
+    pytest.importorskip("catboost")
+    batch, years = fictional_batch()
+    m = explore_nar_2017_2022_ranking_signal(
+        batch, flat_races_by_year=years, iterations=30,
+        official_win_payouts_2022=_fictional_2022_official_win_returns(batch),
+    )
+    assert m.historical_official_win_payouts_reconciled
+    assert m.hypothetical_model_win_gross_yen_2022 is not None
+    assert m.hypothetical_simple_form_win_gross_yen_2022 is not None
+    assert m.hypothetical_model_win_roi_2022 == (
+        m.hypothetical_model_win_gross_yen_2022 / (100 * 3) - 1
+    )
+    assert m.hypothetical_model_win_all_flat_adverse_missing_roi_2022 == (
+        m.hypothetical_model_win_gross_yen_2022 / (100 * 50) - 1
+    )
+    assert m.hypothetical_model_minus_form_roi_2022 == (
+        m.hypothetical_model_win_roi_2022
+        - m.hypothetical_simple_form_win_roi_2022
+    )
+    assert m.hypothetical_paired_day_roi_ci95_lower <= m.hypothetical_paired_day_roi_ci95_upper
+    assert not m.actual_after_cost_roi_verified
+    assert not m.positive_expected_value_demonstrated
+
+
+def test_missing_or_conflicting_retrospective_payout_is_not_silently_zeroed():
+    pytest.importorskip("catboost")
+    batch, years = fictional_batch()
+    payouts = _fictional_2022_official_win_returns(batch)
+    del payouts[sorted(payouts)[0]]
+    with pytest.raises(UnsafeNarSource, match="NAR_EXPLORATORY_PAYOUT_COVERAGE_REQUIRED"):
+        explore_nar_2017_2022_ranking_signal(
+            batch, flat_races_by_year=years, iterations=30,
+            official_win_payouts_2022=payouts,
+        )
+    payouts = _fictional_2022_official_win_returns(batch)
+    first = sorted(payouts)[0]
+    loser = next(h for h, amount in payouts[first].items() if amount == 0)
+    payouts[first][loser] = 100
+    with pytest.raises(UnsafeNarSource, match="NAR_EXPLORATORY_PAYOUT_WIN_LABEL_MISMATCH"):
+        explore_nar_2017_2022_ranking_signal(
+            batch, flat_races_by_year=years, iterations=30,
+            official_win_payouts_2022=payouts,
+        )

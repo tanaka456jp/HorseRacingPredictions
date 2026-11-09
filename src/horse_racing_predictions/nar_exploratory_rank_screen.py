@@ -45,6 +45,16 @@ class NarExploratoryRankingMetrics:
     winner_top1_best_case_all_flat_2022: float
     top3_picks_podium_precision_2022: float
     outsider_podium_hit_rate_2022: float
+    # Post-event official paid prices; never historical pre-off prices.
+    historical_official_win_payouts_reconciled: bool = False
+    hypothetical_model_win_gross_yen_2022: int | None = None
+    hypothetical_simple_form_win_gross_yen_2022: int | None = None
+    hypothetical_model_win_roi_2022: float | None = None
+    hypothetical_simple_form_win_roi_2022: float | None = None
+    hypothetical_model_win_all_flat_adverse_missing_roi_2022: float | None = None
+    hypothetical_model_minus_form_roi_2022: float | None = None
+    hypothetical_paired_day_roi_ci95_lower: float | None = None
+    hypothetical_paired_day_roi_ci95_upper: float | None = None
     independently_fitted_models: bool = True
     real_data_used_locally_only: bool = True
     retrospective_selected_outcomes_only: bool = True
@@ -98,6 +108,7 @@ def explore_nar_2017_2022_ranking_signal(
     batch: NarStatusAwareAsOfBatch,
     *, flat_races_by_year: dict[int, int],
     iterations: int = 40,
+    official_win_payouts_2022: dict[str, dict[int, int]] | None = None,
 ) -> NarExploratoryRankingMetrics:
     """Research-only; retrospectively selected complete labels aren't EV.
 
@@ -180,6 +191,13 @@ def explore_nar_2017_2022_ranking_signal(
     scored["outsider_prediction"] = out
     labels = tune.set_index(["race_id", "horse_number"])[["__win", "__podium"]]
     wins = overlap = outsiders = simple_wins = 0
+    gross_model_win = gross_simple_win = 0
+    payout_day_pairs: dict[date, list[tuple[int, int]]] = {}
+    if official_win_payouts_2022 is not None and (
+        type(official_win_payouts_2022) is not dict
+        or not set(scored["race_id"]).issubset(official_win_payouts_2022)
+    ):
+        raise UnsafeNarSource("NAR_EXPLORATORY_PAYOUT_COVERAGE_REQUIRED")
     random_expected = 0.0
     # Race days, not horses or individual races, are sampled in CI.
     # Purely descriptive post-hoc 2022 tuning uncertainty; not an
@@ -208,6 +226,23 @@ def explore_nar_2017_2022_ranking_signal(
         simple_hit = int(actual.loc[int(simple.horse_number.iloc[0]), "__win"] == 1)
         simple_wins += simple_hit
         day = g["race_day"].iloc[0]
+        if official_win_payouts_2022 is not None:
+            amounts = official_win_payouts_2022[rid]
+            horses = set(int(x) for x in g.horse_number)
+            if type(amounts) is not dict or set(amounts) != horses:
+                raise UnsafeNarSource("NAR_EXPLORATORY_PAYOUT_ROSTER_MISMATCH")
+            for h in horses:
+                amount = amounts[h]
+                if (type(amount) is not int or amount < 0
+                        or (amount >= 100) != (int(actual.loc[h, "__win"]) == 1)):
+                    raise UnsafeNarSource("NAR_EXPLORATORY_PAYOUT_WIN_LABEL_MISMATCH")
+            model_amount = amounts[int(top[0])]
+            simple_amount = amounts[int(simple.horse_number.iloc[0])]
+            gross_model_win += model_amount
+            gross_simple_win += simple_amount
+            payout_day_pairs.setdefault(day, []).append(
+                (model_amount, simple_amount)
+            )
         race_day_paired_hits.setdefault(day, []).append((model_hit, simple_hit))
         overlap += sum(int(actual.loc[h, "__podium"] == 1) for h in top)
         random_expected += float(actual["__win"].sum()) / len(g)
@@ -246,6 +281,44 @@ def explore_nar_2017_2022_ranking_signal(
     ci_low, ci_high = (float(x) for x in np.quantile(
         paired_uplift, [0.025, 0.975]
     ))
+    historical_payouts_joined = official_win_payouts_2022 is not None
+    economic = {}
+    if historical_payouts_joined:
+        if (len(payout_day_pairs) != len(days)
+                or sum(map(len, payout_day_pairs.values())) != n_tune):
+            raise UnsafeNarSource("NAR_EXPLORATORY_PAYOUT_DAY_COVERAGE_INVALID")
+        money_days = np.asarray([
+            (len(payout_day_pairs[d]),
+             sum(a for a, _ in payout_day_pairs[d]),
+             sum(b for _, b in payout_day_pairs[d]))
+            for d in days
+        ], dtype=np.float64)
+        money_boot = money_days[draw].sum(axis=1)
+        if not (money_boot[:, 0] > 0).all():
+            raise UnsafeNarSource("NAR_EXPLORATORY_PAYOUT_BOOTSTRAP_INVALID")
+        difference = (money_boot[:, 1] - money_boot[:, 2]) / (
+            100.0 * money_boot[:, 0]
+        )
+        money_low, money_high = (
+            float(x) for x in np.quantile(difference, [0.025, 0.975])
+        )
+        model_roi = gross_model_win / (100.0 * n_tune) - 1.0
+        form_roi = gross_simple_win / (100.0 * n_tune) - 1.0
+        adverse_roi = gross_model_win / (100.0 * total2022) - 1.0
+        if (not all(isfinite(x) for x in (
+            model_roi, form_roi, adverse_roi, money_low, money_high
+        )) or money_low > money_high or adverse_roi > model_roi):
+            raise UnsafeNarSource("NAR_EXPLORATORY_PAYOUT_METRICS_INVALID")
+        economic = dict(
+            hypothetical_model_win_gross_yen_2022=gross_model_win,
+            hypothetical_simple_form_win_gross_yen_2022=gross_simple_win,
+            hypothetical_model_win_roi_2022=model_roi,
+            hypothetical_simple_form_win_roi_2022=form_roi,
+            hypothetical_model_win_all_flat_adverse_missing_roi_2022=adverse_roi,
+            hypothetical_model_minus_form_roi_2022=model_roi - form_roi,
+            hypothetical_paired_day_roi_ci95_lower=money_low,
+            hypothetical_paired_day_roi_ci95_upper=money_high,
+        )
     nums = (
         wins / n_tune, random_expected / n_tune, wins / total2022,
         (wins + unevaluable) / total2022, overlap / (3 * n_tune),
@@ -275,4 +348,6 @@ def explore_nar_2017_2022_ranking_signal(
         winner_top1_best_case_all_flat_2022=nums[3],
         top3_picks_podium_precision_2022=nums[4],
         outsider_podium_hit_rate_2022=nums[5],
+        historical_official_win_payouts_reconciled=historical_payouts_joined,
+        **economic,
     )
