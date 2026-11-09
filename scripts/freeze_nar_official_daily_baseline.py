@@ -190,19 +190,49 @@ def _main() -> int:
                 or record["salted_zip_sha256_PRIVATE"] != verified):
             raise NarPreoffDailyHold("NAR_FORWARD_SOURCE_SALTED_HASH_MISMATCH")
         observed = datetime.fromisoformat(record["host_captured_utc"].replace("Z", "+00:00"))
-        generated = datetime.now(timezone.utc)
-        salt_forecast = secrets.token_bytes(32)
-        snapshot, digest = prepare_private_daily_baseline(
-            blob, observed_at_utc=observed,
-            generated_at_utc=generated, race_day=today,
-            private_salt=salt_forecast,
-        )
         output = directory / f"{today:%Y%m%d}_baseline_forecast_PRIVATE.json"
-        fd = os.open(output, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-        with os.fdopen(fd, "w", encoding="utf-8") as out:
-            json.dump(snapshot, out, ensure_ascii=False, sort_keys=True)
-            out.flush()
-            os.fsync(out.fileno())
+        if output.exists():
+            # A finished freeze is immutable. Never replace it with a new
+            # salt, a later timestamp, or hindsight-corrupted scores.
+            if not output.is_file() or output.is_symlink():
+                raise NarPreoffDailyHold("NAR_FORWARD_EXISTING_SNAPSHOT_NOT_REGULAR")
+            original = json.loads(output.read_text(encoding="utf-8"))
+            if (not isinstance(original, dict)
+                    or original.get("schema") != "NAR.PC2.OfficialDailyForwardBaseline.v1"
+                    or original.get("status") != "FROZEN_PRIVATE_UNATTESTED_NO_ECONOMIC_EV"
+                    or original.get("day") != today.isoformat()
+                    or original.get("no_real_tickets") is not True
+                    or original.get("odds_observed") is not False
+                    or original.get("positive_ev_proven") is not False):
+                raise NarPreoffDailyHold("NAR_FORWARD_EXISTING_SNAPSHOT_UNTRUSTED")
+            saved_salt = bytes.fromhex(original["private_salt_hex"])
+            saved_generated = datetime.fromisoformat(original["host_generated_utc"])
+            if len(saved_salt) != 32:
+                raise NarPreoffDailyHold("NAR_FORWARD_EXISTING_SALT_INVALID")
+            reconstructed, digest = prepare_private_daily_baseline(
+                blob, observed_at_utc=observed,
+                generated_at_utc=saved_generated, race_day=today,
+                private_salt=saved_salt,
+            )
+            if (reconstructed != original
+                    or not secrets.compare_digest(
+                        digest, original["commitment_digest"]
+                    )):
+                raise NarPreoffDailyHold("NAR_FORWARD_EXISTING_SNAPSHOT_ALTERED")
+            snapshot = original
+        else:
+            generated = datetime.now(timezone.utc)
+            salt_forecast = secrets.token_bytes(32)
+            snapshot, digest = prepare_private_daily_baseline(
+                blob, observed_at_utc=observed,
+                generated_at_utc=generated, race_day=today,
+                private_salt=salt_forecast,
+            )
+            fd = os.open(output, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            with os.fdopen(fd, "w", encoding="utf-8") as out:
+                json.dump(snapshot, out, ensure_ascii=False, sort_keys=True)
+                out.flush()
+                os.fsync(out.fileno())
     except Exception:
         print(json.dumps({
             "schema": "NAR.PC2.OfficialDailyForwardBaseline.v1",
