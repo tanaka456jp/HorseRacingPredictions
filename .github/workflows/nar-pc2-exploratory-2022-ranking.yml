@@ -114,7 +114,13 @@ jobs:
                 if ($held.schema -cne 'NAR.PC2.Exploratory2022RankingSignal.v1') {
                   throw 'NAR_EXPLORATORY_UNTRUSTED_FAILURE_PAYLOAD'
                 }
-                if ([string]$held.staticReason -cmatch '^NAR_[A-Z0-9_]{1,100}
+                if ([string]$held.staticReason -cmatch '^NAR_[A-Z0-9_]{1,100}' -and
+                    [string]$held.staticReason -cnotmatch '[^A-Z0-9_]') {
+                  Write-Host ('NAR_EXPLORATORY_STATIC_HOLD_REASON=' + [string]$held.staticReason)
+                }
+              }
+              throw 'NAR_EXPLORATORY_MODEL_OR_SOURCE_GATE_FAILED'
+            }
             $d = [string]$raw[0] | ConvertFrom-Json
             if ($d.schema -cne 'NAR.PC2.Exploratory2022RankingSignal.v1' -or
                 $d.status -cne 'NAR_EXPLORATORY_2022_RANKING_ONLY_SELECTION_BIAS_HOLD' -or
