@@ -16,6 +16,7 @@ from __future__ import annotations
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 import re
+import unicodedata
 from typing import Mapping
 
 from .nar_official_zip_probe import UnsafeNarSource
@@ -83,6 +84,23 @@ _CANCEL_OR_NON_ESTABLISHED_MARKERS = frozenset({
     "取止", "競走取止", "競走取り止め", "不成", "競走不成立",
 })
 
+# Investigative exact spellings only, NOT approved settlement outcomes.
+# NAR public glossary confirms short canonical "取止"/"不成"; the
+# longer candidates need independent source confirmation on actual days.
+# Matching a string in this set alone must never authorize a refund.
+_POSSIBLE_RACE_CANCEL_SPELLINGS = frozenset({
+    "取止め", "取り止め", "競走取止め", "競走取り止",
+    "開催取止", "開催取止め", "開催取り止め", "レース取止",
+    "レース取止め", "競馬開催取止", "競馬中止",
+    "不成立", "レース不成立", "競走不成立",
+})
+
+
+def _possible_cancel_spelling(marker: str) -> bool:
+    return unicodedata.normalize("NFKC", marker).strip() in (
+        _POSSIBLE_RACE_CANCEL_SPELLINGS
+    )
+
 
 @dataclass(frozen=True)
 class NarStatusAwareRace:
@@ -120,6 +138,7 @@ class NarOfficialExceptionAudit:
     unknown_marker_win_payout_evidence: tuple[tuple[str, int], ...] = ()
     unknown_marker_distinct_text_values_in_month: int = 0
     unknown_marker_largest_single_value_frequency_in_month: int = 0
+    unknown_marker_race_pattern_counts: tuple[tuple[str, int], ...] = ()
     training_authorized: bool = False
     economic_roi_authorized: bool = False
     positive_ev_demonstrated: bool = False
@@ -285,6 +304,7 @@ def audit_nar_official_exceptions(
     unrecognized_raw_frequency: Counter[str] = Counter()
     unknown_rank_shape: Counter[str] = Counter()
     unknown_win_payout_shape: Counter[str] = Counter()
+    unknown_race_pattern: Counter[str] = Counter()
     banei = flat = 0
     for key in keys:
         if "帯広" in key[0]:
@@ -332,6 +352,16 @@ def audit_nar_official_exceptions(
                         unknown_rank_shape["SOME_NONEMPTY_FINAL_RANK_CELL"] += 1
                     else:
                         unknown_rank_shape["NO_NONEMPTY_FINAL_RANK_CELL"] += 1
+                    nonempty = {x for x in raw_markers if x}
+                    if len(nonempty) == 1 and len(raw_markers) == len(groups["horselist"][key]):
+                        unknown_race_pattern["SAME_UNKNOWN_TEXT_ALL_HORSES"] += 1
+                    else:
+                        unknown_race_pattern["MIXED_UNKNOWN_TEXT_OR_PARTIAL_HORSES"] += 1
+                    if (nonempty and all(_possible_cancel_spelling(x)
+                                         for x in nonempty)):
+                        unknown_race_pattern["OFFICIAL_LIKE_CANCEL_SPELLING_UNVERIFIED"] += 1
+                    else:
+                        unknown_race_pattern["NOT_OFFICIAL_LIKE_CANCEL_SPELLING"] += 1
                     # Inspect only presence of the official single-win
                     # payback fields, not the private payout numbers.
                     if any(row[4].strip() and row[5].strip()
@@ -383,6 +413,9 @@ def audit_nar_official_exceptions(
             unknown_marker_largest_single_value_frequency_in_month=(
                 max(unrecognized_raw_frequency.values(), default=0)
             ),
+            unknown_marker_race_pattern_counts=tuple(sorted(
+                unknown_race_pattern.items()
+            )),
         ),
         validated_races=tuple(accepted),
     )
