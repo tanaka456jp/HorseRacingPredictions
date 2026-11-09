@@ -54,12 +54,49 @@ jobs:
           }
           $env:PYTHONDONTWRITEBYTECODE = '1'
           $env:PYTHONPATH = Join-Path (Get-Location).Path 'src'
-          & python -B -c 'import catboost, pandas, numpy, sklearn'
-          if ($LASTEXITCODE -ne 0) {
-            Write-Host 'NAR_EXPLORATORY_REQUIRES_FREE_RESEARCH_DEPENDENCIES'
+          $review = 'D:\Development\HorseRacingPredictions-PrivateReview'
+          $venv = Join-Path $review 'nar-exploratory-venv'
+          if (-not (Test-Path -LiteralPath $review -PathType Container) -or
+              ((Get-Item -LiteralPath $review -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0 -or
+              (Test-Path -LiteralPath $venv -PathType Leaf)) {
+            Write-Host 'NAR_EXPLORATORY_PRIVATE_D_ENV_INVALID'
             exit 2
           }
-          Write-Host 'NAR_EXPLORATORY_PC2_PRECHECK_PASS'
+          $drive = Get-PSDrive -Name D
+          if ($null -eq $drive.Free -or [long]$drive.Free -lt 1610612736) {
+            Write-Host 'NAR_EXPLORATORY_D_FREE_SPACE_INSUFFICIENT'
+            exit 2
+          }
+          if (-not (Test-Path -LiteralPath $venv -PathType Container)) {
+            & python -B -m venv --system-site-packages $venv
+            if ($LASTEXITCODE -ne 0) {
+              Write-Host 'NAR_EXPLORATORY_D_VENV_CREATION_HOLD'
+              exit 2
+            }
+          }
+          foreach ($p in @($venv, (Join-Path $venv 'Scripts'))) {
+            if ((Get-Item -LiteralPath $p -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) {
+              Write-Host 'NAR_EXPLORATORY_REPARSE_ENV_BLOCKED'
+              exit 2
+            }
+          }
+          $vpy = Join-Path $venv 'Scripts\python.exe'
+          if (-not (Test-Path -LiteralPath $vpy -PathType Leaf)) {
+            Write-Host 'NAR_EXPLORATORY_PYTHON_NOT_FOUND'
+            exit 2
+          }
+          $env:PIP_CACHE_DIR = Join-Path $review 'pip-cache'
+          & $vpy -B -m pip install --disable-pip-version-check --no-input --only-binary=:all: 'catboost==1.2.10'
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host 'NAR_EXPLORATORY_FREE_RESEARCH_DEPENDENCY_INSTALL_HOLD'
+            exit 2
+          }
+          & $vpy -B -c 'import catboost, pandas, numpy, sklearn; assert catboost.__version__ == "1.2.10"'
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host 'NAR_EXPLORATORY_FREE_RESEARCH_DEPENDENCY_VALIDATION_HOLD'
+            exit 2
+          }
+          Write-Host 'NAR_EXPLORATORY_PC2_D_ENV_READY'
       - name: Fit only 2017-2021 and evaluate 2022 ranking without genuine odds
         shell: powershell
         run: |
@@ -67,8 +104,9 @@ jobs:
           $env:PYTHONDONTWRITEBYTECODE = '1'
           $env:PYTHONPATH = Join-Path (Get-Location).Path 'src'
           $folder = 'D:\Development\HorseRacingPredictions\nar-personal'
+          $vpy = 'D:\Development\HorseRacingPredictions-PrivateReview\nar-exploratory-venv\Scripts\python.exe'
           try {
-            $raw = @(& python -B .\scripts\screen_nar_pc2_exploratory_status_aware.py --local-nar-training-zip-directory $folder --confirm-personal-private-nar-permission --iterations 40 2>&1)
+            $raw = @(& $vpy -B .\scripts\screen_nar_pc2_exploratory_status_aware.py --local-nar-training-zip-directory $folder --confirm-personal-private-nar-permission --iterations 40 2>&1)
             if ($LASTEXITCODE -ne 0 -or $raw.Count -ne 1) {
               throw 'NAR_EXPLORATORY_MODEL_OR_SOURCE_GATE_FAILED'
             }
