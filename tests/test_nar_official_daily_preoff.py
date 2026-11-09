@@ -144,7 +144,7 @@ def test_genuine_future_form_baseline_freezes_full_fictional_roster_no_ev_claim(
 
 
 def test_real_roster_baseline_cannot_be_backfilled_after_first_off():
-    with pytest.raises(M.NarPreoffDailyHold, match="BEFORE_FIRST_OFF"):
+    with pytest.raises(F.NarPreoffDailyHold, match="BEFORE_FIRST_OFF"):
         F.prepare_private_daily_baseline(
             fictional_daily_zip(), observed_at_utc=EARLY,
             generated_at_utc=datetime(2026, 11, 10, 2, 30, tzinfo=timezone.utc),
