@@ -47,6 +47,7 @@ def fictional_daily_zip(*, result=False, incomplete=False,
         "馬名": f"架空馬{race}-{number}",
         "着順": "1" if result and race == 1 and number == 1 else "",
         "タイム": "", "着差": "", "上がり3F": "",
+        "全成績": "2-1-1-4" if number == 1 else "0-0-0-0",
     } for race in (1, 2) for number in range(1, 5)]
     if incomplete:
         horses.pop()
@@ -109,4 +110,43 @@ def test_official_daily_preoff_rejects_arbitrary_bytes():
     with pytest.raises(M.NarPreoffDailyHold):
         M.validate_official_daily_race_zip(
             b"NOT A ZIP", race_day=DAY, host_captured_utc=EARLY,
+        )
+
+
+# Baseline uses only actual official pre-off career totals, never outcomes.
+_FREEZE = _SCRIPT.with_name("freeze_nar_official_daily_baseline.py")
+sys.path.insert(0, str(_SCRIPT.parent))
+_FREEZE_SPEC = importlib.util.spec_from_file_location("nar_forward_real_roster_baseline_test", _FREEZE)
+assert _FREEZE_SPEC is not None and _FREEZE_SPEC.loader is not None
+F = importlib.util.module_from_spec(_FREEZE_SPEC)
+sys.modules[_FREEZE_SPEC.name] = F
+_FREEZE_SPEC.loader.exec_module(F)
+
+
+def test_genuine_future_form_baseline_freezes_full_fictional_roster_no_ev_claim():
+    observation = datetime(2026, 11, 10, 0, 0, tzinfo=timezone.utc)
+    generated = datetime(2026, 11, 10, 0, 5, tzinfo=timezone.utc)
+    snapshot, digest = F.prepare_private_daily_baseline(
+        fictional_daily_zip(), observed_at_utc=observation,
+        generated_at_utc=generated, race_day=DAY,
+        private_salt=bytes(range(32)),
+    )
+    assert snapshot["source_races"] == 2
+    assert snapshot["source_horses"] == 8
+    assert len(snapshot["complete_private_forecasts"]) == 2
+    assert len(digest) == 64
+    assert all(len(r["top3"]) == 3 and r["outsider"] not in r["top3"]
+               for r in snapshot["complete_private_forecasts"])
+    assert not snapshot["odds_observed"]
+    assert not snapshot["independent_time_attestation"]
+    assert not snapshot["positive_ev_proven"]
+    assert snapshot["no_real_tickets"]
+
+
+def test_real_roster_baseline_cannot_be_backfilled_after_first_off():
+    with pytest.raises(M.NarPreoffDailyHold, match="BEFORE_FIRST_OFF"):
+        F.prepare_private_daily_baseline(
+            fictional_daily_zip(), observed_at_utc=EARLY,
+            generated_at_utc=datetime(2026, 11, 10, 2, 30, tzinfo=timezone.utc),
+            race_day=DAY, private_salt=bytes(range(32)),
         )
