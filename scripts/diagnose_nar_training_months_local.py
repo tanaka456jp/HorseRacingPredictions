@@ -59,6 +59,7 @@ def main() -> int:
         "statusAwareUnresolvedFlatRaces": result.status_aware_unresolved_flat_races,
         "monthsStatusAwareComplete": result.months_status_aware_complete,
         "unrecognizedMarkerProfiles": dict(result.unrecognized_marker_profile_counts),
+        "unknownRacePatternCounts": dict(result.unknown_marker_race_pattern_counts),
         "unknownMarkerRankCellPresence": dict(result.unknown_marker_rank_evidence),
         "unknownMarkerOfficialWinPaybackPresence": dict(
             result.unknown_marker_win_payout_evidence
