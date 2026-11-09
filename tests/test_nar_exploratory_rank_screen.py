@@ -22,8 +22,8 @@ _DAYS = (
 def fictional_batch():
     rows = []
     for r, ymd in enumerate(_DAYS):
-        for n in range(1, 9):
-            finish = ((n + 2*r - 1) % 8) + 1
+        for n in range(1, 8):
+            finish = ((n + 2*r - 1) % 7) + 1
             rows.append(NarStatusAwareAsOfTarget(
                 race_key=("架空地方場", ymd, 1),
                 horse_number=n,
@@ -49,13 +49,13 @@ def fictional_batch():
     report = NarStatusAwareAsOfAudit(
         months=72, source_flat_races=100,
         validated_flat_races=8, unresolved_flat_races=92,
-        projected_target_rows=64, no_target_scratch_or_exclusion_rows=0,
+        projected_target_rows=56, no_target_scratch_or_exclusion_rows=0,
         no_target_disqualification_rows=0,
-        historical_started_rows=64, historical_ranked_rows=64,
-        target_rows_with_prior_start=56,
-        target_rows_without_prior_start=8,
+        historical_started_rows=56, historical_ranked_rows=56,
+        target_rows_with_prior_start=49,
+        target_rows_without_prior_start=7,
         target_rows_with_prior_win=0, target_rows_with_prior_top3=0,
-        target_rows_with_numeric_prior_finish=56,
+        target_rows_with_numeric_prior_finish=49,
     )
     return NarStatusAwareAsOfBatch(
         audit=report, targets=tuple(rows),
@@ -72,8 +72,8 @@ def test_2022_missing_races_are_counted_not_treated_as_win():
     assert m.fit_races_2017_2021 == 5
     assert m.tune_races_2022 == 3
     assert m.unevaluable_tune_races_2022 == 47
-    assert m.fit_horses == 40
-    assert m.tune_horses == 24
+    assert m.fit_horses == 35
+    assert m.tune_horses == 21
     assert 0 <= m.winner_top1_worst_case_all_flat_2022 <= m.winner_top1_hit_rate_2022
     assert m.winner_top1_best_case_all_flat_2022 >= m.winner_top1_worst_case_all_flat_2022
     assert 0 <= m.random_baseline_top1_expected_2022 <= 1
