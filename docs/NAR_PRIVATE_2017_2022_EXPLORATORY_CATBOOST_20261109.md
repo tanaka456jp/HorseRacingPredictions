@@ -128,3 +128,44 @@ non-evaluable race and assumes zero dividend. No favorable race is
 selected by observed payouts. Race-day bootstrap bands are retrospective
 and descriptive, not independent OOS confidence in true profitability.
 This is NOT a genuine pre-off wager or positive-EV authorization.
+
+## Real retrospective payout observations — PC②, 2026-11-09
+
+**Verified actual PC② 2017–2021 fit / 2022 selection-period run:**
+[Actions #42628497493](https://github.com/tanaka456jp/HorseRacingPredictions/actions/runs/42628497493),
+commit `2fadee316640e44647801199bc8645601ba6e187` (**SUCCESS**).
+Runs are reproducible through the strict 72-month private D-drive ZIPs,
+but source data, individual horse/race records and model binaries were
+not published. Preoff racecards/market prices were not independently
+verified. This does **not** demonstrate deployable EV.
+
+- 2022 evaluable flat races: **13,402**, with **138** other flat races
+  retained in the full 13,540-race scope.
+- Single 100-yen hypothetical model WIN: stake **1,340,200 yen**,
+  official return **1,022,160 yen**, net **-318,040 yen**,
+  return on stake **-23.7308%**.
+- Same 100-yen historical-form comparator WIN: **-21.1357%**.
+  Model-minus-form net ROI **-2.5951 percentage points**; paired racing
+  day bootstrap descriptive 95% interval **[-8.1322, +2.4439] points**.
+- Separate fourth-pick 100-yen hypothetical PLACE: stake **1,340,200 yen**,
+  official return **1,004,020 yen**, net **-336,180 yen**,
+  return on stake **-25.0843%**.
+- Predeclared paired model WIN + fourth-pick PLACE: 200 yen per race,
+  stake **2,680,400 yen**, official combined return **2,026,180 yen**,
+  net **-654,220 yen**, ROI **-24.4076%**. Descriptive 95% race-day
+  bootstrap ROI interval **[-26.4668%, -22.1488%]**.
+- Adverse missingness stress assuming a stake and zero return in all
+  13,540 flat races: model WIN **-24.5081%**, combined WIN+PLACE
+  **-25.1780%**. This deliberately pessimistic scenario does not mean
+  cancelled/unoffered bets were in fact placed.
+- No additional payment-platform fees or operational costs were validated.
+  Official tote dividends already reflect the payout system; there was
+  **no actual ticket purchase**, no independently witnessed pre-off
+  snapshot, no untouched OOS validation and no after-cost EV certification.
+
+**Decision:** This specified all-race 2022 strategy is observationally
+negative despite higher rank accuracy. Do **not** upgrade to positive
+EV or live staking. Do not retune the same 2022 sample until it looks
+profitable; that would intensify selection bias. Future analysis must
+prioritize independent advance forecasts and contemporaneous lawful odds,
+while leaving 2023–24 OOS and 2025–26 final holdout sealed.
