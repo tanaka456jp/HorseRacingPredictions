@@ -306,3 +306,42 @@ def test_entire_eight_runner_race_without_finish_ranks_or_win_payout_is_not_impu
     assert not audit.complete_flat_outcome_interpretation
     assert not audit.training_authorized
     assert not audit.economic_roi_authorized
+
+@pytest.mark.parametrize(("marker", "expected"), [
+    ("競走取止め", "OFFICIAL_LIKE_CANCEL_SPELLING_UNVERIFIED"),
+    ("取止め", "OFFICIAL_LIKE_CANCEL_SPELLING_UNVERIFIED"),
+    ("レース取止", "OFFICIAL_LIKE_CANCEL_SPELLING_UNVERIFIED"),
+    ("未確定", "NOT_OFFICIAL_LIKE_CANCEL_SPELLING"),
+])
+def test_race_cancel_spelling_candidates_never_authorize_refunds(marker, expected):
+    # A single horse status is insufficient for race-wide cancellation.
+    data = _synthetic_with_status(marker)
+    audit = audit_nar_official_exceptions(data, month="201711").audit
+    assert audit.unresolved_flat_races == 1
+    assert dict(audit.unknown_marker_race_pattern_counts)[expected] == 1
+    assert dict(audit.unknown_marker_race_pattern_counts)[
+        "MIXED_UNKNOWN_TEXT_OR_PARTIAL_HORSES"
+    ] == 1
+    assert not audit.training_authorized
+    assert not audit.economic_roi_authorized
+
+
+def test_all_eight_unknown_horses_share_possible_cancel_text_but_still_hold():
+    values = _fixture(starters=8, month="201711", with_header=True)
+    rows = list(csv.reader(StringIO(values["horselist"])))
+    for row in rows[1:]:
+        row[31] = ""
+        row[33] = "競走取止め"
+    values["horselist"] = _dump(rows)
+    pay = list(csv.reader(StringIO(values["payback"])))
+    pay[1][4] = ""
+    pay[1][5] = ""
+    values["payback"] = _dump(pay)
+    audit = audit_nar_official_exceptions(values, month="201711").audit
+    assert audit.unknown_marker_race_pattern_counts == (
+        ("OFFICIAL_LIKE_CANCEL_SPELLING_UNVERIFIED", 1),
+        ("SAME_UNKNOWN_TEXT_ALL_HORSES", 1),
+    )
+    assert audit.unresolved_flat_races == 1
+    assert not audit.economic_roi_authorized
+    assert not audit.complete_flat_outcome_interpretation
