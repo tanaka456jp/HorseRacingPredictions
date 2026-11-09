@@ -83,15 +83,21 @@ def reconstruct_nar_status_aware_prior_day(
     months: Iterable[tuple[str, NarPostEventLabelBatch, Mapping[EntrantKey, Identity]]],
     *,
     allow_incomplete_diagnostic: bool = False,
+    allow_explicit_exploratory_sample: bool = False,
 ) -> NarStatusAwareAsOfBatch:
     """Project as-of-date form from a bounded, chronological month stream.
 
     Source-specific identities must be paired from the same authorized
     horselist rows, using (horse name, birth YYYYMMDD) not name alone.
-    Incomplete historic months return NO target rows even in diagnostic
-    mode, to prevent their subsequent accidental training use.
+    Incomplete historic months normally return NO target rows.
+    An explicit opt-in may return an in-memory *biased retrospective*
+    sample for exploratory ranking screening ONLY. It does NOT confer
+    training-readiness, historical preoff evidence or economic ROI rights.
     """
-    if type(allow_incomplete_diagnostic) is not bool:
+    if (type(allow_incomplete_diagnostic) is not bool
+            or type(allow_explicit_exploratory_sample) is not bool
+            or (allow_explicit_exploratory_sample
+                and not allow_incomplete_diagnostic)):
         raise UnsafeNarSource("NAR_ASOF_DIAGNOSTIC_MODE_INVALID")
     history: dict[Identity, _State] = {}
     targets: list[NarStatusAwareAsOfTarget] = []
@@ -255,5 +261,7 @@ def reconstruct_nar_status_aware_prior_day(
             target_rows_with_prior_top3=prior_podium_seen,
             target_rows_with_numeric_prior_finish=prior_finish_seen,
         ),
-        targets=tuple(targets) if unresolved == 0 else (),
+        targets=tuple(targets) if (
+            unresolved == 0 or allow_explicit_exploratory_sample
+        ) else (),
     )
