@@ -13,6 +13,7 @@ import argparse
 from collections import Counter
 from dataclasses import asdict
 import json
+import re
 from pathlib import Path
 
 from horse_racing_predictions.nar_local_monthly_intake import _read_nar_local_csv_texts
@@ -129,12 +130,16 @@ def main() -> int:
             permission=args.confirm_personal_private_nar_permission,
             iterations=args.iterations,
         )
-    except Exception:
-        # No traceback, source horse name, ZIP path, race id or feature rows
-        # may appear in GitHub Actions logs.
+    except Exception as exc:
+        # Only immutable source-code error identifiers. Never echo a
+        # traceback, private path, source label, horse or race key.
+        code = (str(exc) if isinstance(exc, UnsafeNarSource) else "")
+        if not re.fullmatch(r"NAR_[A-Z0-9_]{1,100}", code):
+            code = "NAR_EXPLORATORY_UNEXPECTED_PRIVATE_FAILURE"
         print(json.dumps({
             "schema": "NAR.PC2.Exploratory2022RankingSignal.v1",
             "status": "NAR_PRIVATE_RETROSPECTIVE_SCREENING_HOLD",
+            "staticReason": code,
             "source_data_sent_to_github": False,
             "positive_expected_value_demonstrated": False,
             "protected_final_holdout_opened": False,
