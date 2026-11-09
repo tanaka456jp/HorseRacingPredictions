@@ -48,6 +48,7 @@ class NarPreoffDailyAudit:
     official_zip_structure_validated: bool = True
     host_clock_independently_attested: bool = False
     race_schedule_independently_verified: bool = False
+    reused_existing_private_capture: bool = False
     before_off_forecast_exists: bool = False
     real_wagers_placed: bool = False
     positive_expected_value_demonstrated: bool = False
@@ -191,9 +192,42 @@ def validate_official_daily_race_zip(
 def capture_once(*, directory: Path, now_utc: datetime) -> NarPreoffDailyAudit:
     """Single official fetch; persist ZIP privately only if ALL gates pass."""
     day = now_utc.astimezone(_JST).date()
-    if (not directory.is_dir() or directory.is_symlink()
-            or any(directory.glob(f"{day:%Y%m%d}_*_race.zip"))):
-        raise NarPreoffDailyHold("NAR_PREOFF_PRIVATE_DIRECTORY_OR_DUPLICATE_INVALID")
+    if not directory.is_dir() or directory.is_symlink():
+        raise NarPreoffDailyHold("NAR_PREOFF_PRIVATE_DIRECTORY_INVALID")
+    existing = list(directory.glob(f"{day:%Y%m%d}_*_race.zip"))
+    if len(existing) > 1:
+        raise NarPreoffDailyHold("NAR_PREOFF_MULTIPLE_EXISTING_CAPTURES")
+    if existing:
+        from dataclasses import replace
+        original = existing[0]
+        evidence = original.with_name(
+            original.name.replace("_race.zip", "_private_provenance.json")
+        )
+        if original.is_symlink() or not evidence.is_file() or evidence.is_symlink():
+            raise NarPreoffDailyHold("NAR_PREOFF_EXISTING_PROVENANCE_INVALID")
+        metadata = json.loads(evidence.read_text(encoding="utf-8"))
+        source = original.read_bytes()
+        saved_salt = bytes.fromhex(metadata["salt_hex_PRIVATE"])
+        calculated = sha256(
+            b"NAR_OFFICIAL_DAILY_RACE_V1\\x00" + saved_salt + source
+        ).hexdigest()
+        if (metadata.get("schema") != "NAR.OfficialDailyPreoffCapture.v1"
+                or metadata.get("source") != _OFFICIAL_RACE
+                or len(saved_salt) != 32
+                or not secrets.compare_digest(
+                    calculated, metadata["salted_zip_sha256_PRIVATE"]
+                )):
+            raise NarPreoffDailyHold("NAR_PREOFF_EXISTING_ZIP_HASH_MISMATCH")
+        originally_observed = datetime.fromisoformat(
+            metadata["host_captured_utc"].replace("Z", "+00:00")
+        )
+        verified = validate_official_daily_race_zip(
+            source, race_day=day, host_captured_utc=originally_observed,
+        )
+        if (verified.earliest_off_utc != metadata["earliest_off_utc"]
+                or verified.flat_races != metadata["race_count"]):
+            raise NarPreoffDailyHold("NAR_PREOFF_EXISTING_ZIP_AUDIT_MISMATCH")
+        return replace(verified, reused_existing_private_capture=True)
     request = urllib.request.Request(
         _OFFICIAL_RACE, headers={"User-Agent": "HorseRacingPredictions/1.0 personal research"},
     )
@@ -257,6 +291,7 @@ def main() -> int:
         "registered_horses": audit.registered_horses,
         "excluded_banei_races": audit.out_of_scope_banei_races,
         "lead_minutes": audit.min_lead_seconds // 60,
+        "reused_existing_capture": audit.reused_existing_private_capture,
         "preoff_forecast_created": False,
         "independent_preoff_proof": False, "source_bytes_uploaded": False,
         "positive_ev_proven": False,
