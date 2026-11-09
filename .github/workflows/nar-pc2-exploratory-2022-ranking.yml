@@ -1,0 +1,127 @@
+name: NAR PC2 Real 2017-2022 Exploratory Ranking (NO EV)
+
+on:
+  push:
+    branches: ["feature/weekly-odds-free-note-20261021"]
+    paths:
+      - ".github/workflows/nar-pc2-exploratory-2022-ranking.yml"
+      - "scripts/screen_nar_pc2_exploratory_status_aware.py"
+      - "src/horse_racing_predictions/nar_exploratory_rank_screen.py"
+      - "src/horse_racing_predictions/nar_status_aware_prior_day.py"
+      - "tests/test_nar_exploratory_rank_screen.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nar-pc2-real-exploratory-training-only
+  cancel-in-progress: false
+
+jobs:
+  pc2-2017-to-2022-ranking:
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 65
+    steps:
+      - name: Read only project source; preserve all PC2 private files
+        uses: actions/checkout@v4
+        with:
+          clean: false
+          persist-credentials: false
+      - name: Verify physical PC2 and scientific research-only boundaries
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:COMPUTERNAME -cne 'DESKTOP-MVV1FD4' -or
+              $env:GITHUB_REPOSITORY -cne 'tanaka456jp/HorseRacingPredictions' -or
+              $env:GITHUB_REF_NAME -cne 'feature/weekly-odds-free-note-20261021') {
+            Write-Host 'NAR_EXPLORATORY_PC2_UNTRUSTED_CONTEXT'
+            exit 2
+          }
+          $sourceFolder = 'D:\Development\HorseRacingPredictions\nar-personal'
+          foreach ($p in @('D:\Development','D:\Development\HorseRacingPredictions',
+                           $sourceFolder)) {
+            if (-not (Test-Path -LiteralPath $p -PathType Container) -or
+                ((Get-Item -LiteralPath $p -Force).Attributes -band
+                 [IO.FileAttributes]::ReparsePoint) -ne 0) {
+              Write-Host 'NAR_EXPLORATORY_PRIVATE_D_PATH_INVALID'
+              exit 2
+            }
+          }
+          if (-not (Test-Path -LiteralPath '.\scripts\screen_nar_pc2_exploratory_status_aware.py' -PathType Leaf)) {
+            Write-Host 'NAR_EXPLORATORY_APPROVED_SCRIPT_NOT_FOUND'
+            exit 2
+          }
+          $env:PYTHONDONTWRITEBYTECODE = '1'
+          $env:PYTHONPATH = Join-Path (Get-Location).Path 'src'
+          & python -B -c 'import catboost, pandas, numpy, sklearn'
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host 'NAR_EXPLORATORY_REQUIRES_FREE_RESEARCH_DEPENDENCIES'
+            exit 2
+          }
+          Write-Host 'NAR_EXPLORATORY_PC2_PRECHECK_PASS'
+      - name: Fit only 2017-2021 and evaluate 2022 ranking without genuine odds
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $env:PYTHONDONTWRITEBYTECODE = '1'
+          $env:PYTHONPATH = Join-Path (Get-Location).Path 'src'
+          $folder = 'D:\Development\HorseRacingPredictions\nar-personal'
+          try {
+            $raw = @(& python -B .\scripts\screen_nar_pc2_exploratory_status_aware.py --local-nar-training-zip-directory $folder --confirm-personal-private-nar-permission --iterations 40 2>&1)
+            if ($LASTEXITCODE -ne 0 -or $raw.Count -ne 1) {
+              throw 'NAR_EXPLORATORY_MODEL_OR_SOURCE_GATE_FAILED'
+            }
+            $d = [string]$raw[0] | ConvertFrom-Json
+            if ($d.schema -cne 'NAR.PC2.Exploratory2022RankingSignal.v1' -or
+                $d.status -cne 'NAR_EXPLORATORY_2022_RANKING_ONLY_SELECTION_BIAS_HOLD' -or
+                [int]$d.source_months -ne 72 -or
+                [int]$d.all_original_races -ne 89654 -or
+                [int]$d.original_banei_out_of_scope -ne 10223 -or
+                [int]$d.source_flat_races_2017_2022 -ne 79431 -or
+                [int]$d.unresolved_flat_races_2017_2022 -ne 851 -or
+                [int]$d.tune_races_2022 + [int]$d.unevaluable_tune_races_2022 -ne 13540 -or
+                [int]$d.fit_races_2017_2021 -le 100 -or
+                [int]$d.tune_races_2022 -le 100 -or
+                $d.independently_fitted_models -ne $true -or
+                $d.full_race_denominator_preserved -ne $true -or
+                $d.retrospective_selected_outcomes_only -ne $true -or
+                $d.source_data_sent_to_github -ne $false -or
+                $d.trained_model_exported -ne $false -or
+                $d.pre_off_roster_snapshots_verified -ne $false -or
+                $d.betting_odds_evaluated -ne $false -or
+                $d.independent_oos_2023_2024_opened -ne $false -or
+                $d.protected_final_holdout_opened -ne $false -or
+                $d.actual_after_cost_roi_verified -ne $false -or
+                $d.positive_expected_value_demonstrated -ne $false -or
+                $d.original_private_zips_modified -ne $false -or
+                $d.no_prediction_or_source_details_logged -ne $true -or
+                [double]$d.winner_top1_worst_case_all_flat_2022 -gt [double]$d.winner_top1_hit_rate_2022 -or
+                [double]$d.winner_top1_best_case_all_flat_2022 -lt [double]$d.winner_top1_worst_case_all_flat_2022) {
+              throw 'NAR_EXPLORATORY_MODEL_RESULTS_INVALID'
+            }
+            # Only aggregate numbers, never horse/race keys or arrays.
+            [ordered]@{
+              schema = 'NAR.PC2.Exploratory2022RankingSignal.v1'
+              status = 'EXPLORATORY_RANKING_ONLY_NOT_ECONOMIC_EV'
+              originalFlatRaces = [int]$d.source_flat_races_2017_2022
+              unresolvedRaceOutcomes = [int]$d.unresolved_flat_races_2017_2022
+              fit2017to2021Races = [int]$d.fit_races_2017_2021
+              tune2022Races = [int]$d.tune_races_2022
+              tune2022MissingAndOther = [int]$d.unevaluable_tune_races_2022
+              top1Accuracy2022 = [double]$d.winner_top1_hit_rate_2022
+              randomBaseline2022 = [double]$d.random_baseline_top1_expected_2022
+              worstCaseAllFlatTop1 = [double]$d.winner_top1_worst_case_all_flat_2022
+              bestCaseAllFlatTop1 = [double]$d.winner_top1_best_case_all_flat_2022
+              top3Overlap2022 = [double]$d.top3_picks_podium_precision_2022
+              independentOutsiderPodium2022 = [double]$d.outsider_podium_hit_rate_2022
+              sourceBytesUploaded = $false
+              originalZipsModified = $false
+              2023and2024OosOpened = $false
+              afterCostProfitShown = $false
+            } | ConvertTo-Json -Compress
+            exit 0
+          } catch {
+            Write-Host 'NAR_EXPLORATORY_SCREENING_RESEARCH_HOLD'
+            exit 2
+          }
