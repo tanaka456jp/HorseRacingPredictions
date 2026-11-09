@@ -166,7 +166,7 @@ jobs:
               independentOutsiderPodium2022 = [double]$d.outsider_podium_hit_rate_2022
               sourceBytesUploaded = $false
               originalZipsModified = $false
-              2023and2024OosOpened = $false
+              sealed2023to2024OosOpened = $false
               afterCostProfitShown = $false
             } | ConvertTo-Json -Compress
             exit 0
