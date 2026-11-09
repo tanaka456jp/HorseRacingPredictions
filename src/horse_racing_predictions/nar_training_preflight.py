@@ -45,6 +45,7 @@ class NarMonthDiagnostic:
     unknown_marker_win_payout_evidence: tuple[tuple[str, int], ...] = ()
     unknown_marker_monthly_distinct_sum: int = 0
     unknown_marker_max_monthly_single_value_frequency: int = 0
+    unknown_marker_race_pattern_counts: tuple[tuple[str, int], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -71,6 +72,7 @@ class NarPreflightReport:
     unknown_marker_win_payout_evidence: tuple[tuple[str, int], ...] = ()
     unknown_marker_monthly_distinct_sum: int = 0
     unknown_marker_max_monthly_single_value_frequency: int = 0
+    unknown_marker_race_pattern_counts: tuple[tuple[str, int], ...] = ()
     user_permission_attested: bool = True
     all_months_study_eligible: bool = False
     actual_rights_independently_verified: bool = False
@@ -99,6 +101,7 @@ def diagnose_nar_training_folder(
     unrecognized_profiles: Counter[str] = Counter()
     unknown_rank_evidence: Counter[str] = Counter()
     unknown_win_evidence: Counter[str] = Counter()
+    unknown_race_patterns: Counter[str] = Counter()
     unknown_distinct_monthly_sum = 0
     unknown_max_monthly_frequency = 0
     for source in inventory.absolute_source_paths:
@@ -142,6 +145,15 @@ def diagnose_nar_training_folder(
                 raise UnsafeNarSource("NAR_PREFLIGHT_UNKNOWN_MARKER_EVIDENCE_CONFLICT")
             unknown_rank_evidence.update(dict(outcome.unknown_marker_rank_evidence))
             unknown_win_evidence.update(dict(outcome.unknown_marker_win_payout_evidence))
+            p = dict(outcome.unknown_marker_race_pattern_counts)
+            if (p.get("SAME_UNKNOWN_TEXT_ALL_HORSES", 0)
+                    + p.get("MIXED_UNKNOWN_TEXT_OR_PARTIAL_HORSES", 0)
+                    != n_nonempty
+                    or p.get("OFFICIAL_LIKE_CANCEL_SPELLING_UNVERIFIED", 0)
+                    + p.get("NOT_OFFICIAL_LIKE_CANCEL_SPELLING", 0)
+                    != n_nonempty):
+                raise UnsafeNarSource("NAR_PREFLIGHT_UNKNOWN_RACE_PATTERN_CONFLICT")
+            unknown_race_patterns.update(p)
             unknown_distinct_monthly_sum += (
                 outcome.unknown_marker_distinct_text_values_in_month
             )
@@ -181,6 +193,9 @@ def diagnose_nar_training_folder(
                 unknown_marker_rank_evidence=outcome.unknown_marker_rank_evidence,
                 unknown_marker_win_payout_evidence=(
                     outcome.unknown_marker_win_payout_evidence
+                ),
+                unknown_marker_race_pattern_counts=(
+                    outcome.unknown_marker_race_pattern_counts
                 ),
                 unknown_marker_monthly_distinct_sum=(
                     outcome.unknown_marker_distinct_text_values_in_month
@@ -232,6 +247,9 @@ def diagnose_nar_training_folder(
         unknown_marker_rank_evidence=tuple(sorted(unknown_rank_evidence.items())),
         unknown_marker_win_payout_evidence=tuple(sorted(
             unknown_win_evidence.items()
+        )),
+        unknown_marker_race_pattern_counts=tuple(sorted(
+            unknown_race_patterns.items()
         )),
         unknown_marker_monthly_distinct_sum=unknown_distinct_monthly_sum,
         unknown_marker_max_monthly_single_value_frequency=(
