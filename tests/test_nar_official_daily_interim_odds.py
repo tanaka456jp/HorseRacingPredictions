@@ -161,3 +161,11 @@ def test_direct_capture_has_no_extra_credential_or_unbounded_polling():
     )
     assert S._MAX_SNAPSHOTS_PER_DAY <= 6
     assert S._MIN_REQUEST_GAP.total_seconds() >= 120
+
+def test_empty_quoted_market_has_complete_fixed_denominator_not_false_profit():
+    audit, private = evaluate(zip_odds(no_prices=True))
+    assert audit.planned_ticket_count == 2*audit.registered_flat_races
+    assert audit.planned_win_tickets_with_price + audit.planned_place_tickets_with_min_price == 0
+    assert audit.missing_win_prices == audit.registered_flat_races
+    assert audit.missing_place_min_prices == audit.registered_flat_races
+    assert not audit.after_cost_positive_ev_verified

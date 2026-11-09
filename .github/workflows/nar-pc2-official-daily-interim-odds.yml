@@ -71,7 +71,7 @@ jobs:
             }
             $d = [string]$output[0] | ConvertFrom-Json
             if ($d.schema -cne 'NAR.PC2.OfficialDailyInterimOddsAudit.v1' -or
-                $d.result -cne 'PRIVATE_REAL_OFFICIAL_PREOFF_MARKET_SNAPSHOT_CAPTURED' -or
+                $d.result -cnotin @('PRIVATE_REAL_INTERIM_QUOTES_CAPTURED', 'PRIVATE_OFFICIAL_ZIP_CAPTURED_NO_QUOTED_PRICES_YET') -or
                 [int]$d.flat_races -ne 59 -or
                 [int]$d.registered_horses -ne 641 -or
                 [int]$d.minutes_before_first_scheduled_off -lt 10 -or
@@ -89,7 +89,7 @@ jobs:
             # numbers, race IDs, original ZIP bytes or private salts.
             [ordered]@{
               schema = 'NAR.PC2.OfficialDailyInterimOddsAudit.v1'
-              status = 'PRIVATE_INTERIM_QUOTES_CAPTURED_NO_ECONOMIC_EV'
+              status = [string]$d.result
               raceDay = '2026-11-10'
               allFrozenFlatRaces = [int]$d.flat_races
               frozenRegisteredHorses = [int]$d.registered_horses

@@ -415,7 +415,9 @@ def main() -> int:
         return 2
     print(json.dumps({
         "schema": a.schema,
-        "result": "PRIVATE_REAL_OFFICIAL_PREOFF_MARKET_SNAPSHOT_CAPTURED",
+        "result": ("PRIVATE_REAL_INTERIM_QUOTES_CAPTURED"
+                   if a.planned_win_tickets_with_price + a.planned_place_tickets_with_min_price > 0
+                   else "PRIVATE_OFFICIAL_ZIP_CAPTURED_NO_QUOTED_PRICES_YET"),
         "flat_races": a.registered_flat_races,
         "registered_horses": a.frozen_registered_horses,
         "raw_market_rows": a.market_rows,
