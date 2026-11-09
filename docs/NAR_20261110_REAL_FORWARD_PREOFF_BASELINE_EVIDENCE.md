@@ -110,3 +110,65 @@ and any applicable fees under a predeclared all-races denominator.
 The sample must be judged prospectively; do not use 2022 to choose
 profitable-looking stake/filter rules. Never conflate simulated payout,
 live paper forecast, and an actual verified purchased ticket.
+
+## First genuine official interim-odds capture — still no market quote, 2026-11-10
+
+Official NAR DAILY odds ZIP download:
+`https://www.keiba.go.jp/KeibaWeb/DataDownload/OddsDataDownload?type=daily`
+is confirmed by the official NAR download mechanism and ZIP response;
+the downloaded source and private matching digest are stored **only**
+under the same PC② D-drive private prospective capture directory as the
+unchanged race forecast.
+
+**Evidence 1:**
+[PC② Action #42716217937](https://github.com/tanaka456jp/HorseRacingPredictions/actions/runs/42716217937)
+**SUCCESS** for source download and immutable frozen forecast validation
+at **2026-11-10 07:56 JST**, but the actual official file contained
+**0 odds records**, **0 WIN records**, **0 PLACE records**. All **59**
+frozen WIN candidates and all **59** frozen PLACE candidates are
+therefore **missing contemporaneous market prices** at this time. It
+would be incorrect to describe this as 118 observed prices, a tradable
+event or a positive EV measurement. The source file was generated
+2026-11-10 07:56:06 JST and privately received 07:56:29 JST.
+
+**Evidence 2:**
+[PC② Action #42716708851](https://github.com/tanaka456jp/HorseRacingPredictions/actions/runs/42716708851)
+**SUCCESS** for a second separate NAR official ZIP, generated at
+**07:58:06 JST** and received **08:00:04 JST**. It likewise contains
+**0 market records**, retains the original 59/641 denominator and
+correctly emits status
+`PRIVATE_OFFICIAL_ZIP_CAPTURED_NO_QUOTED_PRICES_YET`, instead of
+falsely claiming that usable betting quotations were received.
+
+The official file timestamp and PC② request time are two different
+attributes; neither is a guaranteed order execution timestamp or a
+provider-certified quote-publication timestamp. Missing/unoffered quotes
+remain **None**, never 0x odds, an assumed lost bet, or an excluded race.
+
+Implementation:
+`scripts/capture_nar_official_daily_odds_preoff_once.py`,
+`tests/test_nar_official_daily_interim_odds.py`, and
+`.github/workflows/nar-pc2-official-daily-interim-odds.yml`.
+The parser recognizes WIN/PLACE rows with official race+horse numbers,
+keeps full previously frozen 59-race coverage, preserves both low and
+high bounds of PLACE odds if available, rejects stale/late/duplicate or
+unfrozen identities, and publishes **only aggregate counts**.
+One request per invocation, **at least 150 seconds between captures**,
+maximum **six snapshots per day**, and **at least 10 minutes before
+the earliest planned first off**. No raw NAR CSV, private salt, candidate
+identifier, selected quote, or ZIP is transferred to GitHub.
+
+**Financial status: HOLD.** No observed interim price exists in these
+early snapshots, no actual bets were placed, and no 2026-11-10
+settlement, executable order prices, positive net EV or independent
+out-of-sample return has been validated.
+
+Follow-up MUST be a new bounded quote capture only if the day's
+source starts publishing real odds while the entire forecast schedule
+is still safely before first off. If late, preserve these early empty
+snapshots and label all 118 planned quotes missing; do not retroactively
+turn post-off data into a pre-off market observation. Separate
+prospective economic evidence will require independent quote timing,
+later official outcome settlement, fees and a predeclared unscreened
+denominator. None of this allows reselecting the two frozen tickets
+using the market values.
