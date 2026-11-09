@@ -65,6 +65,8 @@ def _row(target: Any) -> dict[str, Any]:
     f = target.feature
     if (type(target.target_win) is not int or target.target_win not in (0, 1)
             or type(target.target_place) is not int or target.target_place not in (0, 1)
+            or type(target.target_top3) is not int or target.target_top3 not in (0, 1)
+            or target.target_win > target.target_top3
             or not 0 <= f.prior_win_rate <= 1
             or not 0 <= f.prior_top3_rate <= 1
             or f.prior_starts < 0 or f.prior_wins > f.prior_starts):
@@ -83,7 +85,7 @@ def _row(target: Any) -> dict[str, Any]:
             else float("nan")
         ),
         "__win": target.target_win,
-        "__podium": target.target_place,
+        "__podium": target.target_top3,
     }
 
 
