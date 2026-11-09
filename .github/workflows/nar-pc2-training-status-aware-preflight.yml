@@ -92,6 +92,7 @@ jobs:
             $textProfileTotals = [ordered]@{}
             $rankPresenceTotals = [ordered]@{}
             $winPayoutPresenceTotals = [ordered]@{}
+            $unknownRacePatternTotals = [ordered]@{}
             $monthlyDistinctSum = 0
             $maximumMonthFrequency = 0
             if ([int]$d.monthsPresent -eq 72 -and [int]$d.monthsMissing -eq 0) {
@@ -218,6 +219,33 @@ jobs:
                 throw 'NAR_PC2_TRIAGE_UNKNOWN_MARKER_PROFILE_COUNT_INVALID'
               }
               $unknownRaces = [int]$blankShapeTotals.UNRECOGNIZED_NONEMPTY_STATUS_MARKER
+              $approvedRacePatterns = @(
+                'SAME_UNKNOWN_TEXT_ALL_HORSES',
+                'MIXED_UNKNOWN_TEXT_OR_PARTIAL_HORSES',
+                'OFFICIAL_LIKE_CANCEL_SPELLING_UNVERIFIED',
+                'NOT_OFFICIAL_LIKE_CANCEL_SPELLING'
+              )
+              $racePatternSum = 0
+              $possibleCancelSum = 0
+              foreach ($p in $d.unknownRacePatternCounts.PSObject.Properties) {
+                if ($approvedRacePatterns -cnotcontains $p.Name -or
+                    [int]$p.Value -le 0) {
+                  throw 'NAR_PC2_UNKNOWN_RACE_PATTERN_UNSAFE'
+                }
+                $unknownRacePatternTotals[$p.Name] = [int]$p.Value
+                if ($p.Name -cin @(
+                  'SAME_UNKNOWN_TEXT_ALL_HORSES',
+                  'MIXED_UNKNOWN_TEXT_OR_PARTIAL_HORSES'
+                )) {
+                  $racePatternSum += [int]$p.Value
+                } else {
+                  $possibleCancelSum += [int]$p.Value
+                }
+              }
+              if ($racePatternSum -ne $unknownRaces -or
+                  $possibleCancelSum -ne $unknownRaces) {
+                throw 'NAR_PC2_UNKNOWN_RACE_PATTERN_DENOMINATOR_CONFLICT'
+              }
               $rankTotal = 0
               foreach ($p in $d.unknownMarkerRankCellPresence.PSObject.Properties) {
                 if ($p.Name -cnotin @(
@@ -271,6 +299,7 @@ jobs:
               unknownMarginTextProfiles = $textProfileTotals
               unknownRankCellPresence = $rankPresenceTotals
               unknownWinPaybackPresence = $winPayoutPresenceTotals
+              unknownRacePatterns = $unknownRacePatternTotals
               unknownMarginDistinctValuesSummedAcrossMonths = $monthlyDistinctSum
               unknownMarginLargestFrequencyWithinOneMonth = $maximumMonthFrequency
               licensedSourceBytesUploaded = $false
