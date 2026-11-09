@@ -1,0 +1,112 @@
+# NAR real prospective pre-off full-roster baseline — 2026-11-10
+
+**Research-only evidence; NOT positive betting expected value.**
+Draft PR #142, feature branch only. No merge or actual stakes.
+**All 2023–2024 sealed OOS and 2025–2026 protected historical holdout remain untouched.**
+This 2026-11-10 data is newly captured prospective *event-day* material, not a
+read of historical protected test targets.
+
+## Background: prior betting strategy rejected
+
+PC② private official historical NAR 2017–2021 fit / 2022 exploratory
+model-selection study [Run #42630314405](https://github.com/tanaka456jp/HorseRacingPredictions/actions/runs/42630314405)
+verified a fixed hypothetical ¥100 WIN + ¥100 PLACE in each of 13,402
+retrospectively evaluable races. Historical stake ¥2,680,400;
+official gross return ¥2,026,180; net **-¥654,220**; ROI **-24.4076%**.
+Whole-racing-day 2022 descriptive bootstrap 95% ROI band
+[-26.4668%, -22.1488%]. Gate:
+`REJECT_UNCONDITIONAL_2022_POLICY`.
+This **cannot** establish real-world prospective returns, since no advance
+roster/prediction, independently witnessed preoff price, actual bet, full
+operating cost audit or sealed OOS was available. Do NOT mine the same 2022
+period repeatedly until the outcome appears profitable.
+
+## Actual official source and reproducible controls
+
+[Official NAR data download PDF manual](https://www.keiba.go.jp/pdf/manual/data_pdf_manual.pdf)
+states daily downloadable race and odds ZIP files update approximately every
+two minutes, daily odds may contain *interim* prices, and monthly odds supply
+only final/settled prices. Actual fields include `全成績` in
+`YYYYMMDD_horselist.csv` and `着順`, `タイム`,
+`上がり3F` which may contain **after-event** information.
+Never select on those future fields.
+[Official NAR FAQ](https://www.keiba.go.jp/qa.html) and
+[usage terms](https://www.keiba.go.jp/terms.html) must be respected,
+especially redistribution and commercial re-use; no original NAR rows,
+ZIPs, horses, race keys or machine paths are published to GitHub.
+
+1. [2026-11-10 PC② original real DAILY race ZIP capture, SUCCESS, #42664266326](https://github.com/tanaka456jp/HorseRacingPredictions/actions/runs/42664266326):
+   **59 flat races, 641 registered horses**, earlier than the full
+   day's first scheduled off, **2026-11-10 11:35 JST**. Records are saved
+   only on PC② private D-drive under
+   `D:\Development\HorseRacingPredictions-PrivateReview\nar-prospective-captures`.
+   Only an allowlisted 59/641 aggregate appears in public logs. The original
+   daily ZIP is accompanied by a private salted SHA256 provenance manifest.
+   帯広ばんえい is excluded from flat-race evaluation by a predeclared rule.
+   Strict read-only ZIP structural inspection verifies full race/horse roster,
+   chronological window, and blank known post-result columns.
+2. [2026-11-10 complete real full-roster prospective **historical-career-form
+   comparator** freeze, SUCCESS, #42665793590](https://github.com/tanaka456jp/HorseRacingPredictions/actions/runs/42665793590):
+   every one of the above **59 races / 641 horses** has private numerical
+   frozen winner and top-three score. Winner score uses fixed
+   `(career wins+1)/(career starts+10)`; podium score uses
+   `(career 1st+2nd+3rd+1)/(career starts+10)`.
+   One top WIN and one independently-scored fourth PLACE candidate are
+   chosen without looking at any outcome or betting price.
+   This is **NOT the 2017–2021 CatBoost model**; it is a prospective
+   comparator with no 2022 payout optimization.
+   The complete private snapshot, original observation/creation times,
+   score and roster manifest, and random 32-byte **PRIVATE** salt are
+   persisted on the PC② D drive and never attached to an Actions artifact.
+3. The same workflow GitHub-hosted runner reported the **salted,
+   privacy-preserving forecast digest only** at
+   **2026-11-09 17:34:13Z = 2026-11-10 02:34:13 JST**,
+   over 9 hours before scheduled first off.
+   GitHub-hosted runner receipt schema:
+   `NAR.GitHubHostedRealBlindedDigestReceipt.v1`. Digest
+   `7ed594c19a03764aab963daae17233b23aad34c5f53acc94b29f34bbd8f47bdd`
+   is public by design; salt, private source, score arrays and candidate
+   identities are not. Neither a self-supplied off-time nor a local hash
+   on its own proves an official race schedule or race occurrence.
+4. [Read-only replay/immutability verification, SUCCESS, #42666625017](https://github.com/tanaka456jp/HorseRacingPredictions/actions/runs/42666625017):
+   PC② re-reads the *same original* private ZIP and complete private
+   snapshot, reconstructs all 59/641 scores using the original pre-off
+   capture/freeze times and private salt, and rejects any changed snapshot
+   or digest. The separately re-issued hosted digest remained identical
+   to the original receipt. Replays neither overwrite the forecast nor
+   re-download the source. Read-only capture rerun also
+   [SUCCESS, #42666544815](https://github.com/tanaka456jp/HorseRacingPredictions/actions/runs/42666544815).
+   A replay cannot be used to replace a prediction after knowing outcomes.
+
+## Scientific and legal gates that remain OPEN / HOLD
+
+- **No actual pre-off odds snapshots** have been independently captured,
+  including WIN and PLACE odds. Source documentation provides them, but
+  endpoint/rights/market-open/clock validation remains necessary.
+  A final tote dividend or after-event odds is not a pre-off executable price.
+- External GitHub timestamps and blinded digest receipt are real, but
+  independent comparison of the full frozen private snapshot, full official
+  advance calendar, and licensed source rights is still incomplete.
+  Our local immutable replay is a useful anti-tamper check, not a neutral
+  external audit of every horse or prediction.
+- No settlement of actual 2026-11-10 races has occurred in this study.
+  At a later *properly authorized* time, post-event payouts can be joined
+  strictly AFTER checking the pre-off receipt, without cherry-picking
+  missing/scratched/unoffered races.
+- With no contemporaneously observed prices or actual stakes, no
+  pre-off value-bet recommendation, after-cost empirical ROI, statistical
+  positive expected value, live bet permission or public paid article
+  authorization can be inferred.
+- No source details, private salts, horses, odds, binary models,
+  original ZIP bytes or protected holdout observations may be transferred
+  to GitHub; only aggregate research metrics and blinded commitments.
+
+**Next methodological step:** identify the officially published current-day
+odds download link without inventing endpoints, make a bounded single
+private request only when market is actually open and permissible, record
+the source download time and entire price/selection coverage (including
+missing/suspended prices), and later reconcile against official payouts
+and any applicable fees under a predeclared all-races denominator.
+The sample must be judged prospectively; do not use 2022 to choose
+profitable-looking stake/filter rules. Never conflate simulated payout,
+live paper forecast, and an actual verified purchased ticket.
