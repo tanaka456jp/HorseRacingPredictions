@@ -121,3 +121,60 @@ nonempty final-rank cells and whether official win payback cells are
 present. It also computes within-month counts of distinct unknown
 values without exporting source text; any further resolution must be
 based on that evidence, not on assumptions.
+
+
+## 2026-11-09: explicit whole-race cancellation-language candidate probe
+
+At head `0b86485bd33a`, GitHub CI
+[Run #42605066160](https://github.com/tanaka456jp/HorseRacingPredictions/actions/runs/42605066160)
+completed **1027 passed, 33 skipped**, with fictional-only regressions.
+The updated PC② real-source private
+[Run #42604994962](https://github.com/tanaka456jp/HorseRacingPredictions/actions/runs/42604994962)
+completed **SUCCESS**; raw private CSV/source text never appeared in the
+published workflow log. It processed all 72 training months under the
+same original source and denominator: 89,654 source races; 10,223
+predeclared banei, 79,431 in-scope flat, 78,580 status-aware settled
+flat, 851 still unresolved, **0 training rows released**.
+
+For the **750** cases with nonempty unknown (3-to-5-character)
+margin/status text and **no numeric finishing position and no official
+win-payout slot**, the new immutable/static-code screening finds:
+
+| Evidence category | Race count |
+| --- | ---: |
+| All runner records share exactly the same unknown text | **722** |
+| Multiple texts or partly populated runner records | **28** |
+| ALL unknown texts fit a predeclared *possible* race cancellation/non-establishment spelling set | **750** |
+| Does not fit that candidate set | **0** |
+| Subset independently confirmed by official race-level notices | **0 (not tested)** |
+| Subset automatically assigned 100-yen refunds, false results, or training labels | **0** |
+
+**Interpretation:** this supports a strong hypothesis that these
+750 *whole races* are cancelled or non-established rather than
+individual runners failing to finish. However the check is only
+lexical correspondence to a fixed list of cancellation-like variants
+in source code; exact official race-level notices, final tote status,
+and refund chronology have **NOT** been independently corroborated.
+NAR's official public glossary distinguishes `取止` and `不成`
+(race-level return of all tickets) from `除外` (individual refund)
+and `中止` (started horse, no refund).
+Refer to NAR's published beginner guide:
+https://www.keiba.go.jp/beginner/step2.html
+and the official historical data download specification:
+https://www.keiba.go.jp/pdf/manual/data_pdf_manual.pdf.
+
+Of the original **851** unresolved flat races, **750** now have
+explicit racewide cancellation *candidate evidence*, **2** have
+existing known cancellation/non-establishment status markers, and
+the remaining **99** belong to other source coverage or payout
+conflict categories (53 coverage; 39 place; 3 DQ settlement;
+2 declared starters; 1 field size; 1 win payout conflict).
+The additional **2** still require independent notice/refund proof.
+
+This is an **evidence triage** only. No cancelled race has been
+silently deleted from the 79,431-race denominator or treated as a
+made wager. The private original training ZIPs remain unchanged.
+No 2023–24 OOS nor 2025–26 final holdout was opened, and no
+after-cost positive expected value has been demonstrated. For further
+research, demand independent primary-source notice confirmation
+before changing any eligibility or payout status.
