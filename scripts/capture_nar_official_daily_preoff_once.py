@@ -40,6 +40,7 @@ class NarPreoffDailyHold(ValueError):
 class NarPreoffDailyAudit:
     race_day_jst: str
     flat_races: int
+    out_of_scope_banei_races: int
     registered_horses: int
     earliest_off_utc: str
     host_captured_utc: str
@@ -126,10 +127,14 @@ def validate_official_daily_race_zip(
     if not 1 <= len(race_rows) <= 300 or not 4 <= len(horse_rows) <= 4500:
         raise NarPreoffDailyHold("NAR_PREOFF_RACE_OR_ROSTER_EMPTY")
     schedule = {}
+    banei_count = 0
     for row in race_rows:
         if row["競走年月日"].strip() != race_day.strftime("%Y%m%d"):
             raise NarPreoffDailyHold("NAR_PREOFF_RACE_DATE_MISMATCH")
         place, number = row["競馬場"].strip(), row["レース番号"].strip()
+        if place.startswith("帯広"):
+            banei_count += 1
+            continue
         clock = row["発走時刻"].strip().replace(":", "")
         headcount = row["頭数"].strip()
         if (not place or not number.isdecimal() or not 1 <= int(number) <= 20
@@ -148,11 +153,15 @@ def validate_official_daily_race_zip(
             raise NarPreoffDailyHold("NAR_PREOFF_DUPLICATE_RACE")
         off = datetime.combine(race_day, time(hour, minute), _JST)
         schedule[key] = (int(headcount), off.astimezone(timezone.utc))
+    if not schedule:
+        raise NarPreoffDailyHold("NAR_PREOFF_NO_IN_SCOPE_FLAT_RACES")
     earliest = min(off for _, off in schedule.values())
     if captured + _MIN_LEAD >= earliest:
         raise NarPreoffDailyHold("NAR_PREOFF_NOT_EARLY_ENOUGH")
     counts = {}
     for row in horse_rows:
+        if row["競馬場"].strip().startswith("帯広"):
+            continue
         if row["競走年月日"].strip() != race_day.strftime("%Y%m%d"):
             raise NarPreoffDailyHold("NAR_PREOFF_HORSE_DATE_MISMATCH")
         key = (row["競馬場"].strip(), row["レース番号"].strip())
@@ -171,7 +180,8 @@ def validate_official_daily_race_zip(
         raise NarPreoffDailyHold("NAR_PREOFF_INCOMPLETE_RACE_ROSTER")
     return NarPreoffDailyAudit(
         race_day_jst=race_day.isoformat(), flat_races=len(schedule),
-        registered_horses=len(horse_rows),
+        out_of_scope_banei_races=banei_count,
+        registered_horses=sum(map(len, counts.values())),
         earliest_off_utc=earliest.isoformat().replace("+00:00", "Z"),
         host_captured_utc=captured.isoformat().replace("+00:00", "Z"),
         min_lead_seconds=int((earliest - captured).total_seconds()),
@@ -245,6 +255,7 @@ def main() -> int:
         "schema": "NAR.OfficialDailyPreoffCapture.v1", "result": "PASS",
         "registered_races": audit.flat_races,
         "registered_horses": audit.registered_horses,
+        "excluded_banei_races": audit.out_of_scope_banei_races,
         "lead_minutes": audit.min_lead_seconds // 60,
         "preoff_forecast_created": False,
         "independent_preoff_proof": False, "source_bytes_uploaded": False,
