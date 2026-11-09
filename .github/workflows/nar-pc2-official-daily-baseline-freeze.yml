@@ -95,10 +95,11 @@ jobs:
       PREOFF_EARLIEST_OFF: ${{ needs.pc2-private-forecast-freeze.outputs.earliest_off }}
       PREOFF_DAY: ${{ needs.pc2-private-forecast-freeze.outputs.day }}
       PREOFF_RACES: ${{ needs.pc2-private-forecast-freeze.outputs.races }}
-      EXPECTED_ENVIRONMENT: ${{ runner.environment }}
     steps:
       - name: Receive ONLY blinded digest on independent GitHub-hosted runner, BEFORE off
         shell: bash
+        env:
+          EXPECTED_ENVIRONMENT: ${{ runner.environment }}
         run: |
           set -euo pipefail
           python3 - <<'PY'
