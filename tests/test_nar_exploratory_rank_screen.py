@@ -77,6 +77,18 @@ def test_2022_missing_races_are_counted_not_treated_as_win():
     assert 0 <= m.winner_top1_worst_case_all_flat_2022 <= m.winner_top1_hit_rate_2022
     assert m.winner_top1_best_case_all_flat_2022 >= m.winner_top1_worst_case_all_flat_2022
     assert 0 <= m.random_baseline_top1_expected_2022 <= 1
+    assert 0 <= m.smoothed_prior_win_baseline_top1_2022 <= 1
+    assert abs(
+        m.top1_uplift_over_simple_form_2022
+        - (m.winner_top1_hit_rate_2022
+           - m.smoothed_prior_win_baseline_top1_2022)
+    ) < 1e-12
+    assert -1 <= m.top1_uplift_day_bootstrap_ci95_lower <= 1
+    assert -1 <= m.top1_uplift_day_bootstrap_ci95_upper <= 1
+    assert m.top1_uplift_day_bootstrap_ci95_lower <= (
+        m.top1_uplift_day_bootstrap_ci95_upper
+    )
+    assert m.independent_2022_race_days == 3
     assert 0 <= m.top3_picks_podium_precision_2022 <= 1
     assert 0 <= m.outsider_podium_hit_rate_2022 <= 1
     assert m.independently_fitted_models
@@ -149,3 +161,16 @@ def test_7_runner_podium_target_is_not_two_place_dividend():
                  and t.target_place == 0)
     assert third.target_top3 == 1
     assert third.target_place == 0
+
+
+def test_fixed_seed_race_day_bootstrap_is_deterministic_for_fictional_runs():
+    pytest.importorskip("catboost")
+    batch, years = fictional_batch()
+    one = explore_nar_2017_2022_ranking_signal(
+        batch, flat_races_by_year=years, iterations=30,
+    )
+    two = explore_nar_2017_2022_ranking_signal(
+        batch, flat_races_by_year=years, iterations=30,
+    )
+    assert one == two
+    assert not one.actual_after_cost_roi_verified
