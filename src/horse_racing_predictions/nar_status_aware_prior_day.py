@@ -35,6 +35,9 @@ class NarStatusAwareAsOfTarget:
     feature: NarAsOfFeatures
     target_win: int = field(repr=False)
     target_place: int = field(repr=False)
+    # Three-finisher rank target, NOT a place-ticket dividend (5-7 runners
+    # pay only two). Never used among features or for ROI.
+    target_top3: int = field(repr=False)
     # Target status MUST NOT enter feature.
     after_event_status: str = field(repr=False)
 
@@ -208,6 +211,10 @@ def reconstruct_nar_status_aware_prior_day(
                         horse_identity=identity, feature=features,
                         target_win=label.win_label,
                         target_place=label.place_label,
+                        target_top3=int(
+                            label.official_finish_rank is not None
+                            and label.official_finish_rank <= 3
+                        ),
                         after_event_status=label.status,
                     ))
                     if len(targets) > 1_000_000:
