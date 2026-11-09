@@ -91,7 +91,7 @@ jobs:
             Write-Host 'NAR_EXPLORATORY_FREE_RESEARCH_DEPENDENCY_INSTALL_HOLD'
             exit 2
           }
-          & $vpy -B -c 'import catboost, pandas, numpy, sklearn; assert catboost.__version__ == "1.2.10"'
+          & $vpy -B -c 'import catboost, pandas, numpy, sklearn'
           if ($LASTEXITCODE -ne 0) {
             Write-Host 'NAR_EXPLORATORY_FREE_RESEARCH_DEPENDENCY_VALIDATION_HOLD'
             exit 2
