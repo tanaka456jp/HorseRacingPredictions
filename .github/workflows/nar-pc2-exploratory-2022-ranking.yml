@@ -143,6 +143,10 @@ jobs:
                 $d.protected_final_holdout_opened -ne $false -or
                 $d.actual_after_cost_roi_verified -ne $false -or
                 $d.historical_official_win_payouts_reconciled -ne $true -or
+                $d.historical_official_place_payouts_reconciled -ne $true -or
+                $null -eq $d.hypothetical_two_ticket_roi_2022 -or
+                [double]$d.hypothetical_two_ticket_all_flat_adverse_missing_roi_2022 -gt [double]$d.hypothetical_two_ticket_roi_2022 -or
+                [double]$d.hypothetical_two_ticket_day_ci95_lower -gt [double]$d.hypothetical_two_ticket_day_ci95_upper -or
                 $null -eq $d.hypothetical_model_win_roi_2022 -or
                 $null -eq $d.hypothetical_simple_form_win_roi_2022 -or
                 [double]$d.hypothetical_model_win_all_flat_adverse_missing_roi_2022 -gt [double]$d.hypothetical_model_win_roi_2022 -or
@@ -175,6 +179,11 @@ jobs:
               tune2022MissingAndOther = [int]$d.unevaluable_tune_races_2022
               top1Accuracy2022 = [double]$d.winner_top1_hit_rate_2022
             retrospectiveWinOnlyModelROI = [double]$d.hypothetical_model_win_roi_2022
+            retrospectivePlaceFourthPickROI = [double]$d.hypothetical_outsider_place_roi_2022
+            retrospectiveWinPlusPlaceROI = [double]$d.hypothetical_two_ticket_roi_2022
+            retrospectiveWinPlusPlaceAdverseAllFlatROI = [double]$d.hypothetical_two_ticket_all_flat_adverse_missing_roi_2022
+            retrospectiveWinPlusPlaceDay95Lower = [double]$d.hypothetical_two_ticket_day_ci95_lower
+            retrospectiveWinPlusPlaceDay95Upper = [double]$d.hypothetical_two_ticket_day_ci95_upper
             retrospectiveWinOnlyFormROI = [double]$d.hypothetical_simple_form_win_roi_2022
             retrospectiveWinOnlyAdverseAllFlatROI = [double]$d.hypothetical_model_win_all_flat_adverse_missing_roi_2022
             retrospectiveWinOnlyModelMinusFormROI = [double]$d.hypothetical_model_minus_form_roi_2022

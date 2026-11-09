@@ -112,3 +112,19 @@ selected official payout causes HOLD; it is never silently treated as zero.
 2023–2024 and 2025–2026 sealed periods are untouched.
 Quote aggregate returns only after a confirmed successful PC② run of the
 new commit, not on the strength of code or fictional tests.
+
+
+## Predeclared win + separate fourth-place-candidate scenario
+
+The same 2022 evaluation population is also screened using the earlier
+stated two-ticket option: 100 yen hypothetical win on first-ranked
+model horse, plus 100 yen hypothetical place on the separate fourth
+candidate outside the model's top three. Actual official **place** payouts,
+not numeric third-place finishes, determine settlement. With 5–7 offered
+runners, numeric third finish may return zero place payout.
+One 200-yen combined stake is the denominator for each evaluable race;
+a separate deliberately adverse full-flat stress charges 200 yen to every
+non-evaluable race and assumes zero dividend. No favorable race is
+selected by observed payouts. Race-day bootstrap bands are retrospective
+and descriptive, not independent OOS confidence in true profitability.
+This is NOT a genuine pre-off wager or positive-EV authorization.

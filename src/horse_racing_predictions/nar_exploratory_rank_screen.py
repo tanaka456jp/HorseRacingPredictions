@@ -47,6 +47,13 @@ class NarExploratoryRankingMetrics:
     outsider_podium_hit_rate_2022: float
     # Post-event official paid prices; never historical pre-off prices.
     historical_official_win_payouts_reconciled: bool = False
+    historical_official_place_payouts_reconciled: bool = False
+    hypothetical_outsider_place_gross_yen_2022: int | None = None
+    hypothetical_outsider_place_roi_2022: float | None = None
+    hypothetical_two_ticket_roi_2022: float | None = None
+    hypothetical_two_ticket_all_flat_adverse_missing_roi_2022: float | None = None
+    hypothetical_two_ticket_day_ci95_lower: float | None = None
+    hypothetical_two_ticket_day_ci95_upper: float | None = None
     hypothetical_model_win_gross_yen_2022: int | None = None
     hypothetical_simple_form_win_gross_yen_2022: int | None = None
     hypothetical_model_win_roi_2022: float | None = None
@@ -101,6 +108,7 @@ def _row(target: Any) -> dict[str, Any]:
         ),
         "__win": target.target_win,
         "__podium": target.target_top3,
+        "__place": target.target_place,  # Actual paid place != numeric top-three.
     }
 
 
@@ -109,6 +117,7 @@ def explore_nar_2017_2022_ranking_signal(
     *, flat_races_by_year: dict[int, int],
     iterations: int = 40,
     official_win_payouts_2022: dict[str, dict[int, int]] | None = None,
+    official_place_payouts_2022: dict[str, dict[int, int]] | None = None,
 ) -> NarExploratoryRankingMetrics:
     """Research-only; retrospectively selected complete labels aren't EV.
 
@@ -189,10 +198,18 @@ def explore_nar_2017_2022_ranking_signal(
     scored["race_day"] = tune["race_day"]
     scored["win_prediction"] = win
     scored["outsider_prediction"] = out
-    labels = tune.set_index(["race_id", "horse_number"])[["__win", "__podium"]]
+    labels = tune.set_index(["race_id", "horse_number"])[["__win", "__podium", "__place"]]
     wins = overlap = outsiders = simple_wins = 0
     gross_model_win = gross_simple_win = 0
     payout_day_pairs: dict[date, list[tuple[int, int]]] = {}
+    place_day_pairs: dict[date, list[int]] = {}
+    gross_outsider_place = 0
+    if official_place_payouts_2022 is not None and (
+        official_win_payouts_2022 is None
+        or type(official_place_payouts_2022) is not dict
+        or not set(scored["race_id"]).issubset(official_place_payouts_2022)
+    ):
+        raise UnsafeNarSource("NAR_EXPLORATORY_PLACE_PAYOUT_COVERAGE_REQUIRED")
     if official_win_payouts_2022 is not None and (
         type(official_win_payouts_2022) is not dict
         or not set(scored["race_id"]).issubset(official_win_payouts_2022)
@@ -252,6 +269,19 @@ def explore_nar_2017_2022_ranking_signal(
         )
         outsider_horse = int(other.horse_number.iloc[0])
         outsiders += int(actual.loc[outsider_horse, "__podium"] == 1)
+        if official_place_payouts_2022 is not None:
+            places = official_place_payouts_2022[rid]
+            horses = set(int(x) for x in g.horse_number)
+            if type(places) is not dict or set(places) != horses:
+                raise UnsafeNarSource("NAR_EXPLORATORY_PLACE_ROSTER_MISMATCH")
+            for h in horses:
+                amount = places[h]
+                if (type(amount) is not int or amount < 0
+                        or (amount >= 100) != (int(actual.loc[h, "__place"]) == 1)):
+                    raise UnsafeNarSource("NAR_EXPLORATORY_PLACE_LABEL_MISMATCH")
+            amount = places[outsider_horse]
+            gross_outsider_place += amount
+            place_day_pairs.setdefault(day, []).append(amount)
 
     # Full 2022 flat-race denominator includes all unresolved races,
     # failed roster checks and known cancellation candidates. This wide
@@ -319,6 +349,41 @@ def explore_nar_2017_2022_ranking_signal(
             hypothetical_paired_day_roi_ci95_lower=money_low,
             hypothetical_paired_day_roi_ci95_upper=money_high,
         )
+    if official_place_payouts_2022 is not None:
+        if (len(place_day_pairs) != len(days)
+                or sum(map(len, place_day_pairs.values())) != n_tune):
+            raise UnsafeNarSource("NAR_EXPLORATORY_PLACE_DAY_COVERAGE_INVALID")
+        combo_days = np.asarray([
+            (len(place_day_pairs[d]),
+             sum(a for a, _ in payout_day_pairs[d]),
+             sum(place_day_pairs[d]))
+            for d in days
+        ], dtype=np.float64)
+        paired_draw = combo_days[draw].sum(axis=1)
+        combined_boot = (
+            (paired_draw[:, 1] + paired_draw[:, 2])
+            / (200.0 * paired_draw[:, 0]) - 1.0
+        )
+        combo_low, combo_high = (
+            float(x) for x in np.quantile(combined_boot, [0.025, 0.975])
+        )
+        combo_roi = (gross_model_win + gross_outsider_place) / (200.0 * n_tune) - 1.0
+        adverse_combo = (
+            (gross_model_win + gross_outsider_place) / (200.0 * total2022) - 1.0
+        )
+        place_roi = gross_outsider_place / (100.0 * n_tune) - 1.0
+        if (not all(isfinite(x) for x in (
+            combo_roi, adverse_combo, place_roi, combo_low, combo_high
+        )) or combo_low > combo_high or adverse_combo > combo_roi):
+            raise UnsafeNarSource("NAR_EXPLORATORY_TWO_TICKET_METRICS_INVALID")
+        economic.update(
+            hypothetical_outsider_place_gross_yen_2022=gross_outsider_place,
+            hypothetical_outsider_place_roi_2022=place_roi,
+            hypothetical_two_ticket_roi_2022=combo_roi,
+            hypothetical_two_ticket_all_flat_adverse_missing_roi_2022=adverse_combo,
+            hypothetical_two_ticket_day_ci95_lower=combo_low,
+            hypothetical_two_ticket_day_ci95_upper=combo_high,
+        )
     nums = (
         wins / n_tune, random_expected / n_tune, wins / total2022,
         (wins + unevaluable) / total2022, overlap / (3 * n_tune),
@@ -349,5 +414,6 @@ def explore_nar_2017_2022_ranking_signal(
         top3_picks_podium_precision_2022=nums[4],
         outsider_podium_hit_rate_2022=nums[5],
         historical_official_win_payouts_reconciled=historical_payouts_joined,
+        historical_official_place_payouts_reconciled=official_place_payouts_2022 is not None,
         **economic,
     )

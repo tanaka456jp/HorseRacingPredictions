@@ -232,3 +232,53 @@ def test_missing_or_conflicting_retrospective_payout_is_not_silently_zeroed():
             batch, flat_races_by_year=years, iterations=30,
             official_win_payouts_2022=payouts,
         )
+
+
+def _fictional_2022_official_place_returns(batch):
+    amounts = {}
+    for target in batch.targets:
+        track, ymd, number = target.race_key
+        if ymd.startswith("2022"):
+            rid = f"NAR:{ymd}:{track}:{number:02d}"
+            amounts.setdefault(rid, {})[target.horse_number] = (
+                200 if target.target_place else 0
+            )
+    return amounts
+
+
+def test_fictional_two_ticket_win_plus_paid_place_not_top3():
+    pytest.importorskip("catboost")
+    batch, years = fictional_batch()
+    m = explore_nar_2017_2022_ranking_signal(
+        batch, flat_races_by_year=years, iterations=30,
+        official_win_payouts_2022=_fictional_2022_official_win_returns(batch),
+        official_place_payouts_2022=_fictional_2022_official_place_returns(batch),
+    )
+    assert m.historical_official_place_payouts_reconciled
+    assert m.hypothetical_outsider_place_gross_yen_2022 is not None
+    assert m.hypothetical_two_ticket_roi_2022 == (
+        (m.hypothetical_model_win_gross_yen_2022
+         + m.hypothetical_outsider_place_gross_yen_2022) / (200 * 3) - 1
+    )
+    assert m.hypothetical_two_ticket_all_flat_adverse_missing_roi_2022 == (
+        (m.hypothetical_model_win_gross_yen_2022
+         + m.hypothetical_outsider_place_gross_yen_2022) / (200 * 50) - 1
+    )
+    assert m.hypothetical_two_ticket_day_ci95_lower <= m.hypothetical_two_ticket_day_ci95_upper
+    assert not m.positive_expected_value_demonstrated
+
+
+def test_fictional_seven_runner_third_place_is_not_paid():
+    pytest.importorskip("catboost")
+    batch, years = fictional_batch()
+    places = _fictional_2022_official_place_returns(batch)
+    third = next(t for t in batch.targets if t.race_key[1].startswith("2022")
+                 and t.target_top3 and not t.target_place)
+    rid = f"NAR:{third.race_key[1]}:{third.race_key[0]}:{third.race_key[2]:02d}"
+    places[rid][third.horse_number] = 200
+    with pytest.raises(UnsafeNarSource, match="NAR_EXPLORATORY_PLACE_LABEL_MISMATCH"):
+        explore_nar_2017_2022_ranking_signal(
+            batch, flat_races_by_year=years, iterations=30,
+            official_win_payouts_2022=_fictional_2022_official_win_returns(batch),
+            official_place_payouts_2022=places,
+        )

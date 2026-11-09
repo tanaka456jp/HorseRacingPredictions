@@ -38,6 +38,7 @@ def screen_private_72_month_exploratory(
         raise UnsafeNarSource("NAR_EXPLORATORY_72_MONTHS_REQUIRED")
     # Post-race payout values are never model features; keep privately in memory.
     official_2022_win_returns: dict[str, dict[int, int]] = {}
+    official_2022_place_returns: dict[str, dict[int, int]] = {}
     annual: Counter[int] = Counter()
     totals: Counter[str] = Counter()
 
@@ -67,14 +68,21 @@ def screen_private_72_month_exploratory(
                         raise UnsafeNarSource("NAR_EXPLORATORY_DUPLICATE_PAYOUT_RACE")
                     statuses = dict(race.status_by_number)
                     payouts = dict(race.win_yen_by_number)
+                    place_payouts = dict(race.place_yen_by_number)
                     amounts = {}
+                    places = {}
                     for number, status in statuses.items():
                         if status in {"FINISHED", "DNF_NO_REFUND"}:
                             value = payouts[number]
                             if type(value) is not int or value < 0:
                                 raise UnsafeNarSource("NAR_EXPLORATORY_PAYOUT_INVALID")
                             amounts[number] = value
+                            place_value = place_payouts[number]
+                            if type(place_value) is not int or place_value < 0:
+                                raise UnsafeNarSource("NAR_EXPLORATORY_PLACE_PAYOUT_INVALID")
+                            places[number] = place_value
                     official_2022_win_returns[rid] = amounts
+                    official_2022_place_returns[rid] = places
             labels = derive_nar_status_aware_outcome_labels(assessment)
             required = {(row.race_key, row.horse_number)
                         for row in labels.labels}
@@ -119,6 +127,7 @@ def screen_private_72_month_exploratory(
     m = explore_nar_2017_2022_ranking_signal(
         form, flat_races_by_year=dict(annual), iterations=iterations,
         official_win_payouts_2022=official_2022_win_returns,
+        official_place_payouts_2022=official_2022_place_returns,
     )
     result = {
         "schema": "NAR.PC2.Exploratory2022RankingSignal.v1",
