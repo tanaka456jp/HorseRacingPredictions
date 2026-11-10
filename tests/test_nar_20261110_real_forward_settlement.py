@@ -124,9 +124,8 @@ def test_all_59_fictional_races_hypothetical_positive_still_no_ev():
 
 @pytest.mark.parametrize("kwargs",[
     {"missing_result":True},
-    {"scratch":True},
 ])
-def test_missing_payout_or_scratched_horse_never_cherrypicks_subset_roi(kwargs):
+def test_missing_payout_never_cherrypicks_subset_roi(kwargs):
     frozen,prior,post=synthetic_full_day(**kwargs)
     a=S.verify_real_forward_final_results(
         frozen,prior,post,result_source_name=_SOURCE_NAME,
@@ -136,10 +135,6 @@ def test_missing_payout_or_scratched_horse_never_cherrypicks_subset_roi(kwargs):
     assert a.unresolved_races >= 1
     assert a.fully_interpretable_races < 59
     assert a.hypothetical_full_day_roi is None
-    if kwargs.get("scratch"):
-        assert dict(a.unresolved_marker_category_counts) == {
-            "SCRATCH_NOT_OFFERED": 1
-        }
     assert a.hypothetical_full_day_net_yen is None
     assert a.hypothetical_full_day_gross_return_yen is None
     assert not a.after_cost_positive_ev_proven
@@ -230,3 +225,20 @@ def test_saved_postevent_zip_never_shadows_original_preoff_race_capture(
     )
     assert recovered == frozen
     assert bytes_read == b"FICTIONAL_EARLY_CAPTURE"
+
+
+def test_scratch_of_frozen_place_candidate_is_unoffered_not_an_assumed_loss():
+    frozen,prior,post=synthetic_full_day(scratch=True)
+    a=S.verify_real_forward_final_results(
+        frozen,prior,post,result_source_name=_SOURCE_NAME,
+        observed_utc=_OBS,
+    )
+    assert a.fully_interpretable_races == 59
+    assert a.unresolved_races == 0
+    assert dict(a.unresolved_marker_category_counts) == {"SCRATCH_NOT_OFFERED":1}
+    assert a.not_offered_paper_tickets == 1
+    assert a.refunded_paper_tickets == 0
+    assert a.hypothetical_full_day_win_stake_yen == 5900
+    assert a.hypothetical_full_day_place_stake_yen == 5800
+    assert a.hypothetical_full_day_gross_return_yen == 59*220
+    assert not a.after_cost_positive_ev_proven

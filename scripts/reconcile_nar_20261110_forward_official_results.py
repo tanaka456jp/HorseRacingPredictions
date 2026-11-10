@@ -77,6 +77,9 @@ class NarRealForwardSettlementAudit:
     hypothetical_full_day_roi: float | None
     unresolved_reason_counts: tuple[tuple[str, int], ...] = ()
     unresolved_marker_category_counts: tuple[tuple[str, int], ...] = ()
+    not_offered_paper_tickets: int = 0
+    refunded_paper_tickets: int = 0
+    selected_dnf_losing_paper_tickets: int = 0
     forecast_unchanged: bool = True
     selected_using_results: bool = False
     contemporaneous_quoted_prices_verified: bool = False
@@ -223,6 +226,7 @@ def verify_real_forward_final_results(
     if len(old_names) != len(expected):
         raise NarPreoffDailyHold("NAR_FORWARD_SETTLEMENT_OLD_RACE_COVERAGE")
     completed: dict[str,dict[str,int]] = defaultdict(dict)
+    finished_status: dict[str, dict[str, str]] = defaultdict(dict)
     uncertain: set[str] = set()
     unresolved_reasons: dict[str, str] = {}
     marker_categories: Counter[str] = Counter()
@@ -248,20 +252,29 @@ def verify_real_forward_final_results(
             raise NarPreoffDailyHold("NAR_FORWARD_SETTLEMENT_DUPLICATE_HORSE")
         value = row["着順"].strip()
         if not _FINAL_FINISH.fullmatch(value):
-            uncertain.add(rid)
-            unresolved_reasons.setdefault(rid, "NONNUMERIC_OR_EXCEPTION_FINISH")
             raw_marker = row["着差"].strip()
             marker = (raw_marker if raw_marker in _MARKER_GROUPS else value)
-            marker_categories[_MARKER_GROUPS.get(marker, "UNRECOGNIZED_OR_EMPTY")] += 1
+            category = _MARKER_GROUPS.get(marker, "UNRECOGNIZED_OR_EMPTY")
+            marker_categories[category] += 1
             completed[rid][h] = 0
+            finished_status[rid][h] = category
+            if category not in {
+                "DNF_NO_REFUND", "EXCLUDED_REFUND", "SCRATCH_NOT_OFFERED",
+            }:
+                uncertain.add(rid)
+                unresolved_reasons.setdefault(rid, "UNRESOLVED_OFFICIAL_STATUS")
         elif not 1 <= int(value) <= 18:
             uncertain.add(rid)
             unresolved_reasons.setdefault(rid, "FINISH_RANK_OUT_OF_RANGE")
             completed[rid][h] = 0
+            finished_status[rid][h] = "UNRECOGNIZED_OR_EMPTY"
         else:
             completed[rid][h] = int(value)
+            finished_status[rid][h] = "FINISHED"
     pays = _payout_table(pay_rows, day=_TARGET, frozen_ids=set(expected))
     total_gross = 0
+    total_win_stake = total_place_stake = 0
+    not_offered_slots = refunded_slots = selected_dnf_slots = 0
     full_ok = 0
     for rid in sorted(expected):
         horse_ranks = completed.get(rid, {})
@@ -280,15 +293,24 @@ def verify_real_forward_final_results(
             uncertain.add(rid)
             unresolved_reasons.setdefault(rid, "FINAL_ROSTER_INCOMPLETE")
             continue
-        if len(horse_ranks) <= 4:
-            uncertain.add(rid)
-            unresolved_reasons.setdefault(rid, "PLACE_NOT_UNCONDITIONALLY_OFFERED")
-            continue
         win_pays, place_pays = pays[rid]
-        n = len(horse_ranks)
-        place_limit = 2 if n <= 7 else 3
+        offered_count = sum(
+            status != "SCRATCH_NOT_OFFERED"
+            for status in finished_status[rid].values()
+        )
+        if not 2 <= offered_count <= 18:
+            uncertain.add(rid)
+            unresolved_reasons.setdefault(rid, "OFFICIAL_TICKET_FIELD_UNTRUSTED")
+            continue
+        # NAR place paying positions are determined by the actual
+        # *offered* field, not the original pre-entry headcount.
+        place_limit = (0 if offered_count <= 4 else
+                       2 if offered_count <= 7 else 3)
         actual_winners = {h for h, pos in horse_ranks.items() if pos == 1}
-        actual_places = {h for h, pos in horse_ranks.items() if pos <= place_limit}
+        actual_places = {
+            h for h, pos in horse_ranks.items()
+            if pos > 0 and pos <= place_limit
+        }
         if (not actual_winners
                 or set(win_pays) != actual_winners
                 or sum(1 for v in horse_ranks.values() if v == 1) > 3):
@@ -310,7 +332,46 @@ def verify_real_forward_final_results(
             uncertain.add(rid)
             unresolved_reasons.setdefault(rid, "FROZEN_SELECTED_HORSE_MISSING")
             continue
-        total_gross += win_pays.get(win_horse, 0) + place_pays.get(place_horse, 0)
+        # Policy was frozen before any results: attempt the same two
+        # 100-yen paper tickets on every race; market cannot select races.
+        # Official published status, NOT guessed payout, determines whether
+        # a ticket could have existed, must be refunded, or loses after start.
+        tickets = (("WIN", win_horse, win_pays),
+                   ("PLACE", place_horse, place_pays))
+        race_win_stake = race_place_stake = race_gross = 0
+        race_no_offer = race_refund = race_dnf = 0
+        for kind, horse, payouts in tickets:
+            status = finished_status[rid].get(horse)
+            if status not in {
+                "FINISHED", "DNF_NO_REFUND",
+                "EXCLUDED_REFUND", "SCRATCH_NOT_OFFERED",
+            }:
+                uncertain.add(rid)
+                unresolved_reasons.setdefault(rid, "SELECTED_TICKET_STATUS_UNTRUSTED")
+                break
+            if (status == "SCRATCH_NOT_OFFERED" or
+                    (kind == "PLACE" and place_limit == 0)):
+                race_no_offer += 1
+                continue
+            if kind == "WIN":
+                race_win_stake += 100
+            else:
+                race_place_stake += 100
+            if status == "EXCLUDED_REFUND":
+                race_gross += 100
+                race_refund += 1
+            elif status == "DNF_NO_REFUND":
+                race_dnf += 1
+            else:
+                race_gross += payouts.get(horse, 0)
+        if rid in uncertain:
+            continue
+        total_win_stake += race_win_stake
+        total_place_stake += race_place_stake
+        total_gross += race_gross
+        not_offered_slots += race_no_offer
+        refunded_slots += race_refund
+        selected_dnf_slots += race_dnf
         full_ok += 1
     if (full_ok + len(uncertain) != len(expected)
             or set(unresolved_reasons) != uncertain):
@@ -318,8 +379,13 @@ def verify_real_forward_final_results(
     # No favorable subset P&L. A single unresolved event invalidates
     # the entire 59-race retrospective paper policy metric.
     eligible = full_ok == len(expected)
-    stake = 100 * len(expected) if eligible else None
+    win_stake = total_win_stake if eligible else None
+    place_stake = total_place_stake if eligible else None
     gross = total_gross if eligible else None
+    total_stake = total_win_stake + total_place_stake
+    if eligible and (total_stake <= 0 or
+                     total_stake % 100 or total_stake > 200 * len(expected)):
+        raise NarPreoffDailyHold("NAR_FORWARD_SETTLEMENT_TICKET_DENOMINATOR_INVALID")
     return NarRealForwardSettlementAudit(
         schema="NAR.PC2.RealProspectiveDaySettlement.v1",
         forecast_day=_TARGET.isoformat(),
@@ -329,11 +395,11 @@ def verify_real_forward_final_results(
         official_payback_races=len(pays),
         fully_interpretable_races=full_ok,
         unresolved_races=len(uncertain),
-        hypothetical_full_day_win_stake_yen=stake,
-        hypothetical_full_day_place_stake_yen=stake,
+        hypothetical_full_day_win_stake_yen=win_stake,
+        hypothetical_full_day_place_stake_yen=place_stake,
         hypothetical_full_day_gross_return_yen=gross,
-        hypothetical_full_day_net_yen=(gross-2*stake if eligible else None),
-        hypothetical_full_day_roi=(gross/(2*stake)-1 if eligible else None),
+        hypothetical_full_day_net_yen=(gross-total_stake if eligible else None),
+        hypothetical_full_day_roi=(gross/total_stake-1 if eligible else None),
         unresolved_reason_counts=tuple(sorted(
             (reason, sum(v == reason for v in unresolved_reasons.values()))
             for reason in set(unresolved_reasons.values())
@@ -341,6 +407,9 @@ def verify_real_forward_final_results(
         unresolved_marker_category_counts=tuple(sorted(
             marker_categories.items()
         )),
+        not_offered_paper_tickets=not_offered_slots,
+        refunded_paper_tickets=refunded_slots,
+        selected_dnf_losing_paper_tickets=selected_dnf_slots,
     )
 
 
@@ -393,9 +462,24 @@ def main() -> int:
             )
             previous = metadata["audit"]
             new = asdict(report)
+            # Previous stored audit was produced by the *old*, deliberately
+            # conservative interpretation of all nonnumeric finishes.
+            # Never rewrite it; compare only invariants. A new official
+            # rule-based interpretation may produce a DIFFERENT paper ROI
+            # but cannot retroactively alter the original final ZIP.
+            frozen_audit_keys = (
+                "schema", "forecast_day", "frozen_flat_races",
+                "frozen_horses", "official_result_races",
+                "official_result_horses", "official_payback_races",
+                "forecast_unchanged", "selected_using_results",
+                "contemporaneous_quoted_prices_verified",
+                "real_tickets_purchased", "independent_real_wager_proof",
+                "after_cost_positive_ev_proven",
+                "protected_historical_oos_opened", "source_uploaded",
+            )
             if (not isinstance(previous, dict) or
-                    any(k not in new or new[k] != value
-                        for k, value in previous.items())):
+                    any(previous.get(k) != new.get(k)
+                        for k in frozen_audit_keys)):
                 raise NarPreoffDailyHold("NAR_FORWARD_SETTLEMENT_REPLAY_OLD_AUDIT_CHANGED")
         else:
             req = urllib.request.Request(
@@ -485,9 +569,15 @@ def main() -> int:
         "unresolved_marker_category_counts":dict(report.unresolved_marker_category_counts),
         "previous_official_final_zip_readonly_replayed": replay,
         "hypothetical_full_day_stake_yen":(
-            2*report.hypothetical_full_day_win_stake_yen
-            if report.hypothetical_full_day_win_stake_yen is not None else None
+            report.hypothetical_full_day_win_stake_yen
+            + report.hypothetical_full_day_place_stake_yen
+            if report.hypothetical_full_day_win_stake_yen is not None
+            and report.hypothetical_full_day_place_stake_yen is not None
+            else None
         ),
+        "hypothetical_not_offered_ticket_slots":report.not_offered_paper_tickets,
+        "hypothetical_refunded_ticket_slots":report.refunded_paper_tickets,
+        "hypothetical_selected_dnf_losers":report.selected_dnf_losing_paper_tickets,
         "hypothetical_full_day_paid_yen":report.hypothetical_full_day_gross_return_yen,
         "hypothetical_full_day_net_yen":report.hypothetical_full_day_net_yen,
         "hypothetical_full_day_roi":report.hypothetical_full_day_roi,

@@ -93,7 +93,9 @@ jobs:
             }
             if ($d.status -ceq 'COMPLETE_FORWARD_PAPER_SETTLEMENT_ONLY_NOT_EV') {
               if ($d.unresolved_races -ne 0 -or
-                  $d.hypothetical_full_day_stake_yen -ne 11800 -or
+                  [int]$d.hypothetical_full_day_stake_yen -le 0 -or
+                  [int]$d.hypothetical_full_day_stake_yen -gt 11800 -or
+                  [int]$d.hypothetical_full_day_stake_yen % 100 -ne 0 -or
                   $null -eq $d.hypothetical_full_day_paid_yen -or
                   $null -eq $d.hypothetical_full_day_net_yen -or
                   $null -eq $d.hypothetical_full_day_roi) {
@@ -125,6 +127,9 @@ jobs:
               hypotheticalFullDayGrossYen = $d.hypothetical_full_day_paid_yen
               hypotheticalFullDayNetYen = $d.hypothetical_full_day_net_yen
               hypotheticalFullDayPaperROI = $d.hypothetical_full_day_roi
+              hypotheticalNotOfferedSlots = [int]$d.hypothetical_not_offered_ticket_slots
+              hypotheticalRefundedSlots = [int]$d.hypothetical_refunded_ticket_slots
+              hypotheticalSelectedDNFLossSlots = [int]$d.hypothetical_selected_dnf_losers
               anyRealPurchase = $false
               actualPreoffQuotesObserved = $false
               afterCostPositiveExpectedValueProven = $false
