@@ -64,64 +64,7 @@ jobs:
               if ($rows.Count -eq 1) {
                 $held = [string]$rows[0] | ConvertFrom-Json
                 if ($held.schema -ceq 'NAR.PC2.RealProspectiveDaySettlement.v1' -and
-                    [string]$held.staticReason -cmatch '^NAR_FORWARD_SETTLEMENT_[A-Z0-9_]{1,100}            $d = [string]$rows[0] | ConvertFrom-Json
-            if ($d.schema -cne 'NAR.PC2.RealProspectiveDaySettlement.v1' -or
-                $d.frozen_races -ne 59 -or
-                $d.frozen_horses -ne 641 -or
-                $d.official_result_races -gt 59 -or
-                $d.interpretable_races + $d.unresolved_races -ne 59 -or
-                $d.preoff_market_prices_known -ne $false -or
-                $d.actual_wager_count -ne 0 -or
-                $d.positive_ev_proven -ne $false -or
-                $d.private_source_uploaded -ne $false -or
-                $d.protected_historical_oos_opened -ne $false) {
-              throw 'NAR_FORWARD_SETTLEMENT_INVALID_FULL_DAY_AUDIT'
-            }
-            if ($d.status -ceq 'COMPLETE_FORWARD_PAPER_SETTLEMENT_ONLY_NOT_EV') {
-              if ($d.unresolved_races -ne 0 -or
-                  $d.hypothetical_full_day_stake_yen -ne 11800 -or
-                  $null -eq $d.hypothetical_full_day_paid_yen -or
-                  $null -eq $d.hypothetical_full_day_net_yen -or
-                  $null -eq $d.hypothetical_full_day_roi) {
-                throw 'NAR_FORWARD_SETTLEMENT_COMPLETE_STATISTICS_CONFLICT'
-              }
-            } elseif ($d.status -ceq 'INCOMPLETE_FORWARD_SETTLEMENT_FULL_DAY_ROI_HELD') {
-              if ($d.unresolved_races -lt 1 -or
-                  $null -ne $d.hypothetical_full_day_paid_yen -or
-                  $null -ne $d.hypothetical_full_day_net_yen -or
-                  $null -ne $d.hypothetical_full_day_roi) {
-                throw 'NAR_FORWARD_SETTLEMENT_INCOMPLETE_PROFIT_MUST_BE_HOLD'
-              }
-            } else {
-              throw 'NAR_FORWARD_SETTLEMENT_UNKNOWN_GATE_STATUS'
-            }
-            # ALL real identities, private ZIP, scores, selected horse
-            # numbers and actual payouts stay on PC2. Only aggregate data.
-            [ordered]@{
-              schema = 'NAR.PC2.RealProspectiveDaySettlement.v1'
-              status = [string]$d.status
-              frozenFlatRaceDenominator = [int]$d.frozen_races
-              sourceReportedRaceCount = [int]$d.official_result_races
-              sourceReportedPaybackRaceCount = [int]$d.official_payback_races
-              cleanlyInterpretableWholeRaces = [int]$d.interpretable_races
-              unresolvedWholeRaces = [int]$d.unresolved_races
-              unresolvedStaticReasonCounts = $d.unresolved_reason_counts
-              hypotheticalFullDayStakeYen = $d.hypothetical_full_day_stake_yen
-              hypotheticalFullDayGrossYen = $d.hypothetical_full_day_paid_yen
-              hypotheticalFullDayNetYen = $d.hypothetical_full_day_net_yen
-              hypotheticalFullDayPaperROI = $d.hypothetical_full_day_roi
-              anyRealPurchase = $false
-              actualPreoffQuotesObserved = $false
-              afterCostPositiveExpectedValueProven = $false
-              sealedHistoricalOOSOpened = $false
-              originalForecastUnchanged = $true
-              privateRawSourceUploaded = $false
-            } | ConvertTo-Json -Compress
-          } catch {
-            Write-Host 'NAR_FORWARD_SETTLEMENT_RESEARCH_HOLD_NO_EV'
-            exit 2
-          }
-) {
+                    [string]$held.staticReason -cmatch '^NAR_FORWARD_SETTLEMENT_[A-Z0-9_]{1,100}$') {
                   Write-Host ('NAR_FORWARD_SETTLEMENT_STATIC_HOLD_REASON=' + [string]$held.staticReason)
                 }
               }
@@ -168,6 +111,7 @@ jobs:
               sourceReportedPaybackRaceCount = [int]$d.official_payback_races
               cleanlyInterpretableWholeRaces = [int]$d.interpretable_races
               unresolvedWholeRaces = [int]$d.unresolved_races
+              unresolvedStaticReasonCounts = $d.unresolved_reason_counts
               hypotheticalFullDayStakeYen = $d.hypothetical_full_day_stake_yen
               hypotheticalFullDayGrossYen = $d.hypothetical_full_day_paid_yen
               hypotheticalFullDayNetYen = $d.hypothetical_full_day_net_yen
