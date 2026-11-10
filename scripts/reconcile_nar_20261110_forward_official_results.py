@@ -59,6 +59,7 @@ class NarRealForwardSettlementAudit:
     hypothetical_full_day_gross_return_yen: int | None
     hypothetical_full_day_net_yen: int | None
     hypothetical_full_day_roi: float | None
+    unresolved_reason_counts: tuple[tuple[str, int], ...] = ()
     forecast_unchanged: bool = True
     selected_using_results: bool = False
     contemporaneous_quoted_prices_verified: bool = False
@@ -206,6 +207,7 @@ def verify_real_forward_final_results(
         raise NarPreoffDailyHold("NAR_FORWARD_SETTLEMENT_OLD_RACE_COVERAGE")
     completed: dict[str,dict[str,int]] = defaultdict(dict)
     uncertain: set[str] = set()
+    unresolved_reasons: dict[str, str] = {}
     full_races = set()
     for row in race_rows:
         if row["競馬場"].startswith("帯広"):
@@ -229,9 +231,11 @@ def verify_real_forward_final_results(
         value = row["着順"].strip()
         if not _FINAL_FINISH.fullmatch(value):
             uncertain.add(rid)
+            unresolved_reasons.setdefault(rid, "NONNUMERIC_OR_EXCEPTION_FINISH")
             completed[rid][h] = 0
         elif not 1 <= int(value) <= 18:
             uncertain.add(rid)
+            unresolved_reasons.setdefault(rid, "FINISH_RANK_OUT_OF_RANGE")
             completed[rid][h] = 0
         else:
             completed[rid][h] = int(value)
@@ -240,33 +244,55 @@ def verify_real_forward_final_results(
     full_ok = 0
     for rid in sorted(expected):
         horse_ranks = completed.get(rid, {})
-        if (rid not in full_races or rid not in pays or rid in uncertain
-                or set(horse_ranks) != set(old_names[rid])
-                or set(horse_ranks) != set(expected[rid]["winner_scores"])
-                or len(horse_ranks) <= 4):
+        if rid not in full_races:
             uncertain.add(rid)
+            unresolved_reasons.setdefault(rid, "RACE_RESULT_MISSING")
+            continue
+        if rid not in pays:
+            uncertain.add(rid)
+            unresolved_reasons.setdefault(rid, "OFFICIAL_PAYBACK_MISSING")
+            continue
+        if rid in uncertain:
+            continue
+        if (set(horse_ranks) != set(old_names[rid])
+                or set(horse_ranks) != set(expected[rid]["winner_scores"])):
+            uncertain.add(rid)
+            unresolved_reasons.setdefault(rid, "FINAL_ROSTER_INCOMPLETE")
+            continue
+        if len(horse_ranks) <= 4:
+            uncertain.add(rid)
+            unresolved_reasons.setdefault(rid, "PLACE_NOT_UNCONDITIONALLY_OFFERED")
             continue
         win_pays, place_pays = pays[rid]
         n = len(horse_ranks)
         place_limit = 2 if n <= 7 else 3
         actual_winners = {h for h, pos in horse_ranks.items() if pos == 1}
         actual_places = {h for h, pos in horse_ranks.items() if pos <= place_limit}
-        if (not actual_winners or
-                set(win_pays) != actual_winners or
-                set(place_pays) != actual_places or
-                sum(1 for v in horse_ranks.values() if v == 1) > 3
-                or any(h not in horse_ranks for h in win_pays | place_pays)):
+        if (not actual_winners
+                or set(win_pays) != actual_winners
+                or sum(1 for v in horse_ranks.values() if v == 1) > 3):
             uncertain.add(rid)
+            unresolved_reasons.setdefault(rid, "WIN_PAYOUT_OR_WINNER_MISMATCH")
+            continue
+        if set(place_pays) != actual_places:
+            uncertain.add(rid)
+            unresolved_reasons.setdefault(rid, "PLACE_PAYOUT_OR_FINISH_MISMATCH")
+            continue
+        if any(h not in horse_ranks for h in win_pays | place_pays):
+            uncertain.add(rid)
+            unresolved_reasons.setdefault(rid, "PAYOUT_HORSE_NOT_IN_ROSTER")
             continue
         win_horse = expected[rid]["top3"][0]
         place_horse = expected[rid]["outsider"]
         if (win_horse not in horse_ranks or place_horse not in horse_ranks
                 or win_horse == place_horse):
             uncertain.add(rid)
+            unresolved_reasons.setdefault(rid, "FROZEN_SELECTED_HORSE_MISSING")
             continue
         total_gross += win_pays.get(win_horse, 0) + place_pays.get(place_horse, 0)
         full_ok += 1
-    if full_ok + len(uncertain) != len(expected):
+    if (full_ok + len(uncertain) != len(expected)
+            or set(unresolved_reasons) != uncertain):
         raise NarPreoffDailyHold("NAR_FORWARD_SETTLEMENT_AUDIT_DENOMINATOR_INVALID")
     # No favorable subset P&L. A single unresolved event invalidates
     # the entire 59-race retrospective paper policy metric.
@@ -287,6 +313,10 @@ def verify_real_forward_final_results(
         hypothetical_full_day_gross_return_yen=gross,
         hypothetical_full_day_net_yen=(gross-2*stake if eligible else None),
         hypothetical_full_day_roi=(gross/(2*stake)-1 if eligible else None),
+        unresolved_reason_counts=tuple(sorted(
+            (reason, sum(v == reason for v in unresolved_reasons.values()))
+            for reason in set(unresolved_reasons.values())
+        )),
     )
 
 
@@ -372,6 +402,7 @@ def main() -> int:
         "official_payback_races":report.official_payback_races,
         "interpretable_races":report.fully_interpretable_races,
         "unresolved_races":report.unresolved_races,
+        "unresolved_reason_counts":dict(report.unresolved_reason_counts),
         "hypothetical_full_day_stake_yen":(
             2*report.hypothetical_full_day_win_stake_yen
             if report.hypothetical_full_day_win_stake_yen is not None else None
