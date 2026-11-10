@@ -172,3 +172,60 @@ prospective economic evidence will require independent quote timing,
 later official outcome settlement, fees and a predeclared unscreened
 denominator. None of this allows reselecting the two frozen tickets
 using the market values.
+
+## First complete real *prospectively frozen* paper settlement — 2026-11-10
+
+**Now verified on the original 59-race denominator; no race selection after
+results.** PC②
+[real-data Run #42821912761](https://github.com/tanaka456jp/HorseRacingPredictions/actions/runs/42821912761),
+SHA `a32627dfb0440923511566f07f2d36a301895c67`:
+**SUCCESS**. The 2026-11-10 original pre-off private 59-race / 641-horse
+forecast hash remains unchanged, after-date official NAR result ZIP and
+private outcome audit remain on D, and protected historical OOS stays
+unopened.
+
+An initial deliberately conservative parser accepted only 52 of 59
+races. All seven remaining races contained official **non-numeric
+finishes**, not conveniently omittable loses: **2 中止 (started, no
+refund), 1 除外 (refunded), 4 取消 (unoffered)**. We separately confirmed
+these statuses against the official NAR
+[explanation of starters and refunds](https://www.keiba.go.jp/beginner/step2.html)
+before completing settlement logic. The update did not change any
+race's pre-event selected candidates or their original scores.
+
+The whole-day **predeclared 100-yen WIN + 100-yen PLACE paper scenario**,
+with selected exceptional tickets settled by official status rules:
+
+| Metric | Observed |
+| --- | ---: |
+| Pre-event frozen flat races | 59 |
+| Official final race / payout record coverage | 59 / 59 |
+| Whole-race outcome reconciliation | **59 PASS, 0 unresolved** |
+| Hypothetical attempted tickets | 118 (2 per race) |
+| Hypothetical offered-ticket stake | **11,800 yen** |
+| Actual official after-event gross dividends on the selections | **7,220 yen** |
+| **Hypothetical net P&L** | **-4,580 yen** |
+| **Hypothetical return on stake** | **-38.8136%** |
+| Original selected bets unoffered / refunded | 0 / 0 |
+| Original selected bets losing after DNF | 1 |
+| Real tickets or wagers actually purchased | 0 |
+| Independent observed usable WIN/PLACE preoff quotes | **0** |
+| Verified positive after-cost expected value | **NO** |
+
+Because original licensed pre-off market snapshots at 07:56 and 08:00
+contained ZERO odds rows, this computation uses **official final tote
+returns** and must be labeled a *paper-settlement scenario*, NOT
+a verifiable placed order, executable odds, a true cost-adjusted
+prospective betting EV estimate, or independent statistical proof.
+The single future day cannot establish positive/negative population EV.
+NAR source data is never pushed, and the original sidecar audit is
+immutable: subsequent status-aware interpretations are run in read-only
+replay against the **same** original post-event ZIP.
+
+**Joint scientific observation:** the first actual forward
+career-form baseline day was substantially negative (-38.81%).
+The *different* retrospective 2017–21-trained CatBoost 2022 win+place
+policy was also negative (-24.41%) but its retrospective model should
+not be represented as the 11/10 forward comparator. These are
+distinct periods, model definitions, and evidence levels. Neither
+demonstrates positive expectancy.
