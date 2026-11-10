@@ -64,7 +64,7 @@ jobs:
               if ($rows.Count -eq 1) {
                 $held = [string]$rows[0] | ConvertFrom-Json
                 if ($held.schema -ceq 'NAR.PC2.RealProspectiveDaySettlement.v1' -and
-                    [string]$held.staticReason -cmatch '^NAR_FORWARD_SETTLEMENT_[A-Z0-9_]{1,100}$') {
+                    [string]$held.staticReason -cmatch '^NAR_(FORWARD_SETTLEMENT|PREOFF|FORWARD)_[A-Z0-9_]{1,100}$') {
                   Write-Host ('NAR_FORWARD_SETTLEMENT_STATIC_HOLD_REASON=' + [string]$held.staticReason)
                   if ([string]$held.safeExceptionClass -cmatch '^(KeyError|TypeError|ValueError|NameError|IndexError|AttributeError|NarPreoffDailyHold|UNCLASSIFIED_ERROR)$' -and
                       [int]$held.safeOwnSourceLine -ge 0 -and [int]$held.safeOwnSourceLine -le 700) {

@@ -420,7 +420,7 @@ def main() -> int:
         # Only static source-code audit IDs: no raw licensed CSV, race,
         # horse, payout, private path, URL or traceback in public CI.
         reason = (str(exc) if isinstance(exc, NarPreoffDailyHold) else "")
-        if not re.fullmatch(r"NAR_FORWARD_SETTLEMENT_[A-Z0-9_]{1,100}", reason):
+        if not re.fullmatch(r"NAR_(?:FORWARD_SETTLEMENT|PREOFF|FORWARD)_[A-Z0-9_]{1,100}", reason):
             reason = "NAR_FORWARD_SETTLEMENT_UNCLASSIFIED_PRIVATE_FAILURE"
         ex_class = type(exc).__name__
         if ex_class not in {
@@ -431,8 +431,8 @@ def main() -> int:
         safe_lines = [
             entry.lineno
             for entry in traceback.extract_tb(exc.__traceback__)
-            if entry.filename.replace("\\\\", "/").endswith(
-                "/scripts/reconcile_nar_20261110_forward_official_results.py"
+            if entry.filename.endswith(
+                "reconcile_nar_20261110_forward_official_results.py"
             )
         ]
         line = max(safe_lines) if safe_lines and 1 <= max(safe_lines) <= 700 else 0
