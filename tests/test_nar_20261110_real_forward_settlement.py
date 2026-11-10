@@ -88,7 +88,7 @@ def synthetic_full_day(*, missing_result=False, scratch=False,
     if duplicate_race:
         races.append(races[0].copy())
     if unexpected_race:
-        pays.append({**pays[0],"レース番号":"19"})  # Duplicate different card.
+        pays.append({**pays[0],"競馬場":"架空場4"})  # Truly outside original 59-race calendar.
     frozen = {
         "schema":"NAR.PC2.OfficialDailyForwardBaseline.v1",
         "day":"2026-11-10", "source_races":59, "source_horses":641,
