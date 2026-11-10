@@ -20,6 +20,7 @@ import os
 from pathlib import Path
 import re
 import secrets
+import traceback
 import urllib.request
 from zipfile import ZipFile, BadZipFile
 
@@ -421,9 +422,25 @@ def main() -> int:
         reason = (str(exc) if isinstance(exc, NarPreoffDailyHold) else "")
         if not re.fullmatch(r"NAR_FORWARD_SETTLEMENT_[A-Z0-9_]{1,100}", reason):
             reason = "NAR_FORWARD_SETTLEMENT_UNCLASSIFIED_PRIVATE_FAILURE"
+        ex_class = type(exc).__name__
+        if ex_class not in {
+            "KeyError", "TypeError", "ValueError", "NameError",
+            "IndexError", "AttributeError", "NarPreoffDailyHold",
+        }:
+            ex_class = "UNCLASSIFIED_ERROR"
+        safe_lines = [
+            entry.lineno
+            for entry in traceback.extract_tb(exc.__traceback__)
+            if entry.filename.replace("\\\\", "/").endswith(
+                "/scripts/reconcile_nar_20261110_forward_official_results.py"
+            )
+        ]
+        line = max(safe_lines) if safe_lines and 1 <= max(safe_lines) <= 700 else 0
         print(json.dumps({
             "schema":"NAR.PC2.RealProspectiveDaySettlement.v1",
             "status":"RESEARCH_HOLD_NO_EV", "staticReason":reason,
+            "safeExceptionClass":ex_class,
+            "safeOwnSourceLine":line,
             "original_forecast_unchanged":True,
             "positive_ev_proven":False,
             "protected_oos_opened":False,
