@@ -120,6 +120,7 @@ jobs:
               cleanlyInterpretableWholeRaces = [int]$d.interpretable_races
               unresolvedWholeRaces = [int]$d.unresolved_races
               unresolvedStaticReasonCounts = $d.unresolved_reason_counts
+              unresolvedMarkerCategoryCounts = $d.unresolved_marker_category_counts
               hypotheticalFullDayStakeYen = $d.hypothetical_full_day_stake_yen
               hypotheticalFullDayGrossYen = $d.hypothetical_full_day_paid_yen
               hypotheticalFullDayNetYen = $d.hypothetical_full_day_net_yen

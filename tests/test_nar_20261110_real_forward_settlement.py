@@ -136,6 +136,10 @@ def test_missing_payout_or_scratched_horse_never_cherrypicks_subset_roi(kwargs):
     assert a.unresolved_races >= 1
     assert a.fully_interpretable_races < 59
     assert a.hypothetical_full_day_roi is None
+    if kwargs.get("scratch"):
+        assert dict(a.unresolved_marker_category_counts) == {
+            "SCRATCH_NOT_OFFERED": 1
+        }
     assert a.hypothetical_full_day_net_yen is None
     assert a.hypothetical_full_day_gross_return_yen is None
     assert not a.after_cost_positive_ev_proven

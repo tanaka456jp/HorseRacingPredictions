@@ -10,7 +10,7 @@ licensed source rows or silently drop races/scratches/refunds.
 from __future__ import annotations
 
 import argparse
-from collections import defaultdict
+from collections import Counter, defaultdict
 from dataclasses import asdict, dataclass
 from datetime import date, datetime, timedelta, timezone
 from hashlib import sha256
@@ -44,6 +44,21 @@ _INVALID_MARKERS = {
 }
 
 
+_MARKER_GROUPS = {
+    "取消": "SCRATCH_NOT_OFFERED",
+    "出走取消": "SCRATCH_NOT_OFFERED",
+    "除外": "EXCLUDED_REFUND",
+    "競走除外": "EXCLUDED_REFUND",
+    "中止": "DNF_NO_REFUND",
+    "競走中止": "DNF_NO_REFUND",
+    "失格": "DISQUALIFIED_REVIEW",
+    "取止": "RACE_CANCELLED_REVIEW",
+    "競走取止": "RACE_CANCELLED_REVIEW",
+    "不成": "RACE_CANCELLED_REVIEW",
+    "競走不成立": "RACE_CANCELLED_REVIEW",
+    "降": "DEMOTION_REVIEW",
+}
+
 @dataclass(frozen=True)
 class NarRealForwardSettlementAudit:
     schema: str
@@ -61,6 +76,7 @@ class NarRealForwardSettlementAudit:
     hypothetical_full_day_net_yen: int | None
     hypothetical_full_day_roi: float | None
     unresolved_reason_counts: tuple[tuple[str, int], ...] = ()
+    unresolved_marker_category_counts: tuple[tuple[str, int], ...] = ()
     forecast_unchanged: bool = True
     selected_using_results: bool = False
     contemporaneous_quoted_prices_verified: bool = False
@@ -209,6 +225,7 @@ def verify_real_forward_final_results(
     completed: dict[str,dict[str,int]] = defaultdict(dict)
     uncertain: set[str] = set()
     unresolved_reasons: dict[str, str] = {}
+    marker_categories: Counter[str] = Counter()
     full_races = set()
     for row in race_rows:
         if row["競馬場"].startswith("帯広"):
@@ -233,6 +250,9 @@ def verify_real_forward_final_results(
         if not _FINAL_FINISH.fullmatch(value):
             uncertain.add(rid)
             unresolved_reasons.setdefault(rid, "NONNUMERIC_OR_EXCEPTION_FINISH")
+            raw_marker = row["着差"].strip()
+            marker = (raw_marker if raw_marker in _MARKER_GROUPS else value)
+            marker_categories[_MARKER_GROUPS.get(marker, "UNRECOGNIZED_OR_EMPTY")] += 1
             completed[rid][h] = 0
         elif not 1 <= int(value) <= 18:
             uncertain.add(rid)
@@ -317,6 +337,9 @@ def verify_real_forward_final_results(
         unresolved_reason_counts=tuple(sorted(
             (reason, sum(v == reason for v in unresolved_reasons.values()))
             for reason in set(unresolved_reasons.values())
+        )),
+        unresolved_marker_category_counts=tuple(sorted(
+            marker_categories.items()
         )),
     )
 
@@ -459,6 +482,7 @@ def main() -> int:
         "interpretable_races":report.fully_interpretable_races,
         "unresolved_races":report.unresolved_races,
         "unresolved_reason_counts":dict(report.unresolved_reason_counts),
+        "unresolved_marker_category_counts":dict(report.unresolved_marker_category_counts),
         "previous_official_final_zip_readonly_replayed": replay,
         "hypothetical_full_day_stake_yen":(
             2*report.hypothetical_full_day_win_stake_yen
