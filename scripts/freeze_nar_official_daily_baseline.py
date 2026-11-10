@@ -175,7 +175,7 @@ def _main() -> int:
         today = datetime.now(timezone.utc).astimezone(_JST).date()
         if not directory.is_dir() or directory.is_symlink():
             raise NarPreoffDailyHold("NAR_FORWARD_PRIVATE_DIR_INVALID")
-        zips = list(directory.glob(f"{today:%Y%m%d}_*_race.zip"))
+        zips = list(directory.glob(f"{today:%Y%m%d}_????????T??????Z_race.zip"))
         if len(zips) != 1:
             raise NarPreoffDailyHold("NAR_FORWARD_SINGLE_CAPTURE_REQUIRED")
         path = zips[0]

@@ -104,7 +104,7 @@ def _load_original_frozen_forecast(folder: Path, race_day: date) -> tuple[dict, 
     No historical 2023+ files; only today's exact private original capture.
     """
     key = race_day.strftime("%Y%m%d")
-    files = list(folder.glob(f"{key}_*_race.zip"))
+    files = list(folder.glob(f"{key}_????????T??????Z_race.zip"))
     if len(files) != 1:
         raise NarPreoffDailyHold("NAR_PREOFF_REQUIRES_ORIGINAL_RACE_CAPTURE")
     original = files[0]

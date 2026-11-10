@@ -194,7 +194,7 @@ def capture_once(*, directory: Path, now_utc: datetime) -> NarPreoffDailyAudit:
     day = now_utc.astimezone(_JST).date()
     if not directory.is_dir() or directory.is_symlink():
         raise NarPreoffDailyHold("NAR_PREOFF_PRIVATE_DIRECTORY_INVALID")
-    existing = list(directory.glob(f"{day:%Y%m%d}_*_race.zip"))
+    existing = list(directory.glob(f"{day:%Y%m%d}_????????T??????Z_race.zip"))
     if len(existing) > 1:
         raise NarPreoffDailyHold("NAR_PREOFF_MULTIPLE_EXISTING_CAPTURES")
     if existing:
