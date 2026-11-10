@@ -383,7 +383,7 @@ def main() -> int:
                     raise NarPreoffDailyHold("NAR_FORWARD_SETTLEMENT_REDIRECT_FORBIDDEN")
                 disposition = response.headers.get("Content-Disposition", "")
                 match = re.search(
-                    r'filename="?((?:20261110)_([1-9][0-9]{8,12})_race\\.zip)"?',
+                    r'filename="?((?:20261110)_([1-9][0-9]{8,12})_race\.zip)"?',
                     disposition,
                 )
                 if not match:
