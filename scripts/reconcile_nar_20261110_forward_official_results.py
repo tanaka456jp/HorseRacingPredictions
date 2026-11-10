@@ -415,10 +415,15 @@ def main() -> int:
                     stream.write(payload)
                     stream.flush()
                     os.fsync(stream.fileno())
-    except Exception:
+    except Exception as exc:
+        # Only static source-code audit IDs: no raw licensed CSV, race,
+        # horse, payout, private path, URL or traceback in public CI.
+        reason = (str(exc) if isinstance(exc, NarPreoffDailyHold) else "")
+        if not re.fullmatch(r"NAR_FORWARD_SETTLEMENT_[A-Z0-9_]{1,100}", reason):
+            reason = "NAR_FORWARD_SETTLEMENT_UNCLASSIFIED_PRIVATE_FAILURE"
         print(json.dumps({
             "schema":"NAR.PC2.RealProspectiveDaySettlement.v1",
-            "status":"RESEARCH_HOLD_NO_EV",
+            "status":"RESEARCH_HOLD_NO_EV", "staticReason":reason,
             "original_forecast_unchanged":True,
             "positive_ev_proven":False,
             "protected_oos_opened":False,
