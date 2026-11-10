@@ -199,7 +199,7 @@ def test_saved_postevent_zip_never_shadows_original_preoff_race_capture(
         "host_captured_utc": "2026-11-10T01:00:00Z",
         "salt_hex_PRIVATE": salt.hex(),
         "salted_zip_sha256_PRIVATE": sha256(
-            b"NAR_OFFICIAL_DAILY_RACE_V1\\x00"+salt+source.read_bytes()
+            b"NAR_OFFICIAL_DAILY_RACE_V1\x00"+salt+source.read_bytes()
         ).hexdigest(),
     }
     (tmp_path / source.name.replace("_race.zip","_private_provenance.json")).write_text(
