@@ -338,49 +338,83 @@ def main() -> int:
         )
         if now < final_off + _WAIT_AFTER_LAST_OFF:
             raise NarPreoffDailyHold("NAR_FORWARD_SETTLEMENT_TOO_EARLY")
-        if list(dest.glob("20261110_*_official_postevent_race.zip")):
-            raise NarPreoffDailyHold("NAR_FORWARD_SETTLEMENT_ALREADY_SAVED")
-        req = urllib.request.Request(
-            _OFFICIAL_RACE,
-            headers={"User-Agent": "HorseRacingPredictions/1.0 personal-research"},
-        )
-        with urllib.request.urlopen(req, timeout=45) as response:
-            if response.geturl() != _OFFICIAL_RACE:
-                raise NarPreoffDailyHold("NAR_FORWARD_SETTLEMENT_REDIRECT_FORBIDDEN")
-            disposition = response.headers.get("Content-Disposition", "")
-            match = re.search(
-                r'filename="?((?:20261110)_([1-9][0-9]{8,12})_race\.zip)"?',
-                disposition,
+        saved = list(dest.glob("20261110_*_official_postevent_race.zip"))
+        if len(saved) > 1:
+            raise NarPreoffDailyHold("NAR_FORWARD_SETTLEMENT_MULTIPLE_PRIVATE_RESULTS")
+        replay = bool(saved)
+        if replay:
+            # Re-run NEW diagnostic code against the single OLD original
+            # without network access, overwriting or hindsight refitting.
+            oldpath = saved[0]
+            oldmeta = oldpath.with_name(
+                oldpath.name.replace(
+                    "_official_postevent_race.zip",
+                    "_official_postevent_audit_PRIVATE.json",
+                )
             )
-            if not match:
-                raise NarPreoffDailyHold("NAR_FORWARD_SETTLEMENT_OFFICIAL_NAME_MISSING")
-            official_name = match[1]
-            blob = response.read(_MAX_BYTES+1)
-        observed = datetime.now(timezone.utc)
-        report = verify_real_forward_final_results(
-            frozen, old_blob, blob, result_source_name=official_name,
-            observed_utc=observed,
-        )
-        # Local original only; no public artifact or source transfer.
-        stamp = observed.strftime("%Y%m%dT%H%M%SZ")
-        path = dest / f"20261110_{stamp}_official_postevent_race.zip"
-        raw = json.dumps({
-            "schema":"NAR.PC2.RealProspectiveDaySettlementPrivate.v1",
-            "official_source_name": official_name,
-            "captured_utc": observed.isoformat(),
-            "frozen_commitment_digest": frozen["commitment_digest"],
-            "audit": asdict(report),
-            "raw_lawful_source_never_uploaded": True,
-        }, sort_keys=True).encode("utf-8")
-        for target, payload in (
-            (path, blob),
-            (dest/f"20261110_{stamp}_official_postevent_audit_PRIVATE.json", raw),
-        ):
-            fd = os.open(target, os.O_WRONLY|os.O_CREAT|os.O_EXCL, 0o600)
-            with os.fdopen(fd, "wb") as stream:
-                stream.write(payload)
-                stream.flush()
-                os.fsync(stream.fileno())
+            if (not oldpath.is_file() or oldpath.is_symlink()
+                    or not oldmeta.is_file() or oldmeta.is_symlink()):
+                raise NarPreoffDailyHold("NAR_FORWARD_SETTLEMENT_REPLAY_FILE_INVALID")
+            metadata = json.loads(oldmeta.read_text(encoding="utf-8"))
+            if (metadata.get("schema") != "NAR.PC2.RealProspectiveDaySettlementPrivate.v1"
+                    or metadata.get("frozen_commitment_digest")
+                       != frozen["commitment_digest"]):
+                raise NarPreoffDailyHold("NAR_FORWARD_SETTLEMENT_REPLAY_PROVENANCE_HOLD")
+            original_name = metadata["official_source_name"]
+            received = datetime.fromisoformat(metadata["captured_utc"])
+            blob = oldpath.read_bytes()
+            report = verify_real_forward_final_results(
+                frozen, old_blob, blob, result_source_name=original_name,
+                observed_utc=received,
+            )
+            previous = metadata["audit"]
+            new = asdict(report)
+            if (not isinstance(previous, dict) or
+                    any(k not in new or new[k] != value
+                        for k, value in previous.items())):
+                raise NarPreoffDailyHold("NAR_FORWARD_SETTLEMENT_REPLAY_OLD_AUDIT_CHANGED")
+        else:
+            req = urllib.request.Request(
+                _OFFICIAL_RACE,
+                headers={"User-Agent": "HorseRacingPredictions/1.0 personal-research"},
+            )
+            with urllib.request.urlopen(req, timeout=45) as response:
+                if response.geturl() != _OFFICIAL_RACE:
+                    raise NarPreoffDailyHold("NAR_FORWARD_SETTLEMENT_REDIRECT_FORBIDDEN")
+                disposition = response.headers.get("Content-Disposition", "")
+                match = re.search(
+                    r'filename="?((?:20261110)_([1-9][0-9]{8,12})_race\\.zip)"?',
+                    disposition,
+                )
+                if not match:
+                    raise NarPreoffDailyHold("NAR_FORWARD_SETTLEMENT_OFFICIAL_NAME_MISSING")
+                official_name = match[1]
+                blob = response.read(_MAX_BYTES+1)
+            observed = datetime.now(timezone.utc)
+            report = verify_real_forward_final_results(
+                frozen, old_blob, blob, result_source_name=official_name,
+                observed_utc=observed,
+            )
+            # Local original only; no public artifact or source transfer.
+            stamp = observed.strftime("%Y%m%dT%H%M%SZ")
+            path = dest / f"20261110_{stamp}_official_postevent_race.zip"
+            raw = json.dumps({
+                "schema":"NAR.PC2.RealProspectiveDaySettlementPrivate.v1",
+                "official_source_name": official_name,
+                "captured_utc": observed.isoformat(),
+                "frozen_commitment_digest": frozen["commitment_digest"],
+                "audit": asdict(report),
+                "raw_lawful_source_never_uploaded": True,
+            }, sort_keys=True).encode("utf-8")
+            for target, payload in (
+                (path, blob),
+                (dest/f"20261110_{stamp}_official_postevent_audit_PRIVATE.json", raw),
+            ):
+                fd = os.open(target, os.O_WRONLY|os.O_CREAT|os.O_EXCL, 0o600)
+                with os.fdopen(fd, "wb") as stream:
+                    stream.write(payload)
+                    stream.flush()
+                    os.fsync(stream.fileno())
     except Exception:
         print(json.dumps({
             "schema":"NAR.PC2.RealProspectiveDaySettlement.v1",
@@ -403,6 +437,7 @@ def main() -> int:
         "interpretable_races":report.fully_interpretable_races,
         "unresolved_races":report.unresolved_races,
         "unresolved_reason_counts":dict(report.unresolved_reason_counts),
+        "previous_official_final_zip_readonly_replayed": replay,
         "hypothetical_full_day_stake_yen":(
             2*report.hypothetical_full_day_win_stake_yen
             if report.hypothetical_full_day_win_stake_yen is not None else None
