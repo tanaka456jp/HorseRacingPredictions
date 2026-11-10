@@ -180,3 +180,49 @@ def test_2023_2024_or_2025_2026_sealed_historical_data_cannot_replace_frozen_day
             frozen,prior,post,result_source_name=_SOURCE_NAME,
             observed_utc=_OBS,
         )
+
+
+def test_saved_postevent_zip_never_shadows_original_preoff_race_capture(
+    tmp_path, monkeypatch,
+):
+    import json
+    from hashlib import sha256
+    source = tmp_path / "20261110_20261110T010000Z_race.zip"
+    source.write_bytes(b"FICTIONAL_EARLY_CAPTURE")
+    # Both filenames ended with '_race.zip' under the old unsafe broad glob.
+    post = tmp_path / "20261110_20261110T120000Z_official_postevent_race.zip"
+    post.write_bytes(b"FICTIONAL_POST_EVENT")
+    salt = bytes(range(32))
+    meta = {
+        "schema": "NAR.OfficialDailyPreoffCapture.v1",
+        "source": "https://www.keiba.go.jp/KeibaWeb/DataDownload/RaceDataDownload?type=daily",
+        "host_captured_utc": "2026-11-10T01:00:00Z",
+        "salt_hex_PRIVATE": salt.hex(),
+        "salted_zip_sha256_PRIVATE": sha256(
+            b"NAR_OFFICIAL_DAILY_RACE_V1\\x00"+salt+source.read_bytes()
+        ).hexdigest(),
+    }
+    (tmp_path / source.name.replace("_race.zip","_private_provenance.json")).write_text(
+        json.dumps(meta),encoding="utf-8"
+    )
+    frozen = {
+        "schema":"NAR.PC2.OfficialDailyForwardBaseline.v1",
+        "private_salt_hex":salt.hex(),
+        "host_generated_utc":"2026-11-10T01:05:00+00:00",
+        "commitment_digest":"a"*64,
+    }
+    (tmp_path/"20261110_baseline_forecast_PRIVATE.json").write_text(
+        json.dumps(frozen),encoding="utf-8"
+    )
+    def fake_rebuild(blob, **kwargs):
+        assert blob == source.read_bytes()
+        return frozen, "a"*64
+    monkeypatch.setitem(
+        S._load_original_frozen_forecast.__globals__,
+        "prepare_private_daily_baseline", fake_rebuild,
+    )
+    recovered, bytes_read = S._load_original_frozen_forecast(
+        tmp_path, date(2026,11,10),
+    )
+    assert recovered == frozen
+    assert bytes_read == b"FICTIONAL_EARLY_CAPTURE"

@@ -7,6 +7,9 @@ on:
       - ".github/workflows/nar-pc2-forward-20261110-postevent-settlement.yml"
       - "scripts/reconcile_nar_20261110_forward_official_results.py"
       - "tests/test_nar_20261110_real_forward_settlement.py"
+      - "scripts/capture_nar_official_daily_preoff_once.py"
+      - "scripts/freeze_nar_official_daily_baseline.py"
+      - "scripts/capture_nar_official_daily_odds_preoff_once.py"
   workflow_dispatch:
 
 permissions:
