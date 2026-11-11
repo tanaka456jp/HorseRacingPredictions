@@ -44,6 +44,21 @@ class ForwardDayBoundaryTests(unittest.TestCase):
             validate_forward_receipt(self.receipt, self.manifest)
         self.assertEqual(str(cm.exception), "OBSERVED_DAY_MISMATCH")
 
+    def test_source_timestamp_must_be_on_frozen_race_day(self):
+        # Chronologically valid but yesterday's official source must fail.
+        self.manifest["frozen_at_utc"] = "2026-11-14T06:00:00+09:00"
+        self.receipt["official_source_time_utc"] = "2026-11-14T23:59:00+09:00"
+        with self.assertRaises(ForwardOddsGateError) as cm:
+            validate_forward_receipt(self.receipt, self.manifest)
+        self.assertEqual(str(cm.exception), "SOURCE_DAY_MISMATCH")
+
+    def test_first_off_must_be_on_frozen_race_day(self):
+        # A next-day first off would otherwise satisfy all time ordering.
+        self.manifest["first_off_at_utc"] = "2026-11-16T00:10:00+09:00"
+        with self.assertRaises(ForwardOddsGateError) as cm:
+            validate_forward_receipt(self.receipt, self.manifest)
+        self.assertEqual(str(cm.exception), "FIRST_OFF_DAY_MISMATCH")
+
     def test_no_inferred_denominator_from_download(self):
         for field, value in (("flat_races", 2), ("registered_horses", 20),
                              ("missing_frozen_win_quotes", 1),
