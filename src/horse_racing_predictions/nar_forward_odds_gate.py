@@ -51,6 +51,11 @@ def validate_forward_receipt(receipt, frozen_manifest):
     frozen_at = _utc(frozen_manifest.get("frozen_at_utc"))
     if observed.astimezone(ZoneInfo("Asia/Tokyo")).date().isoformat() != day:
         raise ForwardOddsGateError("OBSERVED_DAY_MISMATCH")
+    # Reject a prior-day source snapshot or next-day first-off timestamp.
+    if source.astimezone(ZoneInfo("Asia/Tokyo")).date().isoformat() != day:
+        raise ForwardOddsGateError("SOURCE_DAY_MISMATCH")
+    if first_off.astimezone(ZoneInfo("Asia/Tokyo")).date().isoformat() != day:
+        raise ForwardOddsGateError("FIRST_OFF_DAY_MISMATCH")
     if not (frozen_at < source <= observed < first_off):
         raise ForwardOddsGateError("CHRONOLOGY_HOLD")
     if (first_off - observed).total_seconds() < 600:
