@@ -60,5 +60,35 @@ class ForwardOddsGateTests(unittest.TestCase):
                     validate_forward_receipt(receipt, manifest)
 
 
+    def test_fictional_partial_quote_coverage_does_not_prove_execution(self):
+        receipt, manifest = self.fixture(3)
+        receipt.update(frozen_win_tickets_with_quote=2,
+                       missing_frozen_win_quotes=1,
+                       frozen_place_tickets_with_quote=1,
+                       missing_frozen_place_quotes=2)
+        summary = validate_forward_receipt(receipt, manifest)
+        self.assertEqual((summary["winQuoted"], summary["winMissing"]), (2, 1))
+        self.assertEqual((summary["placeQuoted"], summary["placeMissing"]), (1, 2))
+        self.assertFalse(summary["executablePriceProven"])
+        self.assertFalse(summary["afterCostPositiveEVProven"])
+
+    def test_fictional_time_and_denominator_boundaries(self):
+        receipt, manifest = self.fixture(2)
+        receipt["observed_at_utc"] = "2026-11-12T11:50:00+09:00"
+        receipt["official_source_time_utc"] = "2026-11-12T11:49:00+09:00"
+        self.assertEqual(validate_forward_receipt(receipt, manifest)["frozenRaces"], 2)
+        receipt["observed_at_utc"] = "2026-11-12T11:50:01+09:00"
+        with self.assertRaises(ForwardOddsGateError):
+            validate_forward_receipt(receipt, manifest)
+        receipt, manifest = self.fixture(2)
+        receipt["frozen_win_tickets_with_quote"] = True
+        with self.assertRaises(ForwardOddsGateError):
+            validate_forward_receipt(receipt, manifest)
+        receipt, manifest = self.fixture(2)
+        manifest["frozen_horses"] = 1
+        with self.assertRaises(ForwardOddsGateError):
+            validate_forward_receipt(receipt, manifest)
+
+
 if __name__ == "__main__":
     unittest.main()
