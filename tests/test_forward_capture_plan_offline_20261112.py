@@ -73,6 +73,37 @@ class ProspectiveMetadataTests(unittest.TestCase):
         self.p["race_day"] = "2026-11-14"
         self.assertEqual(validate_public_capture_plan(self.p, self.now), "HOLD_RACE_DAY")
 
+    def test_rejects_zero_races(self):
+        self.p["race_count"] = 0
+        self.p["win_tickets"] = 0
+        self.p["place_tickets"] = 0
+        self.assertEqual(validate_public_capture_plan(self.p, self.now), "HOLD_DENOMINATOR")
+
+    def test_rejects_entrant_count_below_races(self):
+        self.p["entrant_count"] = 1
+        self.assertEqual(validate_public_capture_plan(self.p, self.now), "HOLD_DENOMINATOR")
+
+    def test_rejects_naive_observation_clock(self):
+        self.assertEqual(
+            validate_public_capture_plan(self.p, datetime(2026, 11, 12, 12)),
+            "HOLD_CLOCK",
+        )
+
+    def test_rejects_naive_freeze_time(self):
+        self.p["freeze_utc"] = "2026-11-12T11:00:00"
+        self.assertEqual(validate_public_capture_plan(self.p, self.now), "HOLD_TIME")
+
+    def test_rejects_freeze_at_first_off(self):
+        self.p["freeze_utc"] = self.p["first_off_utc"]
+        self.assertEqual(validate_public_capture_plan(self.p, self.now), "HOLD_CHRONOLOGY")
+
+    def test_accepts_equivalent_offset_timestamp_without_authorizing_capture(self):
+        self.p["first_off_utc"] = "2026-11-13T11:00:00+09:00"
+        self.assertEqual(
+            validate_public_capture_plan(self.p, self.now),
+            "READY_FOR_SEPARATE_PRIVATE_REVIEW_NOT_CAPTURE_AUTHORIZATION",
+        )
+
     def test_rejects_extra_private_field(self):
         self.p["horse_name"] = "REDACTED"
         self.assertEqual(validate_public_capture_plan(self.p, self.now), "HOLD_SCHEMA")
