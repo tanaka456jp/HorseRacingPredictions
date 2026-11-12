@@ -60,6 +60,24 @@ class ForwardOddsGateTests(unittest.TestCase):
                     validate_forward_receipt(receipt, manifest)
 
 
+    def test_fictional_source_and_freeze_chronology_fail_closed(self):
+        # All examples are synthetic; no private NAR records are used.
+        receipt, manifest = self.fixture(2)
+        cases = [
+            ("official_source_time_utc", "2026-11-11T23:59:59+09:00", "receipt"),
+            ("official_source_time_utc", "2026-11-12T11:00:01+09:00", "receipt"),
+            ("official_source_time_utc", "2026-11-12T09:00:00+09:00", "receipt"),
+            ("frozen_at_utc", "2026-11-12T10:59:00+09:00", "manifest"),
+            ("first_off_at_utc", "2026-11-13T12:00:00+09:00", "manifest"),
+            ("observed_at_utc", "2026-11-12T11:00:00", "receipt"),
+        ]
+        for key, value, target in cases:
+            with self.subTest(key=key, value=value):
+                r, m = self.fixture(2)
+                (r if target == "receipt" else m)[key] = value
+                with self.assertRaises(ForwardOddsGateError):
+                    validate_forward_receipt(r, m)
+
     def test_fictional_partial_quote_coverage_does_not_prove_execution(self):
         receipt, manifest = self.fixture(3)
         receipt.update(frozen_win_tickets_with_quote=2,
