@@ -38,6 +38,42 @@ class ForwardDayBoundaryTests(unittest.TestCase):
         self.assertFalse(summary["executablePriceProven"])
         self.assertFalse(summary["afterCostPositiveEVProven"])
 
+    def test_zero_price_coverage_is_not_positive_ev_evidence(self):
+        receipt = dict(
+            self.receipt,
+            frozen_win_tickets_with_quote=0,
+            missing_frozen_win_quotes=3,
+            frozen_place_tickets_with_quote=0,
+            missing_frozen_place_quotes=3,
+        )
+        summary = validate_forward_receipt(receipt, self.manifest)
+        self.assertEqual(summary["winQuoted"], 0)
+        self.assertEqual(summary["placeQuoted"], 0)
+        self.assertEqual(summary["winMissing"] + summary["placeMissing"], 6)
+        self.assertFalse(summary["executablePriceProven"])
+        self.assertFalse(summary["afterCostPositiveEVProven"])
+
+    def test_ten_minute_boundary_and_late_observation(self):
+        receipt = dict(self.receipt)
+        receipt["observed_at_utc"] = "2026-11-15T09:50:00+09:00"
+        receipt["official_source_time_utc"] = "2026-11-15T09:49:00+09:00"
+        self.assertEqual(validate_forward_receipt(receipt, self.manifest)["frozenRaces"], 3)
+        receipt["observed_at_utc"] = "2026-11-15T09:50:01+09:00"
+        with self.assertRaises(ForwardOddsGateError) as cm:
+            validate_forward_receipt(receipt, self.manifest)
+        self.assertEqual(str(cm.exception), "TOO_LATE")
+
+    def test_invalid_aggregate_types_and_plan_cannot_pass(self):
+        for field, value in (("frozen_win_tickets_with_quote", True),
+                             ("missing_frozen_place_quotes", -1),
+                             ("registered_horses", 21.0)):
+            with self.subTest(field=field):
+                with self.assertRaises(ForwardOddsGateError):
+                    validate_forward_receipt(dict(self.receipt, **{field: value}), self.manifest)
+        with self.assertRaises(ForwardOddsGateError) as cm:
+            validate_forward_receipt(self.receipt, dict(self.manifest, planned_ticket_count=3))
+        self.assertEqual(str(cm.exception), "PLAN_MISMATCH")
+
     def test_observed_jst_day_mismatch_even_if_source_day_claims_match(self):
         self.receipt["observed_at_utc"] = "2026-11-14T14:59:59Z"
         with self.assertRaises(ForwardOddsGateError) as cm:
