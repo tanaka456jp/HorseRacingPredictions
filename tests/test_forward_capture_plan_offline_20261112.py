@@ -15,13 +15,19 @@ def validate_public_capture_plan(plan, now_utc):
         return "HOLD_SCHEMA"
     if not isinstance(now_utc, datetime) or now_utc.tzinfo is None:
         return "HOLD_CLOCK"
+    if (not isinstance(plan["race_day"], str) or
+            len(plan["race_day"]) != 10 or
+            plan["race_day"][4] != "-" or plan["race_day"][7] != "-"):
+        return "HOLD_TIME"
     try:
         race_day = date.fromisoformat(plan["race_day"])
         freeze = datetime.fromisoformat(plan["freeze_utc"].replace("Z", "+00:00"))
         off = datetime.fromisoformat(plan["first_off_utc"].replace("Z", "+00:00"))
     except (ValueError, TypeError, AttributeError):
         return "HOLD_TIME"
-    if freeze.tzinfo is None or off.tzinfo is None:
+    if (freeze.tzinfo is None or off.tzinfo is None or
+            freeze.utcoffset() is None or off.utcoffset() is None or
+            now_utc.utcoffset() is None):
         return "HOLD_TIME"
     if any(type(plan[k]) is not int for k in
            ("race_count", "entrant_count", "win_tickets", "place_tickets")):
@@ -103,6 +109,18 @@ class ProspectiveMetadataTests(unittest.TestCase):
             validate_public_capture_plan(self.p, self.now),
             "READY_FOR_SEPARATE_PRIVATE_REVIEW_NOT_CAPTURE_AUTHORIZATION",
         )
+
+    def test_rejects_compact_race_day_even_if_python_parses_it(self):
+        self.p["race_day"] = "20261113"
+        self.assertEqual(validate_public_capture_plan(self.p, self.now), "HOLD_TIME")
+
+    def test_rejects_non_string_race_day(self):
+        self.p["race_day"] = 20261113
+        self.assertEqual(validate_public_capture_plan(self.p, self.now), "HOLD_TIME")
+
+    def test_rejects_missing_timezone_offset_in_observation(self):
+        # A datetime with no timezone is already rejected by the clock gate.
+        self.assertEqual(validate_public_capture_plan(self.p, self.now.replace(tzinfo=None)), "HOLD_CLOCK")
 
     def test_rejects_extra_private_field(self):
         self.p["horse_name"] = "REDACTED"
