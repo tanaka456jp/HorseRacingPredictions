@@ -108,5 +108,32 @@ class ForwardOddsGateTests(unittest.TestCase):
             validate_forward_receipt(receipt, manifest)
 
 
+    def test_fictional_missing_and_invalid_receipt_fields_fail_closed(self):
+        # No live NAR data: missing fields and invalid aggregates must never
+        # be silently treated as zero, nor change the preregistered denominator.
+        cases = [
+            ("receipt", "missing_frozen_win_quotes", None),
+            ("receipt", "missing_frozen_place_quotes", None),
+            ("receipt", "actual_tickets", None),
+            ("receipt", "original_forecast_unchanged", None),
+            ("receipt", "source_uploaded", None),
+            ("receipt", "after_cost_ev_proven", None),
+            ("receipt", "frozen_place_tickets_with_quote", -1),
+            ("receipt", "missing_frozen_win_quotes", True),
+            ("manifest", "planned_ticket_count", None),
+            ("manifest", "frozen_races", 0),
+            ("manifest", "frozen_horses", True),
+        ]
+        for target, key, value in cases:
+            with self.subTest(target=target, key=key):
+                receipt, manifest = self.fixture(2)
+                obj = receipt if target == "receipt" else manifest
+                if value is None:
+                    del obj[key]
+                else:
+                    obj[key] = value
+                with self.assertRaises(ForwardOddsGateError):
+                    validate_forward_receipt(receipt, manifest)
+
 if __name__ == "__main__":
     unittest.main()
