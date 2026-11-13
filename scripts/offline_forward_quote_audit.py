@@ -33,6 +33,8 @@ def audit_quote(*, race_key, market, quote, source_time, received_time,
 def audit_manifest(*, registered_races, observed_races):
     """Count registered denominator without deleting missing or duplicate races."""
     registered = tuple(registered_races)
+    if not registered:
+        return {"status": "EMPTY_REGISTRATION"}
     if len(registered) != len(set(registered)):
         return {"status": "DUPLICATE_REGISTRATION"}
     observed = tuple(observed_races)
