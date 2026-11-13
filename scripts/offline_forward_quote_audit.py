@@ -37,10 +37,15 @@ def audit_manifest(*, registered_races, observed_races):
     if isinstance(registered_races, (str, bytes)) or isinstance(observed_races, (str, bytes)):
         return {"status": "INVALID_MANIFEST", "registered": 0,
                 "observed": 0, "missing": 0, "unexpected": 0}
-    registered = tuple(registered_races)
-    observed = tuple(observed_races)
-    registered_set = set(registered)
-    seen = set(observed)
+    try:
+        registered = tuple(registered_races)
+        observed = tuple(observed_races)
+        registered_set = set(registered)
+        seen = set(observed)
+    except (TypeError, ValueError):
+        # Malformed/unhashable identifiers must not crash the offline audit.
+        return {"status": "INVALID_MANIFEST", "registered": 0,
+                "observed": 0, "missing": 0, "unexpected": 0}
     if not registered:
         status = "EMPTY_REGISTRATION"
     elif len(registered) != len(registered_set):
