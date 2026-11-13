@@ -41,7 +41,8 @@ def audit_manifest(*, registered_races, observed_races):
     if len(observed) != len(set(observed)):
         return {"status": "DUPLICATE_OBSERVATION"}
     seen = set(observed)
-    return {"status": "OK", "registered": len(registered),
+    return {"status": "UNEXPECTED_OBSERVATION" if seen - set(registered) else "OK",
+            "registered": len(registered),
             "observed": len(seen.intersection(registered)),
             "missing": len(set(registered) - seen),
             "unexpected": len(seen - set(registered))}
