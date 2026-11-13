@@ -44,6 +44,8 @@ def audit_manifest(*, registered_races, observed_races):
         status = "DUPLICATE_OBSERVATION"
     elif seen - registered_set:
         status = "UNEXPECTED_OBSERVATION"
+    elif registered_set - seen:
+        status = "MISSING_OBSERVATION"
     else:
         status = "OK"
     return {"status": status,
