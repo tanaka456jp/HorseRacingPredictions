@@ -16,7 +16,7 @@ def audit_quote(*, race_key, market, quote, source_time, received_time,
         return "MISSING_PRICE"
     if not isinstance(quote, (int, float)) or isinstance(quote, bool):
         return "INVALID_PRICE"
-    if not (0 < quote < float("inf")):
+    if not (1.0 <= quote < float("inf")):
         return "INVALID_PRICE"
     times = (source_time, received_time, off_time)
     if any(not isinstance(t, datetime) or t.tzinfo is None or
