@@ -33,16 +33,21 @@ def audit_quote(*, race_key, market, quote, source_time, received_time,
 def audit_manifest(*, registered_races, observed_races):
     """Count registered denominator without deleting missing or duplicate races."""
     registered = tuple(registered_races)
-    if not registered:
-        return {"status": "EMPTY_REGISTRATION"}
-    if len(registered) != len(set(registered)):
-        return {"status": "DUPLICATE_REGISTRATION"}
     observed = tuple(observed_races)
-    if len(observed) != len(set(observed)):
-        return {"status": "DUPLICATE_OBSERVATION"}
+    registered_set = set(registered)
     seen = set(observed)
-    return {"status": "UNEXPECTED_OBSERVATION" if seen - set(registered) else "OK",
+    if not registered:
+        status = "EMPTY_REGISTRATION"
+    elif len(registered) != len(registered_set):
+        status = "DUPLICATE_REGISTRATION"
+    elif len(observed) != len(seen):
+        status = "DUPLICATE_OBSERVATION"
+    elif seen - registered_set:
+        status = "UNEXPECTED_OBSERVATION"
+    else:
+        status = "OK"
+    return {"status": status,
             "registered": len(registered),
-            "observed": len(seen.intersection(registered)),
-            "missing": len(set(registered) - seen),
-            "unexpected": len(seen - set(registered))}
+            "observed": len(seen.intersection(registered_set)),
+            "missing": len(registered_set - seen),
+            "unexpected": len(seen - registered_set)}
