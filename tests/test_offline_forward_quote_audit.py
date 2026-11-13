@@ -88,3 +88,11 @@ def test_scalar_manifest_inputs_fail_closed_without_splitting_race_ids():
         "status": "OK", "registered": 1, "observed": 1,
         "missing": 0, "unexpected": 0,
     }
+
+
+def test_malformed_manifest_identifiers_fail_closed():
+    invalid = {"status": "INVALID_MANIFEST", "registered": 0,
+               "observed": 0, "missing": 0, "unexpected": 0}
+    assert audit.audit_manifest(registered_races=None, observed_races=[]) == invalid
+    assert audit.audit_manifest(registered_races=[["nested"]], observed_races=[]) == invalid
+    assert audit.audit_manifest(registered_races=["race-A"], observed_races=[{"key": "private"}]) == invalid
