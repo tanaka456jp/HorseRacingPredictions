@@ -48,3 +48,13 @@ def test_expected_only_observations_remain_ok():
         "status": "OK", "registered": 2, "observed": 1,
         "missing": 1, "unexpected": 0,
     }
+
+
+def test_decimal_odds_below_one_are_invalid():
+    off = datetime(2026, 12, 1, 10, tzinfo=timezone.utc)
+    args = dict(race_key="synthetic-A", market="PLACE", quote=0.75,
+                source_time=off - timedelta(minutes=5),
+                received_time=off - timedelta(minutes=4),
+                off_time=off, registered_races={"synthetic-A"})
+    assert audit.audit_quote(**args) == "INVALID_PRICE"
+    assert audit.audit_quote(**{**args, "quote": 1.0}) == "INDICATIVE_ONLY"
