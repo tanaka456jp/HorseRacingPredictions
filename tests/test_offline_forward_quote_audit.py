@@ -48,9 +48,9 @@ def test_empty_registration_cannot_pass_as_complete():
         "missing": 0, "unexpected": 1}
 
 
-def test_expected_only_observations_remain_ok():
+def test_missing_observations_are_not_marked_complete():
     assert audit.audit_manifest(registered_races=["a", "b"], observed_races=["a"]) == {
-        "status": "OK", "registered": 2, "observed": 1,
+        "status": "MISSING_OBSERVATION", "registered": 2, "observed": 1,
         "missing": 1, "unexpected": 0,
     }
 
@@ -70,3 +70,9 @@ def test_duplicate_registration_retains_original_denominator_and_missing_count()
                                   observed_races=["a"])
     assert result == {"status": "DUPLICATE_REGISTRATION", "registered": 3,
                       "observed": 1, "missing": 1, "unexpected": 0}
+
+
+def test_complete_manifest_only_is_ok():
+    assert audit.audit_manifest(registered_races=["a", "b"], observed_races=["b", "a"]) == {
+        "status": "OK", "registered": 2, "observed": 2, "missing": 0, "unexpected": 0,
+    }
