@@ -76,3 +76,15 @@ def test_complete_manifest_only_is_ok():
     assert audit.audit_manifest(registered_races=["a", "b"], observed_races=["b", "a"]) == {
         "status": "OK", "registered": 2, "observed": 2, "missing": 0, "unexpected": 0,
     }
+
+
+def test_scalar_manifest_inputs_fail_closed_without_splitting_race_ids():
+    invalid = {"status": "INVALID_MANIFEST", "registered": 0,
+               "observed": 0, "missing": 0, "unexpected": 0}
+    assert audit.audit_manifest(registered_races="race-A", observed_races="race-A") == invalid
+    assert audit.audit_manifest(registered_races=["race-A"], observed_races="race-A") == invalid
+    assert audit.audit_manifest(registered_races=b"race-A", observed_races=[]) == invalid
+    assert audit.audit_manifest(registered_races=["race-A"], observed_races=["race-A"]) == {
+        "status": "OK", "registered": 1, "observed": 1,
+        "missing": 0, "unexpected": 0,
+    }
