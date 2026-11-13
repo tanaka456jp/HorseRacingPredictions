@@ -30,3 +30,9 @@ def test_denominator_never_shrinks_for_missing():
     assert result == {"status": "OK", "registered": 3, "observed": 1,
                       "missing": 2, "unexpected": 1}
     assert audit.audit_manifest(registered_races=["a", "a"], observed_races=[])["status"] == "DUPLICATE_REGISTRATION"
+
+
+def test_duplicate_observations_block_audit_without_exposing_ids():
+    result = audit.audit_manifest(registered_races=["a", "b"],
+                                  observed_races=["a", "a"])
+    assert result == {"status": "DUPLICATE_OBSERVATION"}
