@@ -27,7 +27,7 @@ def test_quote_provenance_gates():
 def test_denominator_never_shrinks_for_missing():
     result = audit.audit_manifest(registered_races=["a", "b", "c"],
                                   observed_races=["a", "unregistered"])
-    assert result == {"status": "OK", "registered": 3, "observed": 1,
+    assert result == {"status": "UNEXPECTED_OBSERVATION", "registered": 3, "observed": 1,
                       "missing": 2, "unexpected": 1}
     assert audit.audit_manifest(registered_races=["a", "a"], observed_races=[])["status"] == "DUPLICATE_REGISTRATION"
 
@@ -41,3 +41,10 @@ def test_duplicate_observations_block_audit_without_exposing_ids():
 def test_empty_registration_cannot_pass_as_complete():
     assert audit.audit_manifest(registered_races=[], observed_races=[]) == {"status": "EMPTY_REGISTRATION"}
     assert audit.audit_manifest(registered_races=[], observed_races=["unexpected"]) == {"status": "EMPTY_REGISTRATION"}
+
+
+def test_expected_only_observations_remain_ok():
+    assert audit.audit_manifest(registered_races=["a", "b"], observed_races=["a"]) == {
+        "status": "OK", "registered": 2, "observed": 1,
+        "missing": 1, "unexpected": 0,
+    }
