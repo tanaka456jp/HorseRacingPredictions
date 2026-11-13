@@ -36,3 +36,8 @@ def test_duplicate_observations_block_audit_without_exposing_ids():
     result = audit.audit_manifest(registered_races=["a", "b"],
                                   observed_races=["a", "a"])
     assert result == {"status": "DUPLICATE_OBSERVATION"}
+
+
+def test_empty_registration_cannot_pass_as_complete():
+    assert audit.audit_manifest(registered_races=[], observed_races=[]) == {"status": "EMPTY_REGISTRATION"}
+    assert audit.audit_manifest(registered_races=[], observed_races=["unexpected"]) == {"status": "EMPTY_REGISTRATION"}
