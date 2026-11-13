@@ -32,6 +32,11 @@ def audit_quote(*, race_key, market, quote, source_time, received_time,
 
 def audit_manifest(*, registered_races, observed_races):
     """Count registered denominator without deleting missing or duplicate races."""
+    # A scalar string is one identifier, not a roster of character IDs.
+    # Fail closed without printing potentially private race identifiers.
+    if isinstance(registered_races, (str, bytes)) or isinstance(observed_races, (str, bytes)):
+        return {"status": "INVALID_MANIFEST", "registered": 0,
+                "observed": 0, "missing": 0, "unexpected": 0}
     registered = tuple(registered_races)
     observed = tuple(observed_races)
     registered_set = set(registered)
