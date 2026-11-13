@@ -35,12 +35,17 @@ def test_denominator_never_shrinks_for_missing():
 def test_duplicate_observations_block_audit_without_exposing_ids():
     result = audit.audit_manifest(registered_races=["a", "b"],
                                   observed_races=["a", "a"])
-    assert result == {"status": "DUPLICATE_OBSERVATION"}
+    assert result == {"status": "DUPLICATE_OBSERVATION", "registered": 2,
+                      "observed": 1, "missing": 1, "unexpected": 0}
 
 
 def test_empty_registration_cannot_pass_as_complete():
-    assert audit.audit_manifest(registered_races=[], observed_races=[]) == {"status": "EMPTY_REGISTRATION"}
-    assert audit.audit_manifest(registered_races=[], observed_races=["unexpected"]) == {"status": "EMPTY_REGISTRATION"}
+    assert audit.audit_manifest(registered_races=[], observed_races=[]) == {
+        "status": "EMPTY_REGISTRATION", "registered": 0, "observed": 0,
+        "missing": 0, "unexpected": 0}
+    assert audit.audit_manifest(registered_races=[], observed_races=["unexpected"]) == {
+        "status": "EMPTY_REGISTRATION", "registered": 0, "observed": 0,
+        "missing": 0, "unexpected": 1}
 
 
 def test_expected_only_observations_remain_ok():
@@ -58,3 +63,10 @@ def test_decimal_odds_below_one_are_invalid():
                 off_time=off, registered_races={"synthetic-A"})
     assert audit.audit_quote(**args) == "INVALID_PRICE"
     assert audit.audit_quote(**{**args, "quote": 1.0}) == "INDICATIVE_ONLY"
+
+
+def test_duplicate_registration_retains_original_denominator_and_missing_count():
+    result = audit.audit_manifest(registered_races=["a", "a", "b"],
+                                  observed_races=["a"])
+    assert result == {"status": "DUPLICATE_REGISTRATION", "registered": 3,
+                      "observed": 1, "missing": 1, "unexpected": 0}
