@@ -19,7 +19,8 @@ def audit_quote(*, race_key, market, quote, source_time, received_time,
         return "INVALID_MANIFEST"
     # Validate the complete frozen roster before classifying the target race.
     # An empty/duplicated roster is a manifest error, not an absent race.
-    if not registered or len(registered_set) != len(registered):
+    if (not registered or len(registered_set) != len(registered) or
+            any(not isinstance(k, str) or not k.strip() for k in registered)):
         return "INVALID_MANIFEST"
     if not isinstance(race_key, str) or not race_key or race_key not in registered_set:
         return "UNREGISTERED_RACE"
@@ -59,7 +60,10 @@ def audit_manifest(*, registered_races, observed_races):
         # Malformed/unhashable identifiers must not crash the offline audit.
         return {"status": "INVALID_MANIFEST", "registered": 0,
                 "observed": 0, "missing": 0, "unexpected": 0}
-    if not registered:
+    if (any(not isinstance(k, str) or not k.strip() for k in registered) or
+            any(not isinstance(k, str) or not k.strip() for k in observed)):
+        status = "INVALID_MANIFEST"
+    elif not registered:
         status = "EMPTY_REGISTRATION"
     elif len(registered) != len(registered_set):
         status = "DUPLICATE_REGISTRATION"
