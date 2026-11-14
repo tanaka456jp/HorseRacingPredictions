@@ -15,12 +15,14 @@ def audit_quote(*, race_key, market, quote, source_time, received_time,
     try:
         registered = tuple(registered_races)
         registered_set = set(registered)
-        if not isinstance(race_key, str) or not race_key or race_key not in registered_set:
-            return "UNREGISTERED_RACE"
     except (TypeError, ValueError):
         return "INVALID_MANIFEST"
+    # Validate the complete frozen roster before classifying the target race.
+    # An empty/duplicated roster is a manifest error, not an absent race.
     if not registered or len(registered_set) != len(registered):
         return "INVALID_MANIFEST"
+    if not isinstance(race_key, str) or not race_key or race_key not in registered_set:
+        return "UNREGISTERED_RACE"
     if market not in ("WIN", "PLACE"):
         return "INVALID_MARKET"
     if quote is None:
