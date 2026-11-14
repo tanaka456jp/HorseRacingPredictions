@@ -1,0 +1,68 @@
+name: NAR PC2 Private CSV Origin Review (Metadata Only)
+on:
+  push:
+    branches: ["feature/weekly-odds-free-note-20261021"]
+    paths:
+      - "scripts/prepare_pc2_private_source_hints_review.ps1"
+      - ".github/workflows/nar-pc2-private-source-origin-review.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: nar-pc2-private-source-origin-review
+  cancel-in-progress: false
+jobs:
+  static-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Parse PowerShell and reject content/network/source-write operations
+        shell: pwsh
+        run: |
+          $path = "scripts/prepare_pc2_private_source_hints_review.ps1"
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path $path).Path, [ref]$tokens, [ref]$errors
+          ) | Out-Null
+          if (@($errors).Count -gt 0) { throw 'NAR_PRIVATE_REVIEW_POWERSHELL_INVALID' }
+          $source = Get-Content -LiteralPath $path -Raw
+          foreach ($forbidden in @(
+            '\bReadAllBytes\b', '\bReadAllText\b', '\bReadLines\b',
+            '\bOpenRead\b', '\bImport-Csv\b', '\bGet-Content\b',
+            '\bExpand-Archive\b', '\bExtractToDirectory\b',
+            '\bInvoke-WebRequest\b', '\bInvoke-RestMethod\b',
+            '\bStart-Process\b', '\bInvoke-Expression\b',
+            '\bCopy-Item\b', '\bMove-Item\b', '\bRemove-Item\b',
+            '\bSet-Content\b', '\bAdd-Content\b', '\bOut-File\b'
+          )) {
+            if ($source -match $forbidden) {
+              throw 'NAR_PRIVATE_REVIEW_UNSAFE_OPERATION_TOKEN'
+            }
+          }
+          if ($source -notmatch 'HorseRacingPredictions-PrivateReview' -or
+              $source -notmatch 'sourceBytesUploaded\s*=\s*\$false' -or
+              $source -notmatch 'sourceRightsVerified\s*=\s*\$false' -or
+              $source -notmatch 'fileContentRead\s*=\s*\$false') {
+            throw 'NAR_PRIVATE_REVIEW_SAFETY_GUARD_MISSING'
+          }
+          Write-Host 'PASS: PowerShell parsed; private local metadata-only contract'
+  pc2-private-file:
+    needs: static-contract
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 12
+    steps:
+      - name: Checkout preserving unrelated private data
+        uses: actions/checkout@v4
+        with:
+          clean: false
+          persist-credentials: false
+      - name: Save metadata-only source candidates to restricted D folder; log counts only
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          & .\scripts\prepare_pc2_private_source_hints_review.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

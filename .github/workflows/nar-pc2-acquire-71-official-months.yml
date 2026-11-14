@@ -1,0 +1,130 @@
+name: NAR PC2 Download Missing 2017-2022 Official ZIPs (Private D Drive)
+
+on:
+  push:
+    branches: ["feature/weekly-odds-free-note-20261021"]
+    paths:
+      - ".github/workflows/nar-pc2-acquire-71-official-months.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nar-pc2-official-training-month-acquisition
+  cancel-in-progress: false
+
+jobs:
+  download-only-missing-original-months:
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 55
+    steps:
+      - name: Checkout reviewed downloader; keep PC2 private D archive intact
+        uses: actions/checkout@v4
+        with:
+          clean: false
+          persist-credentials: false
+      - name: Verify physical PC2, licensed-source-only D location and free disk
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:COMPUTERNAME -cne 'DESKTOP-MVV1FD4' -or
+              $env:GITHUB_REPOSITORY -cne 'tanaka456jp/HorseRacingPredictions' -or
+              $env:GITHUB_REF_NAME -cne 'feature/weekly-odds-free-note-20261021') {
+            Write-Host 'NAR_ACQUISITION_UNTRUSTED_PC_OR_REPO'
+            exit 2
+          }
+          foreach ($p in @('D:\Development','D:\Development\HorseRacingPredictions',
+                           'D:\Development\HorseRacingPredictions\nar-personal')) {
+            if (-not (Test-Path -LiteralPath $p -PathType Container) -or
+                ((Get-Item -LiteralPath $p -Force).Attributes -band
+                  [IO.FileAttributes]::ReparsePoint) -ne 0) {
+              Write-Host 'NAR_ACQUISITION_UNTRUSTED_D_DIRECTORY'
+              exit 2
+            }
+          }
+          $disk = Get-PSDrive -Name D
+          if ($null -eq $disk.Free -or [long]$disk.Free -lt 2147483648) {
+            Write-Host 'NAR_ACQUISITION_D_DRIVE_FREE_SPACE_HOLD'
+            exit 2
+          }
+          if (-not (Test-Path -LiteralPath '.\scripts\acquire_pc2_nar_2017_2022_months.py' -PathType Leaf)) {
+            Write-Host 'NAR_ACQUISITION_APPROVED_SCRIPT_MISSING'
+            exit 2
+          }
+          Write-Host 'NAR_ACQUISITION_PC2_D_DRIVE_PREFLIGHT_PASS'
+      - name: Probe exactly ONE missing official month, ZIP CRC and headers
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $env:PYTHONDONTWRITEBYTECODE = '1'
+          $raw = @(& python -B .\scripts\acquire_pc2_nar_2017_2022_months.py --confirm-nar-private-monthly-acquisition-authorized --max-downloads 1 2>&1)
+          $exit = $LASTEXITCODE
+          if ($exit -notin @(0,3) -or $raw.Count -ne 1) {
+            Write-Host 'NAR_OFFICIAL_SINGLE_MONTH_PROBE_FAILED'
+            exit 2
+          }
+          $data = [string]$raw[0] | ConvertFrom-Json
+          if ($data.schema -cne 'NAR.PC2.OfficialMonthlyAcquisition.v1' -or
+              [string]$data.staticStopReason -cne '' -or
+              [int]$data.newOfficialZipsValidated -notin @(0,1) -or
+              [int]$data.monthsStillMissing -gt 71 -or
+              $data.privateDataUploaded -ne $false -or
+              $data.sourceRecordsPrinted -ne $false -or
+              $data.protectedOosRead -ne $false -or
+              $data.trainingPerformed -ne $false -or
+              $data.positiveEvDemonstrated -ne $false) {
+            Write-Host 'NAR_OFFICIAL_SINGLE_MONTH_PROBE_NOT_VERIFIED'
+            exit 2
+          }
+          [ordered]@{
+            schema = 'NAR.PC2.AcquisitionSingleMonthGate.v1'
+            status = 'PASS'
+            originalMonthsPresentAtStart = [int]$data.sourceMonthsInitiallyPresent
+            missingMonthsAfterProbe = [int]$data.monthsStillMissing
+            validNewZipCount = [int]$data.newOfficialZipsValidated
+            recordsUploaded = $false
+            realEconomicRoiCalculated = $false
+          } | ConvertTo-Json -Compress
+          # CLI exit code 3 is an expected partial (one validated ZIP).
+          # Windows PowerShell otherwise propagates its last native code.
+          exit 0
+      - name: Continue all remaining missing 2017-2022 ZIPs using 4-second pacing
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $env:PYTHONDONTWRITEBYTECODE = '1'
+          $raw = @(& python -B .\scripts\acquire_pc2_nar_2017_2022_months.py --confirm-nar-private-monthly-acquisition-authorized --max-downloads 72 2>&1)
+          $exit = $LASTEXITCODE
+          if ($exit -notin @(0,3) -or $raw.Count -ne 1) {
+            Write-Host 'NAR_OFFICIAL_MULTI_MONTH_ACQUISITION_FAILED'
+            exit 2
+          }
+          $data = [string]$raw[0] | ConvertFrom-Json
+          if ($data.schema -cne 'NAR.PC2.OfficialMonthlyAcquisition.v1' -or
+              $data.privateDataUploaded -ne $false -or
+              $data.sourceRecordsPrinted -ne $false -or
+              $data.protectedOosRead -ne $false -or
+              $data.trainingPerformed -ne $false -or
+              $data.positiveEvDemonstrated -ne $false) {
+            Write-Host 'NAR_OFFICIAL_MULTI_MONTH_RESULT_SCHEMA_INVALID'
+            exit 2
+          }
+          [ordered]@{
+            schema = 'NAR.PC2.OfficialMonthlyAcquisitionFinal.v1'
+            status = [string]$data.status
+            originallyPresentThisBatch = [int]$data.sourceMonthsInitiallyPresent
+            newlyValidatedOfficialZips = [int]$data.newOfficialZipsValidated
+            missingAfter = [int]$data.monthsStillMissing
+            sanitizedStopReason = [string]$data.staticStopReason
+            sourceDataUploaded = $false
+            preoffRosterProven = $false
+            trainingPerformed = $false
+            actualPositiveEvDemonstrated = $false
+          } | ConvertTo-Json -Compress
+          if ($exit -ne 0 -or [int]$data.monthsStillMissing -ne 0 -or
+              [string]$data.staticStopReason -cne '') {
+            Write-Host 'NAR_TRAINING_SOURCE_INCOMPLETE_HOLD'
+            exit 3
+          }
+          Write-Host 'NAR_ALL_72_MONTHLY_ZIPS_VERIFIED_ON_PC2_D_DRIVE'

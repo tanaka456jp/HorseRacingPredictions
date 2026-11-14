@@ -7,6 +7,10 @@ $ErrorActionPreference = "Stop"
 $ProjectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 Set-Location $ProjectRoot
 
+# Do not (re-)install active JRA-VAN scheduled tasks now that the free
+# trial has ended. Existing tasks must be explicitly disabled separately.
+throw "JRA_VAN_TRIAL_EXPIRED_SCHEDULER_INSTALL_DISABLED"
+
 if ($env:COMPUTERNAME -ne $ExpectedComputerName) {
     throw "Refusing scheduler installation on $($env:COMPUTERNAME); expected $ExpectedComputerName."
 }

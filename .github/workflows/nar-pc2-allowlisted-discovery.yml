@@ -1,0 +1,38 @@
+name: NAR PC2 Data Availability Audit (Filenames Only)
+on:
+  push:
+    branches: ["feature/weekly-odds-free-note-20261021"]
+    paths:
+      - ".github/workflows/nar-pc2-allowlisted-discovery.yml"
+      - "scripts/inspect_pc2_nar_allowlisted_monthly_filenames.ps1"
+      - "scripts/inspect_pc2_nar_training_zip_presence_readonly.ps1"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: nar-pc2-allowlisted-discovery
+  cancel-in-progress: false
+jobs:
+  metadata:
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 10
+    steps:
+      - name: Checkout preserving unrelated local data
+        uses: actions/checkout@v4
+        with:
+          clean: false
+          persist-credentials: false
+      # One-time expanded, bounded D-drive check after finding only 1/72
+      # training months in the dedicated folder. No C-drive scan or writes.
+      - name: Check bounded D roots only, never read CSV or ZIP contents
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          & .\scripts\inspect_pc2_nar_allowlisted_monthly_filenames.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Crosscheck exact candidate training ZIP months (names and sizes only)
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          & .\scripts\inspect_pc2_nar_training_zip_presence_readonly.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

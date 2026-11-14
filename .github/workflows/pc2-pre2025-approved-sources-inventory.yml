@@ -1,0 +1,80 @@
+name: PC2 Pre-2025 Existing Archive Discovery (Metadata Only)
+
+on:
+  push:
+    branches: ["feature/weekly-odds-free-note-20261021"]
+    paths:
+      - "scripts/inspect_pc2_pre2025_archive_metadata_readonly.ps1"
+      - ".github/workflows/pc2-pre2025-approved-sources-inventory.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pc2-pre2025-two-roots-metadata
+  cancel-in-progress: false
+
+jobs:
+  static-no-content:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify static PowerShell and no mutating/read-data functions
+        shell: pwsh
+        run: |
+          $path = "scripts/inspect_pc2_pre2025_archive_metadata_readonly.ps1"
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path $path).Path, [ref]$tokens, [ref]$errors
+          ) | Out-Null
+          if (@($errors).Count -ne 0) { throw "INVALID_PC2_ARCHIVE_INVENTORY_SCRIPT" }
+          $source = Get-Content -LiteralPath $path -Raw
+          foreach ($p in @(
+            '\bRemove-Item\b', '\bCopy-Item\b', '\bMove-Item\b',
+            '\bSet-ItemProperty\b', '\bGet-ItemProperty\b',
+            '\bInvoke-WebRequest\b', '\bInvoke-RestMethod\b',
+            '\bImport-Csv\b', '\bConvertFrom-Csv\b',
+            '\bGet-Content\s+-LiteralPath\s+\$file\b'
+          )) {
+            if ($source -match $p) { throw "PC2_SOURCE_INVENTORY_FORBIDDEN_OPERATION" }
+          }
+
+  local-pc2-metadata:
+    name: PC2 count approved pre2025 file formats without opening data
+    needs: static-no-content
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          clean: false
+          persist-credentials: false
+      - name: Inspect only exact two D source roots
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          & .\scripts\inspect_pc2_pre2025_archive_metadata_readonly.ps1 `
+            -OutputPath "artifacts/pre2025_archive_file_inventory.json"
+          $report = Get-Content -LiteralPath "artifacts/pre2025_archive_file_inventory.json" -Raw |
+            ConvertFrom-Json
+          if ($report.physicalPC2Verified -ne $true -or
+              $report.sourceBytesOpened -ne $false -or
+              $report.fileNamesReadOrUploaded -ne $false -or
+              $report.existingArchiveMutated -ne $false -or
+              $report.protectedHoldoutTrainingAllowed -ne $false -or
+              $report.publicationAuthorized -ne $false) {
+            throw "PC2_PRIVATE_SOURCE_METADATA_SECURITY_PROOF_MISSING"
+          }
+      - name: Upload only allowed counts, not source contents
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pc2-pre2025-source-counts-only
+          path: artifacts/pre2025_archive_file_inventory.json
+          if-no-files-found: error
+          retention-days: 7

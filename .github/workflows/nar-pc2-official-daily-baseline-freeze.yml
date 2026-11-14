@@ -1,0 +1,139 @@
+name: NAR PC2 Real Future Career-Form Forecast Freeze (NO EV)
+
+on:
+  push:
+    branches: ["feature/weekly-odds-free-note-20261021"]
+    paths:
+      - ".github/workflows/nar-pc2-official-daily-baseline-freeze.yml"
+      - "scripts/freeze_nar_official_daily_baseline.py"
+      - "tests/test_nar_official_daily_preoff.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nar-pc2-real-daily-forecast-freeze
+  cancel-in-progress: false
+
+jobs:
+  pc2-private-forecast-freeze:
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 8
+    outputs:
+      digest: ${{ steps.freeze.outputs.digest }}
+      earliest_off: ${{ steps.freeze.outputs.earliest_off }}
+      day: ${{ steps.freeze.outputs.day }}
+      races: ${{ steps.freeze.outputs.races }}
+    steps:
+      - name: Read only code; preserve private source and protected holdouts
+        uses: actions/checkout@v4
+        with:
+          clean: false
+          persist-credentials: false
+      - name: Freeze COMPLETE today's real official roster privately before earliest off
+        id: freeze
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:COMPUTERNAME -cne 'DESKTOP-MVV1FD4' -or
+              $env:GITHUB_REPOSITORY -cne 'tanaka456jp/HorseRacingPredictions' -or
+              $env:GITHUB_REF_NAME -cne 'feature/weekly-odds-free-note-20261021') {
+            Write-Host 'NAR_FORWARD_WRONG_PC_OR_BRANCH'
+            exit 2
+          }
+          $env:PYTHONDONTWRITEBYTECODE = '1'
+          $env:PYTHONPATH = Join-Path (Get-Location).Path 'src'
+          $dest = 'D:\Development\HorseRacingPredictions-PrivateReview\nar-prospective-captures'
+          try {
+            $raw = @(& python -B .\scripts\freeze_nar_official_daily_baseline.py --private-capture-dir $dest 2>&1)
+            if ($LASTEXITCODE -ne 0 -or $raw.Count -ne 1) {
+              throw 'NAR_FORWARD_PRIVATE_FREEZE_FAILED'
+            }
+            $d = [string]$raw[0] | ConvertFrom-Json
+            if ($d.schema -cne 'NAR.PC2.OfficialDailyForwardBaseline.v1' -or
+                $d.result -cne 'PRIVATE_FORECAST_FROZEN_NO_EV_PROOF' -or
+                [int]$d.flat_races -lt 1 -or
+                [int]$d.registered_horses -lt 4 -or
+                [string]$d.commitment_digest_salted -cnotmatch '^[0-9a-f]{64}$' -or
+                $d.odds_observed -ne $false -or
+                $d.independently_timestamped_before_off -ne $false -or
+                $d.source_uploaded -ne $false -or
+                $d.positive_ev_proven -ne $false -or
+                [int]$d.real_wagers -ne 0) {
+              throw 'NAR_FORWARD_FORECAST_NOT_SAFE'
+            }
+            # The digest is BLINDED with a random 256-bit private salt,
+            # and no raw source, private salt, horse names or race keys leave PC2.
+            Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ('digest=' + [string]$d.commitment_digest_salted)
+            Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ('earliest_off=' + [string]$d.earliest_off_utc)
+            Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ('day=' + [string]$d.race_day_jst)
+            Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ('races=' + [int]$d.flat_races)
+            [ordered]@{
+              schema = 'NAR.PC2.OfficialDailyForwardBaseline.v1'
+              result = 'FULL_REAL_ROSTER_BASELINE_FROZEN_NO_EV_PROOF'
+              flatRaces = [int]$d.flat_races
+              registeredHorses = [int]$d.registered_horses
+              earliestOffUTC = [string]$d.earliest_off_utc
+              independentHostedReceiptPending = $true
+              privateDataUploaded = $false
+              protectedOOSOpened = $false
+              realTickets = 0
+              positiveEVProven = $false
+            } | ConvertTo-Json -Compress
+          } catch {
+            Write-Host 'NAR_FORWARD_PRIVATE_FULL_ROSTER_HOLD'
+            exit 2
+          }
+
+  github-hosted-blinded-digest-receipt:
+    needs: pc2-private-forecast-freeze
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    env:
+      PREOFF_DIGEST: ${{ needs.pc2-private-forecast-freeze.outputs.digest }}
+      PREOFF_EARLIEST_OFF: ${{ needs.pc2-private-forecast-freeze.outputs.earliest_off }}
+      PREOFF_DAY: ${{ needs.pc2-private-forecast-freeze.outputs.day }}
+      PREOFF_RACES: ${{ needs.pc2-private-forecast-freeze.outputs.races }}
+    steps:
+      - name: Receive ONLY blinded digest on independent GitHub-hosted runner, BEFORE off
+        shell: bash
+        env:
+          EXPECTED_ENVIRONMENT: ${{ runner.environment }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from datetime import date, datetime, timedelta, timezone
+          import json
+          import os
+          import re
+          digest = os.environ["PREOFF_DIGEST"]
+          off = os.environ["PREOFF_EARLIEST_OFF"]
+          day = os.environ["PREOFF_DAY"]
+          count = os.environ["PREOFF_RACES"]
+          now = datetime.now(timezone.utc)
+          assert re.fullmatch(r"[0-9a-f]{64}", digest), "HOLD_DIGEST"
+          assert re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z", off), "HOLD_OFF"
+          assert re.fullmatch(r"\d{4}-\d{2}-\d{2}", day), "HOLD_DAY"
+          assert re.fullmatch(r"[1-9]\d{0,2}", count), "HOLD_COUNT"
+          earliest = datetime.fromisoformat(off.replace("Z","+00:00"))
+          assert earliest.astimezone(timezone(timedelta(hours=9))).date() == date.fromisoformat(day)
+          assert now < earliest - timedelta(minutes=5), "HOLD_TOO_LATE"
+          assert os.environ["EXPECTED_ENVIRONMENT"] == "github-hosted", "HOLD_NOT_INDEPENDENT_HOST"
+          # Digest receipt is external, NOT a verified private snapshot,
+          # official odds, full schedule, economic settlement or +EV result.
+          print(json.dumps({
+              "schema": "NAR.GitHubHostedRealBlindedDigestReceipt.v1",
+              "status": "BLINDED_DIGEST_RECEIVED_PREOFF_PRIVATE_VERIFICATION_PENDING",
+              "blinded_digest": digest,
+              "host_observed_at_utc": now.isoformat().replace("+00:00","Z"),
+              "earliest_off_utc": off, "race_day": day,
+              "declared_flat_races": int(count),
+              "private_source_transferred": False,
+              "private_salt_transferred": False,
+              "independent_private_snapshot_verified": False,
+              "independent_schedule_verified": False,
+              "actual_wagers": 0,
+              "positive_expected_value_proven": False,
+          }, sort_keys=True))
+          PY
