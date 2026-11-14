@@ -108,3 +108,20 @@ def test_quote_malformed_registration_fails_closed():
     for roster in (None, "synthetic-A", [["nested"]], [], ["synthetic-A", "synthetic-A"]):
         assert audit.audit_quote(**{**base, "registered_races": roster}) == "INVALID_MANIFEST"
     assert audit.audit_quote(**{**base, "race_key": ["unhashable"]}) == "UNREGISTERED_RACE"
+
+
+def test_blank_or_nonstr_race_identifiers_never_pass_manifest_gate():
+    invalid = {"status": "INVALID_MANIFEST", "registered": 0,
+               "observed": 0, "missing": 0, "unexpected": 0}
+    for roster, observed in [([None], [None]), ([""], [""]), (["   "], []),
+                             (["synthetic-A"], [None]), ([123], [123])]:
+        assert audit.audit_manifest(registered_races=roster,
+                                    observed_races=observed)["status"] == "INVALID_MANIFEST"
+    off = datetime(2026, 12, 1, 10, tzinfo=timezone.utc)
+    args = dict(race_key="synthetic-A", market="WIN", quote=2.4,
+                source_time=off - timedelta(minutes=5),
+                received_time=off - timedelta(minutes=4),
+                off_time=off)
+    for roster in ([None, "synthetic-A"], ["", "synthetic-A"],
+                   ["   ", "synthetic-A"], [123, "synthetic-A"]):
+        assert audit.audit_quote(**args, registered_races=roster) == "INVALID_MANIFEST"
