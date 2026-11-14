@@ -8,8 +8,19 @@ from datetime import datetime, timezone
 def audit_quote(*, race_key, market, quote, source_time, received_time,
                 off_time, registered_races):
     """Return a public-safe reason code, never a race key or raw quote."""
-    if race_key not in registered_races:
-        return "UNREGISTERED_RACE"
+    # A malformed roster or unhashable identifier must fail closed without
+    # logging private identifiers or interrupting a prospective audit.
+    if isinstance(registered_races, (str, bytes)):
+        return "INVALID_MANIFEST"
+    try:
+        registered = tuple(registered_races)
+        registered_set = set(registered)
+        if not isinstance(race_key, str) or not race_key or race_key not in registered_set:
+            return "UNREGISTERED_RACE"
+    except (TypeError, ValueError):
+        return "INVALID_MANIFEST"
+    if not registered or len(registered_set) != len(registered):
+        return "INVALID_MANIFEST"
     if market not in ("WIN", "PLACE"):
         return "INVALID_MARKET"
     if quote is None:
