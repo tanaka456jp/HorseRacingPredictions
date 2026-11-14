@@ -96,3 +96,15 @@ def test_malformed_manifest_identifiers_fail_closed():
     assert audit.audit_manifest(registered_races=None, observed_races=[]) == invalid
     assert audit.audit_manifest(registered_races=[["nested"]], observed_races=[]) == invalid
     assert audit.audit_manifest(registered_races=["race-A"], observed_races=[{"key": "private"}]) == invalid
+
+
+def test_quote_malformed_registration_fails_closed():
+    off = datetime(2026, 12, 1, 10, tzinfo=timezone.utc)
+    base = dict(race_key="synthetic-A", market="WIN", quote=2.4,
+                source_time=off - timedelta(minutes=5),
+                received_time=off - timedelta(minutes=4),
+                off_time=off, registered_races=["synthetic-A"])
+    assert audit.audit_quote(**base) == "INDICATIVE_ONLY"
+    for roster in (None, "synthetic-A", [["nested"]], [], ["synthetic-A", "synthetic-A"]):
+        assert audit.audit_quote(**{**base, "registered_races": roster}) == "INVALID_MANIFEST"
+    assert audit.audit_quote(**{**base, "race_key": ["unhashable"]}) == "UNREGISTERED_RACE"
