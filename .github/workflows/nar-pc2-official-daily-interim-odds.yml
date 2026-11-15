@@ -1,63 +1,62 @@
-name: NAR PC2 Real OFFICIAL DAILY Interim Odds Snapshot (Private / No EV)
+name: NAR PC2 Future-Race Interim Odds Evidence (PRIVATE / MANUAL ONLY)
 
+# NEVER network on source changes. A bounded provider request is allowed
+# only after explicit permissions, preregistration and machine guards.
 on:
-  push:
-    branches: ["feature/weekly-odds-free-note-20261021"]
-    paths:
-      - ".github/workflows/nar-pc2-official-daily-interim-odds.yml"
-      - "scripts/capture_nar_official_daily_odds_preoff_once.py"
-      - "tests/test_nar_official_daily_interim_odds.py"
   workflow_dispatch:
+    inputs:
+      provider_odds_permission_confirmed:
+        description: "I separately verified NAR WIN/PLACE odds download + private research/storage permission"
+        required: true
+        type: boolean
+        default: false
+      prospective_digest_already_receipted:
+        description: "Private full day roster+forecast digest was hosted-receipted BEFORE FIRST OFF"
+        required: true
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
 concurrency:
-  group: nar-pc2-daily-real-interim-odds-one-fetch
+  group: nar-pc2-official-interim-evidence-one-shot
   cancel-in-progress: false
 
 jobs:
   pc2-one-bounded-interim-odds-download:
+    if: ${{ inputs.provider_odds_permission_confirmed && inputs.prospective_digest_already_receipted }}
     runs-on: [self-hosted, Windows]
     timeout-minutes: 10
     steps:
-      - name: Read reviewed source without touching PC2 private original files
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           clean: false
           persist-credentials: false
-      - name: Check physical PC2, private D folder and no protected sources
+      - name: Check physical PC2 and private D-drive (never run on PC1)
         shell: powershell
         run: |
           $ErrorActionPreference = 'Stop'
           if ($env:COMPUTERNAME -cne 'DESKTOP-MVV1FD4' -or
               $env:GITHUB_REPOSITORY -cne 'tanaka456jp/HorseRacingPredictions' -or
-              $env:GITHUB_REF_NAME -cne 'feature/weekly-odds-free-note-20261021') {
-            Write-Host 'NAR_PREOFF_ODDS_WRONG_MACHINE_OR_BRANCH'
-            exit 2
+              $env:GITHUB_REF_NAME -cne 'feature/weekly-odds-free-note-20261021' -or
+              $env:GITHUB_EVENT_NAME -cne 'workflow_dispatch') {
+            Write-Host 'NAR_PREOFF_ODDS_WRONG_MACHINE_OR_BRANCH'; exit 2
           }
           $folder = 'D:\Development\HorseRacingPredictions-PrivateReview\nar-prospective-captures'
           foreach ($p in @('D:\Development',
                            'D:\Development\HorseRacingPredictions-PrivateReview', $folder)) {
             if (-not (Test-Path -LiteralPath $p -PathType Container) -or
                 ((Get-Item -LiteralPath $p -Force).Attributes -band
-                   [IO.FileAttributes]::ReparsePoint) -ne 0) {
-              Write-Host 'NAR_PREOFF_ODDS_D_DESTINATION_NOT_TRUSTED'
-              exit 2
+                [IO.FileAttributes]::ReparsePoint) -ne 0) {
+              Write-Host 'NAR_PREOFF_ODDS_PRIVATE_D_PATH_HOLD'; exit 2
             }
           }
-          if (-not (Test-Path -LiteralPath '.\scripts\capture_nar_official_daily_odds_preoff_once.py' -PathType Leaf) -or
-              -not (Test-Path -LiteralPath '.\scripts\freeze_nar_official_daily_baseline.py' -PathType Leaf)) {
-            Write-Host 'NAR_PREOFF_ODDS_CODE_MISSING'
-            exit 2
-          }
-          $drive = Get-PSDrive -Name D
-          if ($null -eq $drive.Free -or [long]$drive.Free -lt 1073741824) {
-            Write-Host 'NAR_PREOFF_ODDS_STORAGE_HOLD'
-            exit 2
+          if ((Get-PSDrive -Name D).Free -lt 1073741824) {
+            Write-Host 'NAR_PREOFF_ODDS_STORAGE_HOLD'; exit 2
           }
           Write-Host 'NAR_PREOFF_ODDS_PC2_PRIVATE_PATH_READY'
-      - name: Request at most one publicly documented daily ZIP, save ONLY on private D
+      - name: One official daily download at most; publish aggregate audit only
         shell: powershell
         run: |
           $ErrorActionPreference = 'Stop'
@@ -65,53 +64,51 @@ jobs:
           $env:PYTHONPATH = Join-Path (Get-Location).Path 'src'
           $folder = 'D:\Development\HorseRacingPredictions-PrivateReview\nar-prospective-captures'
           try {
-            $output = @(& python -B .\scripts\capture_nar_official_daily_odds_preoff_once.py --private-capture-dir $folder 2>&1)
-            if ($LASTEXITCODE -ne 0 -or $output.Count -ne 1) {
-              throw 'NAR_PREOFF_ODDS_DOWNLOAD_OR_SCHEMA_HOLD'
+            $raw = @(& python -B .\scripts\capture_nar_official_daily_odds_preoff_once.py --private-capture-dir $folder 2>&1)
+            if ($LASTEXITCODE -ne 0 -or $raw.Count -ne 1) {
+              throw 'NAR_PREOFF_ODDS_RESEARCH_HOLD'
             }
-            $d = [string]$output[0] | ConvertFrom-Json
+            $d = [string]$raw[0] | ConvertFrom-Json
             if ($d.schema -cne 'NAR.PC2.OfficialDailyInterimOddsAudit.v1' -or
                 $d.result -cnotin @('PRIVATE_REAL_INTERIM_QUOTES_CAPTURED', 'PRIVATE_OFFICIAL_ZIP_CAPTURED_NO_QUOTED_PRICES_YET') -or
-                [int]$d.flat_races -ne 59 -or
-                [int]$d.registered_horses -ne 641 -or
-                [int]$d.minutes_before_first_scheduled_off -lt 10 -or
-                [int]$d.frozen_win_tickets_with_quote -gt [int]$d.flat_races -or
-                [int]$d.frozen_place_tickets_with_quote -gt [int]$d.flat_races -or
-                [int]$d.missing_frozen_win_quotes + [int]$d.frozen_win_tickets_with_quote -ne 59 -or
-                [int]$d.missing_frozen_place_quotes + [int]$d.frozen_place_tickets_with_quote -ne 59 -or
+                [int]$d.flat_races -lt 1 -or
+                [int]$d.registered_horses -lt [int]$d.flat_races -or
+                [int]$d.future_preoff_eligible_races -lt 1 -or
+                [int]$d.past_or_closed_races + [int]$d.future_preoff_eligible_races -ne [int]$d.flat_races -or
+                [int]$d.missing_frozen_win_quotes + [int]$d.frozen_win_tickets_with_quote -ne [int]$d.flat_races -or
+                [int]$d.missing_frozen_place_quotes + [int]$d.frozen_place_tickets_with_quote -ne [int]$d.flat_races -or
+                [int]$d.frozen_win_tickets_with_quote -gt [int]$d.future_preoff_eligible_races -or
+                [int]$d.frozen_place_tickets_with_quote -gt [int]$d.future_preoff_eligible_races -or
                 $d.original_forecast_unchanged -ne $true -or
                 $d.source_uploaded -ne $false -or
                 [int]$d.actual_tickets -ne 0 -or
                 $d.after_cost_ev_proven -ne $false) {
-              throw 'NAR_PREOFF_ODDS_AUDIT_GATE_FAILED'
+              throw 'NAR_PREOFF_ODDS_AUDIT_INVARIANT_HOLD'
             }
-            # Only aggregate counts and timestamps, never odds, horse
-            # numbers, race IDs, original ZIP bytes or private salts.
+            $jst = [TimeZoneInfo]::FindSystemTimeZoneById('Tokyo Standard Time')
+            $observed = [datetimeoffset]::Parse([string]$d.observed_time_utc)
+            $day = [TimeZoneInfo]::ConvertTime($observed, $jst).ToString('yyyy-MM-dd')
+            # One legal source attempt, not a claim of executable odds.
             [ordered]@{
               schema = 'NAR.PC2.OfficialDailyInterimOddsAudit.v1'
               status = [string]$d.result
-              raceDay = '2026-11-10'
-              allFrozenFlatRaces = [int]$d.flat_races
-              frozenRegisteredHorses = [int]$d.registered_horses
-              parsedOfficialMarketRows = [int]$d.raw_market_rows
-              allOfficialWinRows = [int]$d.win_rows
-              allOfficialPlaceRows = [int]$d.place_rows
-              frozenWinPicksWithRealInterimQuote = [int]$d.frozen_win_tickets_with_quote
-              frozenPlacePicksWithRealInterimQuote = [int]$d.frozen_place_tickets_with_quote
-              frozenPlacePicksWithRangeMaximum = [int]$d.frozen_place_tickets_with_upper_bound
-              frozenWinPicksMissingPrice = [int]$d.missing_frozen_win_quotes
-              frozenPlacePicksMissingPrice = [int]$d.missing_frozen_place_quotes
-              earliestOffLeadMinutes = [int]$d.minutes_before_first_scheduled_off
+              sourceDayJST = $day
+              allPreFrozenFlatRaces = [int]$d.flat_races
+              frozenRunners = [int]$d.registered_horses
+              liveFutureRaces = [int]$d.future_preoff_eligible_races
+              closedOrTooLateRaces = [int]$d.past_or_closed_races
+              rawAfterCutoffWINPLACERowsDiscarded = [int]$d.after_cutoff_raw_quote_rows_ignored
+              registeredWINPicksWithPreoffQuotes = [int]$d.frozen_win_tickets_with_quote
+              registeredPLACEPicksWithPreoffQuotes = [int]$d.frozen_place_tickets_with_quote
+              missingWINQuotes = [int]$d.missing_frozen_win_quotes
+              missingPLACEQuotes = [int]$d.missing_frozen_place_quotes
+              receivedAtUTC = [string]$d.observed_time_utc
               sourceGeneratedAtUTC = [string]$d.official_source_time_utc
-              hostDownloadedAtUTC = [string]$d.observed_time_utc
-              privateOriginalSourceModified = $false
-              frozenBeforeOddsPicksUnchanged = $true
-              sourceRowsSentToGitHub = $false
-              executableOrderPriceProven = $false
-              actualTickets = 0
-              afterCostPositiveEVProven = $false
+              realPurchases = 0
+              actualOrderExecutionVerified = $false
+              afterCostEVProven = $false
+              rawSourceUploaded = $false
             } | ConvertTo-Json -Compress
           } catch {
-            Write-Host 'NAR_PREOFF_ODDS_PRIVATE_RESEARCH_HOLD'
-            exit 2
+            Write-Host 'NAR_PREOFF_ODDS_RESEARCH_HOLD_NO_EV'; exit 2
           }

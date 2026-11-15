@@ -70,6 +70,9 @@ class NarPrivateOddsAudit:
     source_generated_at_utc: str
     observed_at_utc: str
     minutes_before_first_scheduled_off: int
+    future_preoff_eligible_races: int = 0
+    past_or_closed_races: int = 0
+    after_cutoff_raw_quote_rows_ignored: int = 0
     complete_forecast_previously_frozen: bool = True
     odds_influenced_selection: bool = False
     independent_official_schedule_verified: bool = False
@@ -248,9 +251,8 @@ def validate_private_official_odds_zip(
         raise NarPreoffDailyHold("NAR_PREOFF_ODDS_INPUT_OR_PRIOR_FORECAST_INVALID")
     now = captured_utc.astimezone(timezone.utc)
     off = datetime.fromisoformat(frozen["earliest_off_utc"].replace("Z", "+00:00"))
-    if (now.astimezone(_JST).date() != day
-            or not now + _MIN_ALL_RACE_LEAD < off):
-        raise NarPreoffDailyHold("NAR_PREOFF_ODDS_TOO_LATE_FOR_FULL_CALENDAR")
+    if now.astimezone(_JST).date() != day:
+        raise NarPreoffDailyHold("NAR_PREOFF_ODDS_WRONG_OBSERVATION_DAY")
     match = _DAY_ZIP_NAME.fullmatch(source_filename)
     if match is None or match[1] != day.strftime("%Y%m%d"):
         raise NarPreoffDailyHold("NAR_PREOFF_ODDS_OFFICIAL_NAME_INVALID")
@@ -263,6 +265,28 @@ def validate_private_official_odds_zip(
     if (len(expected) != len(rows)
             or len(expected) != frozen["source_races"]):
         raise NarPreoffDailyHold("NAR_PREOFF_ODDS_FORECAST_RACE_COUNT_MISMATCH")
+    scheduled = {}
+    for rid, record in expected.items():
+        try:
+            when = datetime.fromisoformat(record["scheduled_off_utc"].replace("Z", "+00:00"))
+        except (KeyError, ValueError, TypeError, AttributeError) as exc:
+            raise NarPreoffDailyHold("NAR_PREOFF_ODDS_INVALID_FROZEN_SCHEDULE") from exc
+        if (when.tzinfo is None or when.utcoffset() is None
+                or when.astimezone(_JST).date() != day):
+            raise NarPreoffDailyHold("NAR_PREOFF_ODDS_INVALID_FROZEN_SCHEDULE")
+        scheduled[rid] = when.astimezone(timezone.utc)
+    if not scheduled or min(scheduled.values()) != off:
+        raise NarPreoffDailyHold("NAR_PREOFF_ODDS_FROZEN_EARLIEST_OFF_MISMATCH")
+    # Later races can be observed after the first race has started,
+    # but NO observation at/after the per-race 10-minute cutoff counts.
+    # Keep the entire preregistered denominator including all closed races.
+    open_ids = {
+        rid for rid, when in scheduled.items()
+        if now + _MIN_ALL_RACE_LEAD < when
+        and source_time + _MIN_ALL_RACE_LEAD < when
+    }
+    if not open_ids:
+        raise NarPreoffDailyHold("NAR_PREOFF_ODDS_TOO_LATE_FOR_ANY_FUTURE_RACE")
     try:
         with ZipFile(BytesIO(odds_blob)) as package:
             selection, stats = _parse_csv_bounded(
@@ -271,6 +295,15 @@ def validate_private_official_odds_zip(
             )
     except (BadZipFile, RuntimeError, EOFError) as exc:
         raise NarPreoffDailyHold("NAR_PREOFF_ODDS_ZIP_INVALID") from exc
+    # An official full-day ZIP can contain final odds for races that
+    # already ran. Such rows are ALWAYS excluded even from private
+    # selected quote evidence: neither final odds nor post-off snapshots
+    # may be retroactively classified as independently observed pre-off.
+    ignored_rows = 0
+    for rid in expected:
+        if rid not in open_ids:
+            ignored_rows += len(selection[rid]["WIN"]) + len(selection[rid]["PLACE"])
+            selection[rid] = {"WIN": {}, "PLACE": {}}
     selected_quotes = []
     win_p, place_p, place_u = 0, 0, 0
     win_races = sum(bool(v["WIN"]) for v in selection.values())
@@ -317,6 +350,9 @@ def validate_private_official_odds_zip(
         source_generated_at_utc=source_time.isoformat().replace("+00:00","Z"),
         observed_at_utc=now.isoformat().replace("+00:00","Z"),
         minutes_before_first_scheduled_off=int((off-now).total_seconds()//60),
+        future_preoff_eligible_races=len(open_ids),
+        past_or_closed_races=len(expected) - len(open_ids),
+        after_cutoff_raw_quote_rows_ignored=ignored_rows,
     )
     return audit, {"selected_quotes_PRIVATE": selected_quotes,
                    "all_market_per_race_PRIVATE": selection}
@@ -329,10 +365,16 @@ def capture_private_daily_odds_once(directory: Path) -> NarPrivateOddsAudit:
     now = datetime.now(timezone.utc)
     day = now.astimezone(_JST).date()
     frozen, _ = _load_original_frozen_forecast(directory, day)
-    first_off = datetime.fromisoformat(
-        frozen["earliest_off_utc"].replace("Z", "+00:00")
-    )
-    if now + _MIN_ALL_RACE_LEAD >= first_off:
+    # An authenticated full-roster forecast is already pre-off frozen.
+    # Do not block legitimate later races just because the first off has
+    # passed; exact per-race window is validated after ZIP download.
+    # Fail before any network request if NO remaining event is future.
+    if not any(
+        now + _MIN_ALL_RACE_LEAD < datetime.fromisoformat(
+            row["scheduled_off_utc"].replace("Z", "+00:00")
+        ).astimezone(timezone.utc)
+        for row in frozen["complete_private_forecasts"]
+    ):
         raise NarPreoffDailyHold("NAR_PREOFF_ODDS_CAPTURE_WINDOW_CLOSED")
     existing = list(directory.glob(f"{day:%Y%m%d}_*_odds_private_provenance.json"))
     if len(existing) >= _MAX_SNAPSHOTS_PER_DAY:
@@ -431,6 +473,9 @@ def main() -> int:
         "missing_frozen_win_quotes": a.missing_win_prices,
         "missing_frozen_place_quotes": a.missing_place_min_prices,
         "minutes_before_first_scheduled_off": a.minutes_before_first_scheduled_off,
+        "future_preoff_eligible_races": a.future_preoff_eligible_races,
+        "past_or_closed_races": a.past_or_closed_races,
+        "after_cutoff_raw_quote_rows_ignored": a.after_cutoff_raw_quote_rows_ignored,
         "official_source_time_utc": a.source_generated_at_utc,
         "observed_time_utc": a.observed_at_utc,
         "original_forecast_unchanged": True,

@@ -169,3 +169,63 @@ def test_empty_quoted_market_has_complete_fixed_denominator_not_false_profit():
     assert audit.missing_win_prices == audit.registered_flat_races
     assert audit.missing_place_min_prices == audit.registered_flat_races
     assert not audit.after_cost_positive_ev_verified
+
+
+def test_after_first_off_later_race_preoff_quote_remains_valid():
+    """Fictional two-race chronology: never discard later sales windows."""
+    snap = frozen_real_style()
+    later_off = OFF + timedelta(hours=5)
+    snap["complete_private_forecasts"][1]["scheduled_off_utc"] = later_off.isoformat()
+    after_first = OFF + timedelta(minutes=20)
+    file_time = after_first - timedelta(minutes=1)
+    audit, private = S.validate_private_official_odds_zip(
+        zip_odds(), day=DAY,
+        source_filename=f"20261110_{int(file_time.timestamp())}_odds.zip",
+        captured_utc=after_first, frozen=snap,
+    )
+    assert audit.registered_flat_races == 2  # full original denominator
+    assert audit.future_preoff_eligible_races == 1
+    assert audit.past_or_closed_races == 1
+    assert audit.after_cutoff_raw_quote_rows_ignored == 8
+    assert audit.planned_win_tickets_with_price == 1
+    assert audit.planned_place_tickets_with_min_price == 1
+    assert audit.missing_win_prices == 1
+    assert audit.missing_place_min_prices == 1
+    first, second = private["selected_quotes_PRIVATE"]
+    assert first["win_interim_odds"] is None
+    assert first["place_interim_odds_min"] is None
+    assert second["win_interim_odds"] == "3.2"
+    assert second["place_interim_odds_min"] == "3.2"
+    assert not private["all_market_per_race_PRIVATE"][first["race_id"]]["WIN"]
+
+
+def test_all_completed_or_within_ten_minutes_is_hold_without_backfill():
+    snap = frozen_real_style()
+    last_moment = OFF - timedelta(minutes=10)
+    fts = last_moment - timedelta(minutes=1)
+    with pytest.raises(S.NarPreoffDailyHold, match="TOO_LATE_FOR_ANY_FUTURE_RACE"):
+        S.validate_private_official_odds_zip(
+            zip_odds(),day=DAY,
+            source_filename=f"20261110_{int(fts.timestamp())}_odds.zip",
+            captured_utc=last_moment,frozen=snap,
+        )
+
+
+def test_closed_race_nonempty_prices_cannot_create_fake_retroactive_return():
+    snap = frozen_real_style()
+    snap["complete_private_forecasts"][1]["scheduled_off_utc"] = (
+        OFF + timedelta(hours=4)
+    ).isoformat()
+    now = OFF + timedelta(seconds=15)
+    generated = now - timedelta(seconds=5)
+    audit, data = S.validate_private_official_odds_zip(
+        zip_odds(),day=DAY,
+        source_filename=f"20261110_{int(generated.timestamp())}_odds.zip",
+        captured_utc=now,frozen=snap,
+    )
+    assert audit.win_rows == 8
+    assert audit.place_rows == 8
+    assert audit.planned_ticket_count == 4
+    assert audit.planned_win_tickets_with_price == 1
+    assert audit.after_cutoff_raw_quote_rows_ignored == 8
+    assert not audit.after_cost_positive_ev_verified
