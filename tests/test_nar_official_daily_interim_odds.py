@@ -144,7 +144,8 @@ def test_source_clock_must_not_be_after_download_or_stale():
 
 
 def test_never_accept_first_off_already_close_or_past():
-    with pytest.raises(S.NarPreoffDailyHold, match="TOO_LATE"):
+    with pytest.raises(S.NarPreoffDailyHold, match="TOO_LATE|STALE"):
+        # Both late receipt and a two-hour-stale source must remain HOLD.
         evaluate(zip_odds(), captured=OFF-timedelta(minutes=7))
 
 
