@@ -9,7 +9,7 @@ user-supplied file creation time. No results, betting or hindsight.
 from __future__ import annotations
 
 import argparse
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from hashlib import sha256
 import json
 import os
@@ -54,7 +54,7 @@ def import_user_downloaded_preoff_race(
     if match is None or match[1] != day.strftime("%Y%m%d"):
         raise NarPreoffDailyHold("NAR_MANUAL_RACE_WRONG_DAY_OR_NAME")
     generated = datetime.fromtimestamp(int(match[2]), tz=timezone.utc)
-    if (generated > now + __import__("datetime").timedelta(seconds=90)
+    if (generated > now + timedelta(seconds=90)
             or generated.astimezone(_JST).date() != day):
         raise NarPreoffDailyHold("NAR_MANUAL_RACE_SOURCE_TIME_INVALID")
     originals = list(private_folder.glob(
