@@ -91,3 +91,98 @@ horse/race IDs or salted raw NAR data is authorized here.
 - At most 6 official ZIPs/day with a 150-second minimum spacing,
   local D-drive only; no automatic workflow push acquisition.
 - All CI fixtures are fictional and are not live EV results.
+
+
+## 2026-11-19 implementation: no-network permission preflight, then research
+
+### What was blocking progress?
+The user's earlier report that NAR authorized *some* data use does not
+include the verbatim grant or confirmation that it specifically covers
+the official daily **WIN/PLACE intermediate-odds ZIP**, bounded automated
+polling, retaining the downloaded source locally, training/analysis,
+and sharing only nonidentifying aggregate results. The public
+[NAR terms](https://www.keiba.go.jp/terms.html) retain prior permission
+requirements for reproducing/republishing. The official
+[NAR FAQ](https://www.keiba.go.jp/qa.html) forbids commercial reuse or
+modified republication of race information. Public web availability
+is NOT a substitute for the documented scope of the individual grant.
+
+Instead of repeatedly running synthetic CI or making unauthorized
+requests, a new PRIVATE offline preflight blocks the real capture
+function before its first `urlopen` if scope-specific documentary
+evidence has not been stored on PC②. This is **not** a digital signature,
+legal opinion, independent NAR authentication, or an assertion that the
+user has or lacks rights; it is a fail-closed workflow checkpoint.
+
+### Private PC② setup (only after the actual grant expressly covers it)
+
+1. Keep the authentic NAR response/eml/text/PDF on
+   `D:\\Development\\HorseRacingPredictions-PrivateReview\\nar-prospective-captures\\`.
+   Make a private copy named
+   `nar_odds_permission_YYYYMMDD_PRIVATE.eml` (or .txt/.pdf; YYYYMMDD
+   is the evidence date). The original is retained unchanged.
+   No evidence document, original filename or message text is uploaded.
+2. Review the actual wording, especially permission for **bounded
+   automated download**, **private immutable retention**, **private
+   predictive research**, **internal model training**, and **only
+   nonidentifying aggregate reporting**. If the grant omits any item,
+   leave that item `false` and the capture stays blocked. Explicitly
+   stated access rate limitations must be reflected; never exceed
+   official permitted frequency. This is only a template, not a
+   declaration that any permission has been issued.
+3. Calculate a SHA256 of the private evidence *on PC②* with
+   PowerShell `Get-FileHash -Algorithm SHA256`; keep the digest inside
+   the private JSON alongside the evidence, NEVER in public CI logs.
+4. Create local-only
+   `nar_official_daily_odds_rights_PRIVATE.json` in the same folder,
+   with the following complete key schema. The values `false`, fake
+   dates and placeholders intentionally **do not authorize a fetch**:
+
+```json
+{
+  "schema": "NAR.PC2.OfficialDailyOddsRights.v1",
+  "provider": "NAR",
+  "endpoint": "https://www.keiba.go.jp/KeibaWeb/DataDownload/OddsDataDownload?type=daily",
+  "permission_evidence_file": "nar_odds_permission_YYYYMMDD_PRIVATE.eml",
+  "permission_evidence_sha256": "<SHA256_OF_PRIVATE_EVIDENCE_FILE>",
+  "issued_on": "YYYY-MM-DD",
+  "valid_until": null,
+  "private_scope_reviewed_by_user": false,
+  "permit_bounded_automated_download": false,
+  "permit_private_immutable_retention": false,
+  "permit_private_predictive_research": false,
+  "permit_internal_model_training": false,
+  "permit_nonidentifying_aggregate_reporting": false,
+  "max_downloads_per_day": 1,
+  "min_seconds_between_downloads": 1800
+}
+```
+
+`valid_until: null` means **only** that the original grant explicitly
+has no expiry. It may not be assumed from silence; where an expiry
+exists, record its date. If the source permission is unclear, obtain
+clarification rather than setting a `true` field.
+
+5. The new file `scripts/nar_private_odds_rights_gate.py` checks
+   exact source URL, evidence file name and SHA256, date scope,
+   all five use rights and actual user review, bounded maximum
+   download count (1–6/day), and minimum spacing (>=150 seconds).
+   The original capture script respects the stricter of the developer
+   guard and the documented limits. Any missing/altered/expired
+   evidence causes a static private HOLD **before a provider fetch**.
+   These checks prevent accidental collection, but cannot establish
+   that an unverified document is a genuine authorization.
+6. Even after this checkpoint succeeds, the separate **independent
+   pre-event forecast digest receipt** and race-window guards still
+   apply. The manual-only GitHub workflow cannot be run from a push;
+   two explicit workflow inputs must be true, and a new real
+   prospective observation will be reported as indicative only,
+   NEVER as executable odds or positive EV.
+
+### Research decision
+**As of this update, actual odds-specific scope and independent
+future pre-off prices are still UNVERIFIED.** Research is
+`RIGHTS_HOLD / PRICE_FEASIBILITY_HOLD / POSITIVE_EV_NOT_PROVEN`.
+Neither the prior 2022 negative ROI nor the -38.81% career-form
+2026-11-10 paper result changed. Do not enable live collection
+until permission and external pre-off forecast receipt are documented.
