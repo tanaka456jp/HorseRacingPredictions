@@ -186,3 +186,26 @@ future pre-off prices are still UNVERIFIED.** Research is
 Neither the prior 2022 negative ROI nor the -38.81% career-form
 2026-11-10 paper result changed. Do not enable live collection
 until permission and external pre-off forecast receipt are documented.
+
+## 2026-11-19 telephone authorization clarification
+
+The user has explicitly reported prior **telephone NAR authorization**
+for **personal use**, and for homepage information dissemination **with
+source attribution**, provided the purpose is **not resale**. The
+date and exact wording of the original call are unknown. See
+[telephone permission and the offline manual-odds path]
+(NAR_ORAL_PERMISSION_AND_OFFLINE_ODDS_20261119.md).
+
+This resolves the earlier overly broad implication that personal
+research necessarily requires a separately authenticated written NAR
+permission letter. It does **not** resolve whether repeat automated
+polling of the official ZIP endpoint was part of that conversation.
+
+As a practical alternative, the newly implemented private
+`scripts/import_nar_manual_daily_odds_offline.py` reads a
+user-manually-downloaded ZIP solely inside PC② without any provider
+request, and requires a prior frozen, complete forecast. A valid
+independent market timestamp receipt, true provider-origin evidence
+and a future preregistered three-day coverage study are still
+missing. Automated polling stays separately gated by documented
+scope-specific permission. No positive expected value is proven.
