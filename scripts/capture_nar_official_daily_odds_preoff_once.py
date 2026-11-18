@@ -30,6 +30,7 @@ from capture_nar_official_daily_preoff_once import (
     _JST, NarPreoffDailyHold,
 )
 from freeze_nar_official_daily_baseline import prepare_private_daily_baseline
+from nar_private_odds_rights_gate import verify_private_odds_rights_checkpoint
 
 _OFFICIAL_ODDS_URL = (
     "https://www.keiba.go.jp/KeibaWeb/DataDownload/OddsDataDownload?type=daily"
@@ -365,6 +366,11 @@ def capture_private_daily_odds_once(directory: Path) -> NarPrivateOddsAudit:
     now = datetime.now(timezone.utc)
     day = now.astimezone(_JST).date()
     frozen, _ = _load_original_frozen_forecast(directory, day)
+    # Mandatory offline documentary checkpoint before ANY odds-source
+    # request. This does not replace a real provider-grant scope review.
+    rights = verify_private_odds_rights_checkpoint(
+        directory, requested_day=day,
+    )
     # An authenticated full-roster forecast is already pre-off frozen.
     # Do not block legitimate later races just because the first off has
     # passed; exact per-race window is validated after ZIP download.
@@ -377,7 +383,7 @@ def capture_private_daily_odds_once(directory: Path) -> NarPrivateOddsAudit:
     ):
         raise NarPreoffDailyHold("NAR_PREOFF_ODDS_CAPTURE_WINDOW_CLOSED")
     existing = list(directory.glob(f"{day:%Y%m%d}_*_odds_private_provenance.json"))
-    if len(existing) >= _MAX_SNAPSHOTS_PER_DAY:
+    if len(existing) >= min(_MAX_SNAPSHOTS_PER_DAY, rights.max_requests_per_day):
         raise NarPreoffDailyHold("NAR_PREOFF_ODDS_DAILY_CAPTURE_LIMIT")
     for p in existing:
         if not p.is_file() or p.is_symlink():
@@ -386,7 +392,7 @@ def capture_private_daily_odds_once(directory: Path) -> NarPrivateOddsAudit:
         if meta.get("schema") != "NAR.PC2.OfficialDailyInterimOddsProvenance.v1":
             raise NarPreoffDailyHold("NAR_PREOFF_ODDS_PROVENANCE_SCHEMA_INVALID")
         old = datetime.fromisoformat(meta["captured_utc"].replace("Z","+00:00"))
-        if now - old < _MIN_REQUEST_GAP:
+        if now - old < max(_MIN_REQUEST_GAP, timedelta(seconds=rights.min_gap_seconds)):
             raise NarPreoffDailyHold("NAR_PREOFF_ODDS_REQUEST_TOO_SOON")
     request = urllib.request.Request(
         _OFFICIAL_ODDS_URL, headers={
