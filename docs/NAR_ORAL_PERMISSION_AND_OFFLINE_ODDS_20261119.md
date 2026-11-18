@@ -113,3 +113,81 @@ synthetic CI success is **not** a demonstrated positive expected value.
 CatBoost exploration -24.4076% and a *different* 2026-11-10
 prospectively frozen career-form benchmark -38.8136% paper ROI.
 Both remain separate. No live bets were purchased.
+
+## Full no-provider-request path: manual RACE -> frozen forecast -> manual ODDS
+
+The manual odds reader requires a previously validated complete pre-off
+race source and an immutable frozen forecast. It is **not** sufficient
+to put an odds ZIP alone in the D-drive inbox. To avoid any programmatic
+NAR provider requests in the entire provenance chain, an additional
+offline race importer is now available:
+
+`scripts/import_nar_manual_daily_race_offline.py`
+
+1. On a future race day, well before that day's **earliest** off time,
+   personally download the unmodified official
+   `YYYYMMDD_UNIXTIMESTAMP_race.zip` from the NAR data-download page.
+   Put it in the private
+   `D:\\Development\\HorseRacingPredictions-PrivateReview\\nar-prospective-captures\\manual-race-inbox`
+   folder on PC②. Do **not** upload it to this chat or GitHub.
+2. With the repository's Draft PR #142 code checked out on PC②,
+   set the private local directory and run the manual import and then
+   the *already-existing* career-form freeze, before the first off:
+
+```powershell
+$env:PYTHONPATH = (Resolve-Path .\\src).Path
+$private = "D:\\Development\\HorseRacingPredictions-PrivateReview\\nar-prospective-captures"
+python -B .\\scripts\\import_nar_manual_daily_race_offline.py --private-capture-dir $private
+python -B .\\scripts\\freeze_nar_official_daily_baseline.py --private-capture-dir $private
+```
+
+3. The importer accepts only one current-day ZIP from its dedicated
+   inbox; validates all races, original entrant list, completion,
+   absence of same-day outcome fields and at least 10 minutes
+   before the earliest off; and creates the *same* immutable
+   salted ZIP + private provenance format required by the existing
+   forecast freezer. The existing source importer is reused
+   without an HTTP request. A second overwrite or changed source
+   is rejected.
+4. The career-form freezer creates a complete private selection
+   snapshot and a blinded salted digest. The digest must **also**
+   receive independent pre-off witness evidence, for example from
+   the repository's already-existing GitHub-hosted digest receipt
+   workflow, before treating it as an independently registered
+   prospective cohort. Running the local freezer alone does **not**
+   give independent pre-off proof. Follow the existing separate
+   hosted-receipt workflow; never publish a private salt or forecast.
+5. After the original roster and full forecast have been frozen,
+   *personally* download the official day's
+   `YYYYMMDD_UNIXTIMESTAMP_odds.zip` while at least some races
+   remain strictly >10 minutes ahead. Move it to the separate
+   `manual-odds-inbox` folder on the same private D drive and run:
+
+```powershell
+python -B .\\scripts\\import_nar_manual_daily_odds_offline.py --private-capture-dir $private
+```
+
+6. Each stage preserves the originals and outputs only aggregate
+   status. A price row for a closed/too-close race is blanked,
+   **including if the ZIP still lists it**, while the original
+   race/ticket denominator is retained. The manual acquisition
+   remains user-attested; there is no independent verification that
+   a particular file came directly from NAR unless later
+   corroborated. The receipt timestamp is the code's actual local
+   observation; original filesystem mtime is not accepted as proof
+   of pre-off availability. A successful paper read is never proof
+   of order execution or positive expected value.
+
+The complete synthetic regression
+`tests/test_import_nar_manual_daily_race_offline.py`
+proves that the current manual race importer and pre-existing
+forecast reconstruction are compatible **without NAR network
+calls**. The companion manual odds tests verify strict day,
+late/off and no-overwrite guards. Actual nonempty future prices
+and the 3-day pilot remain uncollected until the user supplies
+real future manual downloads.
+
+**Important:** These instructions are for the user's reported
+personal-use permission only. Do not use a scripted headless browser,
+periodic HTTP client, scrape loop, or republish the original licensed
+ZIPs based on an inference from the telephone statement.
