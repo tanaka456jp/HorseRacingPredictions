@@ -3,11 +3,13 @@ from dataclasses import asdict
 from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
+import sys
 
 import pytest
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 from horse_racing_predictions.nar_nonfavorite_win_policy import NonfavoriteWinRace
-from scripts.evaluate_nar_nonfavorite_preoff_local import audit_private_file
+from evaluate_nar_nonfavorite_preoff_local import audit_private_file
 
 UTC = timezone.utc
 
