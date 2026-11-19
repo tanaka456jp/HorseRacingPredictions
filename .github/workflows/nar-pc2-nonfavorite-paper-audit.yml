@@ -1,0 +1,58 @@
+name: NAR PC2 Preoff Nonfavorite WIN Paper Audit (PRIVATE / MANUAL ONLY)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nar-pc2-nonfavorite-paper-audit-manual
+  cancel-in-progress: false
+
+jobs:
+  pc2-private-paired-evaluation:
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          clean: false
+          persist-credentials: false
+      - name: No-provider-request, private PC2 only, aggregate metrics only
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:COMPUTERNAME -cne 'DESKTOP-MVV1FD4' -or
+              $env:GITHUB_REPOSITORY -cne 'tanaka456jp/HorseRacingPredictions' -or
+              $env:GITHUB_REF_NAME -cne 'feature/weekly-odds-free-note-20261021' -or
+              $env:GITHUB_EVENT_NAME -cne 'workflow_dispatch') {
+            Write-Host 'NAR_NONFAVORITE_WRONG_PC_OR_BRANCH'; exit 2
+          }
+          $env:PYTHONDONTWRITEBYTECODE = '1'
+          $env:PYTHONPATH = Join-Path (Get-Location).Path 'src'
+          $base = 'D:\Development\HorseRacingPredictions-PrivateReview\nar-prospective-captures'
+          $inputJson = Join-Path $base 'nonfavorite_forward_PRIVATE.json'
+          try {
+            if (-not (Test-Path -LiteralPath $inputJson -PathType Leaf) -or
+                ((Get-Item -LiteralPath $inputJson -Force).Attributes -band
+                [IO.FileAttributes]::ReparsePoint) -ne 0) {
+              throw 'PRIVATE_FORWARD_COHORT_NOT_AVAILABLE'
+            }
+            $raw = @(& python -B .\scripts\evaluate_nar_nonfavorite_preoff_local.py --reviewed-local-json $inputJson 2>&1)
+            if ($LASTEXITCODE -ne 0 -or $raw.Count -ne 1) {
+              throw 'PRIVATE_AUDIT_HOLD'
+            }
+            $d = [string]$raw[0] | ConvertFrom-Json
+            if ($d.schema -cne 'NAR.PC2.NonfavoriteAggregateOnly.v1' -or
+                $d.source_records_exported -ne $false -or
+                $d.after_cost_positive_expected_value_proven -ne $false -or
+                $d.actual_tickets_purchased -ne $false) {
+              throw 'NAR_NONFAVORITE_UNTRUSTED_AUDIT'
+            }
+            # No paths, original race keys, horses, odds or private ZIP in logs.
+            $d | ConvertTo-Json -Compress
+          } catch {
+            Write-Host 'NAR_NONFAVORITE_PRIVATE_FORWARD_EVIDENCE_HOLD_NO_EV'
+            exit 2
+          }
