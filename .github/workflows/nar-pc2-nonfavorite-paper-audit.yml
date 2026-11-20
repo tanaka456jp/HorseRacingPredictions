@@ -37,7 +37,33 @@ jobs:
             if (-not (Test-Path -LiteralPath $inputJson -PathType Leaf) -or
                 ((Get-Item -LiteralPath $inputJson -Force).Attributes -band
                 [IO.FileAttributes]::ReparsePoint) -ne 0) {
-              throw 'PRIVATE_FORWARD_COHORT_NOT_AVAILABLE'
+              # Read-only source readiness, no filenames, dates, paths,
+              # individual races, horses, prices or original content.
+              $counts = [ordered]@{
+                schema = 'NAR.PC2.NonfavoriteReadinessAggregate.v1'
+                status = 'HOLD_PRIVATE_PAIRED_INPUT_NOT_AVAILABLE'
+                baseline_files = 0
+                preoff_capture_files = 0
+                manually_downloaded_odds_files = 0
+                source_records_exported = $false
+                after_cost_positive_expected_value_proven = $false
+                actual_tickets_purchased = $false
+              }
+              if (Test-Path -LiteralPath $base -PathType Container) {
+                $patterns = @{
+                  baseline_files = '*_baseline_forecast_PRIVATE.json'
+                  preoff_capture_files = '*_odds_private_provenance.json'
+                  manually_downloaded_odds_files = '*_manually_downloaded_odds_PRIVATE.json'
+                }
+                foreach ($key in $patterns.Keys) {
+                  $counts[$key] = @(
+                    Get-ChildItem -LiteralPath $base -File -Filter $patterns[$key] -ErrorAction Stop |
+                    Where-Object { ($_.Attributes -band [IO.FileAttributes]::ReparsePoint) -eq 0 }
+                  ).Count
+                }
+              }
+              $counts | ConvertTo-Json -Compress
+              exit 0
             }
             $raw = @(& python -B .\scripts\evaluate_nar_nonfavorite_preoff_local.py --reviewed-local-json $inputJson 2>&1)
             if ($LASTEXITCODE -ne 0 -or $raw.Count -ne 1) {
