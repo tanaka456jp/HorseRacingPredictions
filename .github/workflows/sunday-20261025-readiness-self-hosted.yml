@@ -1,0 +1,89 @@
+name: Sunday 2026-10-25 Local AI Readiness (No Publication)
+
+on:
+  push:
+    branches:
+      - "feature/weekly-odds-free-note-20261021"
+    paths:
+      - "src/horse_racing_predictions/sunday_auto_post_readiness.py"
+      - "src/horse_racing_predictions/sunday_ai_research.py"
+      - "tests/test_sunday_ai_research.py"
+      - "src/horse_racing_predictions/odds_free_outsider_eval.py"
+      - "tests/test_odds_free_outsider_eval.py"
+      - "scripts/evaluate_outsider_pre2025_local.py"
+      - "tests/test_evaluate_outsider_pre2025_cli.py"
+      - "scripts/inspect_sunday_auto_post_readiness.py"
+      - "scripts/inspect_sunday_pc2_readonly.ps1"
+      - "tests/test_sunday_auto_post_readiness.py"
+      - ".github/workflows/sunday-20261025-readiness-self-hosted.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sunday-20261025-readiness-pc2
+  cancel-in-progress: false
+
+jobs:
+  verify-readonly-script:
+    name: PowerShell parser and no-provider-mutation guard
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Parse PC2 diagnostic without executing it
+        shell: pwsh
+        run: |
+          $source = 'scripts/inspect_sunday_pc2_readonly.ps1'
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path $source).Path, [ref]$tokens, [ref]$errors
+          ) | Out-Null
+          if (@($errors).Count -ne 0) {
+            throw 'PC2_DIAGNOSTIC_POWERSHELL_SYNTAX_ERROR'
+          }
+          $text = Get-Content -LiteralPath $source -Raw
+          foreach ($forbidden in @(
+            '\bJVOpen\s*\(',
+            '\bJVInit\s*\(',
+            '\bStart-Service\b',
+            '\bSet-Service\b',
+            '\bRemove-Item\b',
+            '\bInvoke-WebRequest\b',
+            '\bInvoke-RestMethod\b'
+          )) {
+            if ($text -match $forbidden) {
+              throw 'PC2_DIAGNOSTIC_MUST_BE_READ_ONLY'
+            }
+          }
+
+  local-readonly-probe:
+    name: PC2 local input metadata only
+    needs: verify-readonly-script
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 10
+    steps:
+      - name: Checkout without deleting local ignored archives
+        uses: actions/checkout@v4
+        with:
+          clean: false
+          persist-credentials: false
+
+      - name: Diagnose existing archive and Sunday candidate bundle
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          & .\scripts\inspect_sunday_pc2_readonly.ps1 -OutputPath 'artifacts/sunday_20261025_readiness.json'
+
+      - name: Upload metadata only, never raw entries/model/key
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sunday-20261025-readiness-metadata
+          path: artifacts/sunday_20261025_readiness.json
+          if-no-files-found: warn
+          retention-days: 7

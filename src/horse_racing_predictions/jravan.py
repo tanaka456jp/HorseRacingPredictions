@@ -98,28 +98,17 @@ def _record_text(memview, record_length: int) -> str:
 
 
 def _default_com_factory():
-    if platform.system() != "Windows":
-        raise JraVanUnavailableError(
-            "JV-Link requires Windows and cannot run on this platform"
-        )
+    """Fail closed: the user's JRA-VAN free trial has ended.
 
-    try:
-        import pythoncom
-        import win32com.client.dynamic
-    except ImportError as exc:
-        raise JraVanUnavailableError(
-            "JV-Link requires pywin32. Install requirements-jravan.txt."
-        ) from exc
-
-    pythoncom.CoInitialize()
-    try:
-        jv = win32com.client.dynamic.Dispatch(
-            "JVDTLab.JVLink"
-        )
-    except Exception:
-        pythoncom.CoUninitialize()
-        raise
-    return jv, pythoncom
+    Creating the real COM object may display an expired-trial page in the
+    interactive user's browser. Never instantiate it in unattended runs.
+    Injected fake clients/factories in *synthetic tests* remain unaffected.
+    Any future paid subscription requires an independently reviewed change,
+    not an environment variable or silent automatic reactivation.
+    """
+    raise JraVanUnavailableError(
+        "JRA_VAN_TRIAL_EXPIRED_LIVE_COM_DISABLED"
+    )
 
 
 class JvLinkClient:

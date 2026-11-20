@@ -1,0 +1,139 @@
+name: PC2 Private Current-Week RA-SE D Quarantine (No Export)
+
+on:
+  push:
+    branches: ["feature/weekly-odds-free-note-20261021"]
+    paths:
+      - "scripts/quarantine_pc2_jvlink_currentweek_local.py"
+      - "tests/test_pc2_jvlink_private_quarantine.py"
+      - ".github/workflows/pc2-jvlink-private-currentweek-quarantine.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pc2-jvlink-private-currentweek-quarantine
+  cancel-in-progress: false
+
+jobs:
+  safeguards:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install -e ".[dev]"
+      - name: Exercise fake RA-SE private quarantine and no-overwrite invariants
+        run: |
+          pytest -q tests/test_pc2_jvlink_private_quarantine.py tests/test_jv_fixedwidth_ra_se_preflight.py
+      - name: Ensure D private data and licence are never uploaded
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          workflow = Path(".github/workflows/pc2-jvlink-private-currentweek-quarantine.yml").read_text()
+          # Explicit exact metadata-only upload; no broad artifact glob.
+          import re
+          upload_paths = re.findall(r"(?m)^          path: (.*)$", workflow)
+          assert upload_paths == ["artifacts/pc2_private_jvdata_metadata.json"]
+          assert ("artifacts/" + "**") not in workflow
+          code = Path("scripts/quarantine_pc2_jvlink_currentweek_local.py").read_text()
+          assert 'from_time="00000000000000", option=2' in code
+          assert "protectedHoldoutTrainingAllowed" in code
+          assert "rawDataUploaded" in code
+          PY
+
+  pc2-local-only:
+    name: Private D new snapshot with current-week RA/SE only
+    needs: safeguards
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          clean: false
+          persist-credentials: false
+      - name: Bounded private PC2-only archive, no GitHub record upload
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force -Path artifacts | Out-Null
+          $out = 'artifacts/pc2_private_jvdata_metadata.json'
+          $result = [ordered]@{
+            status = 'BLOCKED'; stage = 'NO_SAFE_RUNTIME'
+            verifiedPhysicalPC2 = ($env:COMPUTERNAME -eq 'DESKTOP-MVV1FD4')
+            raCount = 0; seCount = 0; savedLocally = $false
+            incompleteSnapshot = $true
+            existingSnapshotsOverwritten = $false
+            protectedHoldoutTrainingAllowed = $false
+            notePostAttempted = $false
+            publicationAuthorized = $false
+            usageKeyRead = $false
+            rawDataUploaded = $false
+          }
+          $py = 'D:\HorseRacingPredictions\runtime\pc2-jvlink64-py314-312\Scripts\python.exe'
+          $marker = 'D:\HorseRacingPredictions\runtime\pc2-jvlink64-py314-312\.horse-jvlink64-diagnostic-owned.txt'
+          if ($result.verifiedPhysicalPC2 -and
+              (Test-Path -LiteralPath $py -PathType Leaf) -and
+              (Test-Path -LiteralPath $marker -PathType Leaf) -and
+              ((Get-Content -LiteralPath $marker -Raw).Trim() -eq
+                'HorseRacingPredictions PC2 isolated pywin32 only')) {
+            $env:PYTHONPATH = Join-Path (Get-Location).Path 'src'
+            $program = Join-Path (Get-Location).Path 'scripts\quarantine_pc2_jvlink_currentweek_local.py'
+            $childSummary = Join-Path (Get-Location).Path (
+              'artifacts\private_archive_' + [Guid]::NewGuid().ToString('N') + '.json'
+            )
+            $proc = $null
+            try {
+              $psi = New-Object System.Diagnostics.ProcessStartInfo
+              $psi.FileName = $py
+              $psi.Arguments = ('"{0}" --sanitized-output "{1}"' -f
+                $program, $childSummary)
+              $psi.UseShellExecute = $false
+              $psi.CreateNoWindow = $true
+              $psi.RedirectStandardOutput = $true
+              $psi.RedirectStandardError = $true
+              $proc = [System.Diagnostics.Process]::Start($psi)
+              if (-not $proc.WaitForExit(150000)) {
+                $result.stage = 'PRIVATE_JV_DATA_CHILD_WATCHDOG_TIMEOUT'
+                try { $proc.Kill() } catch {}
+              } elseif (Test-Path -LiteralPath $childSummary -PathType Leaf) {
+                $candidate = Get-Content -LiteralPath $childSummary -Raw |
+                  ConvertFrom-Json
+                if ($candidate.verifiedPhysicalPC2 -eq $true -and
+                    $candidate.pythonBits -eq 64 -and
+                    $candidate.usageKeyRead -eq $false -and
+                    $candidate.rawDataUploaded -eq $false -and
+                    $candidate.publicationAuthorized -eq $false -and
+                    $candidate.notePostAttempted -eq $false -and
+                    $candidate.protectedHoldoutTrainingAllowed -eq $false -and
+                    $candidate.existingSnapshotsOverwritten -eq $false) {
+                  foreach ($key in @(
+                    'status','stage','raCount','seCount','recordCount',
+                    'savedLocally','incompleteSnapshot','jvOpenReturnCode',
+                    'jvCloseSucceeded'
+                  )) { $result[$key] = $candidate.$key }
+                } else { $result.stage = 'PRIVATE_ARCHIVE_SECURITY_INVARIANT_FAILED' }
+              } else { $result.stage = 'PRIVATE_ARCHIVE_REPORT_NOT_FOUND' }
+            } catch {
+              $result.stage = 'PRIVATE_ARCHIVE_CHILD_FAILED'
+            } finally {
+              if ($null -ne $proc) { $proc.Dispose() }
+            }
+          }
+          $result | ConvertTo-Json -Depth 6 |
+            Set-Content -LiteralPath $out -Encoding UTF8
+          Get-Content -LiteralPath $out -Encoding UTF8
+      - name: Upload metadata only, never current-week JV-Data files
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pc2-private-jvdata-quarantine-status-only
+          path: artifacts/pc2_private_jvdata_metadata.json
+          retention-days: 7
+          if-no-files-found: error

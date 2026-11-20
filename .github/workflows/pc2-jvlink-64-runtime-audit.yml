@@ -1,0 +1,89 @@
+name: PC2 JV-Link 64bit Python and 32bit Agent Liveness (Read Only)
+
+on:
+  push:
+    branches: ["feature/weekly-odds-free-note-20261021"]
+    paths:
+      - "scripts/inspect_pc2_64_runtime_agent_readonly.ps1"
+      - ".github/workflows/pc2-jvlink-64-runtime-audit.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pc2-jvlink-64-runtime-metadata
+  cancel-in-progress: false
+
+jobs:
+  static-guards:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Parse PowerShell and forbid mutating APIs
+        shell: pwsh
+        run: |
+          $file = "scripts/inspect_pc2_64_runtime_agent_readonly.ps1"
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path $file).Path, [ref]$tokens, [ref]$errors
+          ) | Out-Null
+          if (@($errors).Count -ne 0) {
+            throw "INSPECTION_POWERSHELL_PARSE_FAILED"
+          }
+          $content = Get-Content -LiteralPath $file -Raw
+          foreach ($forbidden in @(
+            '\.JVInit\s*\(',
+            '\.JVOpen\s*\(',
+            '\.JVGets\s*\(',
+            '\bGet-ItemProperty\b',
+            '\bSet-ItemProperty\b',
+            '\bRemove-Item\b',
+            '\bStart-Service\b',
+            '\bStop-Service\b',
+            '\bSet-Service\b',
+            '\bInvoke-WebRequest\b',
+            '\bInvoke-RestMethod\b'
+          )) {
+            if ($content -match $forbidden) {
+              throw "READONLY_RUNTIME_DIAGNOSTIC_MUTATION_FORBIDDEN"
+            }
+          }
+
+  local-pc2-runtime:
+    name: PC2 Python x64 and native agent process/service counts
+    needs: static-guards
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          clean: false
+          persist-credentials: false
+      - name: Run sanitized OS-level diagnosis only
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          & .\scripts\inspect_pc2_64_runtime_agent_readonly.ps1 `
+            -OutputPath "artifacts/jvlink_64_runtime_agent_metadata.json"
+          $result = Get-Content "artifacts/jvlink_64_runtime_agent_metadata.json" -Raw |
+            ConvertFrom-Json
+          if ($result.physicalPC2Verified -ne $true -or
+              $result.usageKeyRead -ne $false -or
+              $result.providerAccessAttempted -ne $false -or
+              $result.serviceMutated -ne $false -or
+              $result.publicationAuthorized -ne $false) {
+            throw "PC2_READONLY_METADATA_PROOF_MISSING"
+          }
+      - name: Upload sanitized booleans and counts only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pc2-jvlink-runtime-agent-metadata
+          path: artifacts/jvlink_64_runtime_agent_metadata.json
+          retention-days: 7
+          if-no-files-found: error

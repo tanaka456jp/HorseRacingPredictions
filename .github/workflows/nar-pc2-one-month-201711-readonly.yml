@@ -1,0 +1,400 @@
+name: NAR PC2 Single Approved 201711 ZIP Read-Only Aggregate Check
+
+on:
+  push:
+    branches: ["feature/weekly-odds-free-note-20261021"]
+    paths:
+      - ".github/workflows/nar-pc2-one-month-201711-readonly.yml"
+      - "scripts/probe_nar_private_csv_header_shapes.py"
+      - "src/horse_racing_predictions/nar_published_result_normalizer.py"
+      - "src/horse_racing_predictions/nar_monthly_coverage_audit.py"
+      - "tests/test_nar_monthly_coverage_audit.py"
+      - "tests/test_nar_published_result_normalizer.py"
+      - "tests/test_nar_private_finish_marker_probe.py"
+      - "tests/test_nar_official_exception_audit.py"
+      - "src/horse_racing_predictions/nar_official_exception_audit.py"
+      - "scripts/diagnose_nar_one_month_local.py"
+      - "src/horse_racing_predictions/nar_status_aware_training_labels.py"
+      - "tests/test_nar_status_aware_training_labels.py"
+      - "src/horse_racing_predictions/nar_status_aware_prior_day.py"
+      - "tests/test_nar_status_aware_prior_day.py"
+      - "scripts/inspect_pc2_nar_training_zip_presence_readonly.ps1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nar-pc2-201711-readonly
+  cancel-in-progress: false
+
+jobs:
+  one-operator-downloaded-archive:
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 8
+    steps:
+      - name: Checkout code while protecting all PC2 data
+        uses: actions/checkout@v4
+        with:
+          clean: false
+          persist-credentials: false
+      - name: Read ONLY one operator-downloaded local 201711 NAR archive
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:COMPUTERNAME -cne 'DESKTOP-MVV1FD4') {
+            throw 'NAR_SINGLE_MONTH_WRONG_PHYSICAL_PC'
+          }
+          if ($env:GITHUB_REPOSITORY -cne 'tanaka456jp/HorseRacingPredictions' -or
+              $env:GITHUB_REF_NAME -cne 'feature/weekly-odds-free-note-20261021') {
+            throw 'NAR_SINGLE_MONTH_WRONG_REPOSITORY_OR_REF'
+          }
+          $landing = 'D:\Development\HorseRacingPredictions\nar-personal'
+          foreach ($dir in @('D:\Development', 'D:\Development\HorseRacingPredictions', $landing)) {
+            if (-not (Test-Path -LiteralPath $dir -PathType Container)) {
+              throw 'NAR_SINGLE_MONTH_PRIVATE_FOLDER_MISSING'
+            }
+            $item = Get-Item -LiteralPath $dir -Force
+            if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+              throw 'NAR_SINGLE_MONTH_REPARSE_FOLDER_REJECTED'
+            }
+          }
+          $sources = @(Get-ChildItem -LiteralPath $landing -File -Filter '201711_*_race.zip' -Force)
+          if ($sources.Count -ne 1) {
+            throw 'NAR_SINGLE_MONTH_EXPECTED_EXACTLY_ONE_NOVEMBER_2017_ZIP'
+          }
+          $source = $sources[0]
+          if ($source.Name -cnotmatch '^201711_[0-9]{8,13}_race\.zip$' -or
+              ($source.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+            throw 'NAR_SINGLE_MONTH_SOURCE_NAME_OR_REPARSE_REJECTED'
+          }
+          if ($source.Length -lt 1 -or $source.Length -gt 400000000) {
+            throw 'NAR_SINGLE_MONTH_INVALID_ZIP_SIZE'
+          }
+          $env:PYTHONPATH = Join-Path (Get-Location).Path 'src'
+          $cli = Join-Path (Get-Location).Path 'scripts\diagnose_nar_one_month_local.py'
+          # Pipe stays in-memory; no stderr or licensed input rows printed.
+          $lines = & python $cli --local-monthly-race-zip $source.FullName --expected-month '201711' --confirm-personal-private-nar-permission 2>&1
+          $code = $LASTEXITCODE
+          try {
+            $doc = [string]::Join([Environment]::NewLine, @($lines)) | ConvertFrom-Json
+          } catch {
+            Write-Host 'NAR_SINGLE_MONTH_PYTHON_RUNTIME_OR_PRIVATE_JSON_INVALID'
+            exit 2
+          }
+          if ($doc.month -cne '201711') {
+            Write-Host 'NAR_SINGLE_MONTH_UNEXPECTED_MONTH'
+            exit 2
+          }
+          if ($doc.status -ceq 'NAR_PRIVATE_MONTH_DIAGNOSTIC_BLOCKED') {
+            if ([string]$doc.stage -cnotmatch '^(ZIP_METADATA|ZIP_CSV_READ|CSV_SCHEMA_OR_MONTH|PRIVATE_PREFLIGHT)$' -or
+                [string]$doc.reasonCode -cnotmatch '^NAR_[A-Z0-9_]{1,90}$') {
+              Write-Host 'NAR_SINGLE_MONTH_PRIVATE_REPORT_INVALID'
+              exit 2
+            }
+            ([ordered]@{
+              status = 'NAR_PRIVATE_201711_REVIEW_REQUIRED'
+              month = '201711'
+              stage = [string]$doc.stage
+              reasonCode = [string]$doc.reasonCode
+              sourceBytesUploaded = $false
+              trainingRun = $false
+              positiveEvDemonstrated = $false
+            } | ConvertTo-Json -Compress)
+            if ($doc.reasonCode -ceq 'NAR_HEADER_SCHEMA_DRIFT') {
+              $probe = Join-Path (Get-Location).Path 'scripts\probe_nar_private_csv_header_shapes.py'
+              $probeLines = & python $probe --local-monthly-race-zip $source.FullName --expected-month '201711' --confirm-personal-private-nar-permission 2>&1
+              if ($LASTEXITCODE -ne 0) {
+                Write-Host 'NAR_PRIVATE_HEADER_SHAPE_PROBE_NOT_AVAILABLE'
+              } else {
+                try {
+                  $shapes = [string]::Join([Environment]::NewLine, @($probeLines)) | ConvertFrom-Json
+                  if ($shapes.status -cne 'NAR_LOCAL_HEADER_SHAPE_ONLY' -or
+                      @($shapes.members).Count -ne 3 -or
+                      $shapes.sourceTextExported -ne $false) {
+                    throw 'NAR_PROBE_INVALID'
+                  }
+                  $shapes | ConvertTo-Json -Depth 5 -Compress
+                } catch {
+                  Write-Host 'NAR_PRIVATE_HEADER_SHAPE_RESULT_INVALID'
+                }
+              }
+            }
+            exit 2
+          }
+          if ($doc.stage -cne 'MONTH_COVERAGE' -or $code -notin @(0,2) -or
+              $doc.status -cnotin @('NAR_PRIVATE_MONTH_STRUCTURE_OK_PREOFF_UNVERIFIED', 'NAR_PRIVATE_MONTH_REQUIRES_COVERAGE_REVIEW') -or
+              $doc.positiveEvDemonstrated -ne $false -or
+              $doc.sourceBytesUploaded -ne $false) {
+            Write-Host 'NAR_SINGLE_MONTH_PRIVATE_REPORT_INVALID'
+            exit 2
+          }
+          $reasons = [ordered]@{}
+          foreach ($prop in $doc.staticReasonCounts.PSObject.Properties) {
+            if ($prop.Name -cnotmatch '^NAR_[A-Z0-9_]{1,90}$') {
+              Write-Host 'NAR_SINGLE_MONTH_REASON_CODE_INVALID'
+              exit 2
+            }
+            $reasons[$prop.Name] = [int]$prop.Value
+          }
+          $official = $doc.officialStatusAwareAudit
+          if ($null -eq $official -or
+              [int]$official.sourceRaces -ne [int]$doc.observedRaces -or
+              [int]$official.baneiRaces -ne [int]$doc.predeclaredOutOfScopeRaces -or
+              ([int]$official.flatRaces + [int]$official.baneiRaces) -ne
+              [int]$doc.observedRaces -or
+              ([int]$official.validatedFlatRaces + [int]$official.unresolvedFlatRaces) -ne
+              [int]$official.flatRaces -or
+              $official.trainingAuthorized -ne $false -or
+              $official.economicRoiAuthorized -ne $false -or
+              $official.positiveEvDemonstrated -ne $false -or
+              $official.sourceBytesExported -ne $false) {
+            Write-Host 'NAR_STATUS_AWARE_AGGREGATE_CONTRACT_INVALID'
+            exit 2
+          }
+          $officialStatuses = [ordered]@{}
+          $allowedOfficialStatuses = @(
+            'FINISHED', 'SCRATCH_NOT_OFFERED', 'EXCLUDED_REFUND',
+            'DNF_NO_REFUND', 'DISQUALIFIED_REVIEW'
+          )
+          foreach ($prop in $official.horseStatusCounts.PSObject.Properties) {
+            if ($prop.Name -cnotin $allowedOfficialStatuses -or
+                [int]$prop.Value -lt 0) {
+              Write-Host 'NAR_STATUS_AWARE_STATUS_CODE_INVALID'
+              exit 2
+            }
+            $officialStatuses[$prop.Name] = [int]$prop.Value
+          }
+          $officialReasons = [ordered]@{}
+          foreach ($prop in $official.staticReasonCounts.PSObject.Properties) {
+            if ($prop.Name -cnotmatch '^NAR_[A-Z0-9_]{1,90}$' -or
+                [int]$prop.Value -lt 1) {
+              Write-Host 'NAR_STATUS_AWARE_REASON_CODE_INVALID'
+              exit 2
+            }
+            $officialReasons[$prop.Name] = [int]$prop.Value
+          }
+          $labels = $doc.statusAwareLabelAudit
+          if ($null -eq $labels -or
+              [int]$labels.sourceRaces -ne [int]$doc.observedRaces -or
+              [int]$labels.flatRaces -ne [int]$official.flatRaces -or
+              [int]$labels.validatedFlatRaces -ne [int]$official.validatedFlatRaces -or
+              [int]$labels.unresolvedFlatRaces -ne [int]$official.unresolvedFlatRaces -or
+              ([int]$labels.labeledRunnerRows +
+               [int]$labels.excludedScratchRows +
+               [int]$labels.excludedRefundedRows +
+               [int]$labels.unknownDisqualificationRows) -ne
+              [int]$labels.observedRosterRows -or
+              ([int]$labels.officialFinishedRows +
+               [int]$officialStatuses.DNF_NO_REFUND +
+               [int]$officialStatuses.DISQUALIFIED_REVIEW) -ne
+              [int]$labels.officialStartedRows -or
+              [int]$labels.officialStartedRows -gt [int]$labels.observedRosterRows -or
+              $labels.preEventAvailabilityProven -ne $false -or
+              $labels.modelTrainingAuthorized -ne $false -or
+              $labels.realizedRoiAuthorized -ne $false -or
+              $labels.positiveEvDemonstrated -ne $false -or
+              $labels.sourceBytesExported -ne $false) {
+            Write-Host 'NAR_STATUS_LABEL_AGGREGATE_CONTRACT_INVALID'
+            exit 2
+          }
+          $form = $doc.statusAwarePriorDayFormAudit
+          if ($null -eq $form -or
+              $form.status -cnotin @(
+                'NAR_STATUS_AWARE_FORM_INCOMPLETE_HISTORY_HOLD',
+                'NAR_STATUS_AWARE_FORM_DIAGNOSTIC_BLOCKED'
+              ) -or
+              $form.modelTrainingAuthorized -ne $false -or
+              $form.positiveEvDemonstrated -ne $false -or
+              $form.sourceRowsExported -ne $false) {
+            Write-Host 'NAR_STATUS_AWARE_PRIOR_DAY_CONTRACT_INVALID'
+            exit 2
+          }
+          if ($form.status -ceq 'NAR_STATUS_AWARE_FORM_INCOMPLETE_HISTORY_HOLD') {
+            if ([int]$form.historicalProjectedTargetRows -ne
+                [int]$labels.labeledRunnerRows -or
+                [int]$form.historicalStartedRows -ne
+                [int]$labels.officialStartedRows -or
+                [int]$form.historicalNumericFinishRows -ne
+                [int]$labels.officialFinishedRows -or
+                [int]$form.unresolvedFlatRaces -ne
+                [int]$official.unresolvedFlatRaces -or
+                [int]$form.releasedTrainingRows -ne 0 -or
+                ([int]$form.targetRowsWithPriorStart +
+                 [int]$form.targetRowsWithoutPriorStart) -ne
+                [int]$form.historicalProjectedTargetRows -or
+                [int]$form.targetRowsWithPriorWin -gt
+                [int]$form.targetRowsWithPriorStart -or
+                [int]$form.targetRowsWithPriorTop3 -gt
+                [int]$form.targetRowsWithPriorStart -or
+                [int]$form.targetRowsWithNumericPriorFinish -gt
+                [int]$form.targetRowsWithPriorStart -or
+                $form.independentPreoffRosterVerified -ne $false) {
+              Write-Host 'NAR_STATUS_AWARE_PRIOR_DAY_COUNT_INVALID'
+              exit 2
+            }
+          } elseif ([string]$form.staticReason -cnotmatch '^NAR_[A-Z0-9_]{1,90}$') {
+            Write-Host 'NAR_STATUS_AWARE_PRIOR_DAY_ERROR_UNBOUNDED'
+            exit 2
+          }
+          $safe = [ordered]@{
+            schema = 'NAR.PC2.SinglePrivateMonthAggregate.v2'
+            status = [string]$doc.status
+            month = '201711'
+            observedRaces = [int]$doc.observedRaces
+            parsedRaces = [int]$doc.acceptedFlatRaces
+            parsedStarters = [int]$doc.acceptedFlatStarters
+            predeclaredOutOfScopeRaces = [int]$doc.predeclaredOutOfScopeRaces
+            unresolvedInScopeRaces = [int]$doc.unresolvedInScopeRaces
+            staticReasonCounts = $reasons
+            statusAwarePriorDayForm = ([ordered]@{
+              status = [string]$form.status
+              historicalProjectedTargetRows = [int]$form.historicalProjectedTargetRows
+              historicalStartedRows = [int]$form.historicalStartedRows
+              historicalNumericFinishRows = [int]$form.historicalNumericFinishRows
+              targetRowsWithPriorStart = [int]$form.targetRowsWithPriorStart
+              targetRowsWithoutPriorStart = [int]$form.targetRowsWithoutPriorStart
+              targetRowsWithPriorWin = [int]$form.targetRowsWithPriorWin
+              targetRowsWithPriorTop3 = [int]$form.targetRowsWithPriorTop3
+              targetRowsWithNumericPriorFinish = [int]$form.targetRowsWithNumericPriorFinish
+              unresolvedFlatRaces = [int]$form.unresolvedFlatRaces
+              releasedTrainingRows = [int]$form.releasedTrainingRows
+              staticReason = [string]$form.staticReason
+              modelTrainingAuthorized = $false
+              positiveEvDemonstrated = $false
+            })
+            statusAwareLabels = ([ordered]@{
+              observedRosterRows = [int]$labels.observedRosterRows
+              labeledRunnerRows = [int]$labels.labeledRunnerRows
+              excludedScratchRows = [int]$labels.excludedScratchRows
+              excludedRefundedRows = [int]$labels.excludedRefundedRows
+              unknownDisqualificationRows = [int]$labels.unknownDisqualificationRows
+              officialStartedRows = [int]$labels.officialStartedRows
+              officialFinishedRows = [int]$labels.officialFinishedRows
+              preEventAvailabilityProven = $false
+              modelTrainingAuthorized = $false
+              realizedRoiAuthorized = $false
+            })
+            officialStatusAware = ([ordered]@{
+              flatRaces = [int]$official.flatRaces
+              validatedFlatRaces = [int]$official.validatedFlatRaces
+              unresolvedFlatRaces = [int]$official.unresolvedFlatRaces
+              horseStatusCounts = $officialStatuses
+              staticReasonCounts = $officialReasons
+              completeInterpretation = [bool]$official.completeInterpretation
+              trainingAuthorized = $false
+              economicRoiAuthorized = $false
+            })
+            preEventSnapshotProven = $false
+            actualRightsIndependentlyVerified = $false
+            trainModelsRun = $false
+            independentOosOpened = $false
+            sourceBytesUploaded = $false
+            positiveEvDemonstrated = $false
+          }
+          $safe | ConvertTo-Json -Compress
+          if ($doc.status -ceq 'NAR_PRIVATE_MONTH_REQUIRES_COVERAGE_REVIEW') {
+            # Aggregate-only venue/surface triage; do not print any real
+            # source text or a venue label from the local CSV.
+            $probe = Join-Path (Get-Location).Path 'scripts\probe_nar_private_csv_header_shapes.py'
+            $probeLines = & python $probe --local-monthly-race-zip $source.FullName --expected-month '201711' --confirm-personal-private-nar-permission 2>&1
+            if ($LASTEXITCODE -eq 0) {
+              try {
+                $shapes = [string]::Join([Environment]::NewLine, @($probeLines)) | ConvertFrom-Json
+                if ($shapes.status -cne 'NAR_LOCAL_HEADER_SHAPE_ONLY' -or
+                    @($shapes.members).Count -ne 3 -or $shapes.sourceTextExported -ne $false) {
+                  throw 'NAR_LOCAL_PROBE_INVALID'
+                }
+                $context = $shapes.flatBlankContextEvidence
+                if ($null -eq $context -or
+                    $context.noRawFieldContentsExported -ne $true -or
+                    $context.evidenceOnlyNotRefundOrLossClassification -ne $true -or
+                    [int]$context.unknownStatusRows -lt 0 -or
+                    [int]$context.blankRowsWithAnyExplicitOfficialMarkerInOtherFields -lt 0 -or
+                    ([int]$context.unknownStatusRows +
+                     [int]$context.blankRowsWithAnyExplicitOfficialMarkerInOtherFields) -ne
+                    [int]$shapes.flatFinishReconciliation.blankHorseRows) {
+                  throw 'NAR_BLANK_STATUS_CONTEXT_CONTRACT_INVALID'
+                }
+                $shapes | ConvertTo-Json -Depth 5 -Compress
+              } catch {
+                Write-Host 'NAR_PRIVATE_COVERAGE_PROBE_OUTPUT_REJECTED'
+              }
+            } else {
+              Write-Host 'NAR_PRIVATE_COVERAGE_PROBE_NOT_AVAILABLE'
+            }
+          }
+          if ($code -ne 0) { exit 2 }
+
+      - name: Verify 2017-2022 training ZIP presence without opening archives
+        if: ${{ always() }}
+        shell: powershell
+        run: |
+          # This independent check runs even when the 201711 data
+          # quality gate deliberately returns HOLD. No archive is opened.
+          $ErrorActionPreference = 'Stop'
+          if ($env:COMPUTERNAME -cne 'DESKTOP-MVV1FD4' -or
+              $env:GITHUB_REPOSITORY -cne 'tanaka456jp/HorseRacingPredictions' -or
+              $env:GITHUB_REF_NAME -cne 'feature/weekly-odds-free-note-20261021') {
+            Write-Host 'NAR_TRAINING_INVENTORY_WRONG_MACHINE_OR_REF'
+            exit 2
+          }
+          $script = Join-Path (Get-Location).Path 'scripts\inspect_pc2_nar_training_zip_presence_readonly.ps1'
+          if (-not (Test-Path -LiteralPath $script -PathType Leaf)) {
+            Write-Host 'NAR_TRAINING_INVENTORY_REVIEWED_SCRIPT_MISSING'
+            exit 2
+          }
+          try {
+            $raw = @(& $script 2>&1)
+            $report = [string]::Join([Environment]::NewLine, $raw) | ConvertFrom-Json
+            if ($report.schema -cne 'NAR.PC2.TrainingZIPNamesOnly.v1' -or
+                $report.pc2Verified -ne $true -or
+                @($report.candidates).Count -ne 2 -or
+                $report.realNARRowsProcessed -ne 0 -or
+                $report.finishedRacePayoutsRead -ne $false -or
+                $report.historicalHoldoutOpened -ne $false -or
+                $report.sourceRecordsUploaded -ne $false -or
+                $report.trainingExecuted -ne $false -or
+                $report.roiComputed -ne $false -or
+                $report.filesChanged -ne $false) {
+              throw 'NAR_TRAINING_INVENTORY_REPORT_INVALID'
+            }
+            $locations = @()
+            foreach ($item in $report.candidates) {
+              $found = [int]$item.trainingMonthsObservedByName
+              $missing = [int]$item.trainingMonthsMissingByName
+              if ([int]$item.rootId -notin @(1,2) -or
+                  $found -lt 0 -or $found -gt 72 -or
+                  $missing -ne 72 - $found -or
+                  [string]$item.status -cnotin @(
+                    'ABSENT', 'FILENAMES_ONLY', 'REPARSE_POINT_BLOCKED',
+                    'TOO_MANY_ENTRIES_BLOCKED'
+                  ) -or
+                  $item.zipContentsOpened -ne $false) {
+                throw 'NAR_TRAINING_INVENTORY_COUNT_INVALID'
+              }
+              $locations += [ordered]@{
+                rootId = [int]$item.rootId
+                status = [string]$item.status
+                trainingMonthsFoundByFilename = $found
+                trainingMonthsMissingByFilename = $missing
+                duplicateMonthZipCount = [int]$item.duplicateTrainingMonthZips
+                outOfTrainingPeriodZipCount = [int]$item.outOfPeriodMonthlyZips
+              }
+            }
+            ([ordered]@{
+              schema = 'NAR.PC2.TrainingSourceReadinessAggregate.v1'
+              pc2Verified = $true
+              requiredTrainingMonths = 72
+              locations = $locations
+              zipContentsOpened = $false
+              privatePathsOrFilenamesExported = $false
+              trainingExecuted = $false
+              ROIComputed = $false
+              protectedHoldoutOpened = $false
+            } | ConvertTo-Json -Depth 5 -Compress)
+          } catch {
+            # Never print an exception, path, ZIP name or private contents.
+            Write-Host 'NAR_TRAINING_INVENTORY_SAFE_REPORT_BLOCKED'
+            exit 2
+          }

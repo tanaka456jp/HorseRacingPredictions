@@ -1,0 +1,318 @@
+name: NAR PC2 Training Status-Aware Preflight (Private Aggregate Only)
+
+on:
+  push:
+    branches: ["feature/weekly-odds-free-note-20261021"]
+    paths:
+      - ".github/workflows/nar-pc2-training-status-aware-preflight.yml"
+      - "src/horse_racing_predictions/nar_training_preflight.py"
+      - "src/horse_racing_predictions/nar_historical_anomaly_triage.py"
+      - "tests/test_nar_historical_anomaly_triage.py"
+      - "scripts/diagnose_nar_training_months_local.py"
+      - "tests/test_nar_training_preflight.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nar-pc2-status-aware-72-months
+  cancel-in-progress: false
+
+jobs:
+  pc2-private-month-diagnostic:
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 40
+    steps:
+      - name: Checkout source without cleaning non-repo private data
+        uses: actions/checkout@v4
+        with:
+          clean: false
+          persist-credentials: false
+      - name: Compare strict versus official-status read-only monthly counts
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:COMPUTERNAME -cne 'DESKTOP-MVV1FD4' -or
+              $env:GITHUB_REPOSITORY -cne 'tanaka456jp/HorseRacingPredictions' -or
+              $env:GITHUB_REF_NAME -cne 'feature/weekly-odds-free-note-20261021') {
+            Write-Host 'NAR_PRIVATE_STATUS_PREFLIGHT_UNTRUSTED_PC_OR_REF'
+            exit 2
+          }
+          $sourceFolder = 'D:\Development\HorseRacingPredictions\nar-personal'
+          $parents = @('D:\Development', 'D:\Development\HorseRacingPredictions', $sourceFolder)
+          foreach ($p in $parents) {
+            if (-not (Test-Path -LiteralPath $p -PathType Container) -or
+                ((Get-Item -LiteralPath $p -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+              Write-Host 'NAR_PRIVATE_STATUS_PREFLIGHT_SOURCE_HOLD'
+              exit 2
+            }
+          }
+          $script = Join-Path (Get-Location).Path 'scripts\diagnose_nar_training_months_local.py'
+          if (-not (Test-Path -LiteralPath $script -PathType Leaf)) {
+            Write-Host 'NAR_PRIVATE_STATUS_PREFLIGHT_SCRIPT_MISSING'
+            exit 2
+          }
+          $env:PYTHONDONTWRITEBYTECODE = '1'
+          $env:PYTHONPATH = Join-Path (Get-Location).Path 'src'
+          try {
+            # The CLI intentionally exits 3 on known absent months/strict
+            # anomalies; its aggregated JSON still contains valid evidence.
+            $raw = @(& python -B $script --local-nar-training-zip-directory $sourceFolder --confirm-personal-private-nar-permission 2>&1)
+            $code = $LASTEXITCODE
+            if ($code -notin @(0,3) -or $raw.Count -ne 1) {
+              throw 'NAR_PRIVATE_STATUS_PREFLIGHT_CLI_FAILED'
+            }
+            $d = [string]$raw[0] | ConvertFrom-Json
+            if ([int]$d.monthsPresent -le 0 -or
+                [int]$d.monthsPresent + [int]$d.monthsMissing -ne 72 -or
+                [int]$d.monthsStatusAwareComplete -gt [int]$d.monthsPresent -or
+                ([int]$d.acceptedFlatRaces + [int]$d.unresolvedFlatRaces +
+                 [int]$d.predeclaredBaneiOutOfScopeRaces) -ne [int]$d.observedRaces -or
+                ([int]$d.statusAwareValidatedFlatRaces + [int]$d.statusAwareUnresolvedFlatRaces +
+                 [int]$d.predeclaredBaneiOutOfScopeRaces) -ne [int]$d.observedRaces -or
+                [int]$d.statusAwareValidatedFlatRaces -lt [int]$d.acceptedFlatRaces -or
+                [int]$d.statusAwareUnresolvedFlatRaces -gt [int]$d.unresolvedFlatRaces -or
+                $d.statusAwareAnalysisIsPostEventOnly -ne $true -or
+                $d.modelTrainingAuthorized -ne $false -or
+                $d.realDataUploaded -ne $false -or
+                $d.trainingExecuted -ne $false -or
+                $d.actualRoiEvaluated -ne $false -or
+                $d.protectedHoldoutOpened -ne $false -or
+                $d.positiveEvDemonstrated -ne $false -or
+                $d.publicPostingAuthorized -ne $false) {
+              throw 'NAR_PRIVATE_STATUS_PREFLIGHT_COUNT_CONTRACT_INVALID'
+            }
+            # Never log CSV records or private race/horse identifiers.
+            # The summary is deterministic over all 72 source months.
+            $byYear = @()
+            $reasonTotals = [ordered]@{}
+            $categoryTotals = [ordered]@{}
+            $blankShapeTotals = [ordered]@{}
+            $textProfileTotals = [ordered]@{}
+            $rankPresenceTotals = [ordered]@{}
+            $winPayoutPresenceTotals = [ordered]@{}
+            $unknownRacePatternTotals = [ordered]@{}
+            $monthlyDistinctSum = 0
+            $maximumMonthFrequency = 0
+            if ([int]$d.monthsPresent -eq 72 -and [int]$d.monthsMissing -eq 0) {
+              $t = $d.anomalyTriage
+              if ($null -eq $t -or
+                  $t.schema -cne 'NAR.HistoricalAnomalyTriage.v1' -or
+                  [int]$t.fullPeriodFlatRaceDenominator -ne (
+                    [int]$d.observedRaces - [int]$d.predeclaredBaneiOutOfScopeRaces
+                  ) -or
+                  [int]$t.strictUnresolvedFlat -ne [int]$d.unresolvedFlatRaces -or
+                  [int]$t.statusAwareUnresolvedFlat -ne [int]$d.statusAwareUnresolvedFlatRaces -or
+                  [int]$t.newlyInterpretedFlat -ne (
+                    [int]$d.unresolvedFlatRaces - [int]$d.statusAwareUnresolvedFlatRaces
+                  ) -or
+                  [int]$t.trainingRowsReleased -ne 0 -or
+                  $t.sourceRecordsExported -ne $false -or
+                  $t.individualRaceIdsExported -ne $false -or
+                  $t.positiveEvDemonstrated -ne $false -or
+                  @($t.byYear).Count -ne 6) {
+                throw 'NAR_PC2_TRIAGE_SUMMARY_CONTRACT_FAILED'
+              }
+              $sumFlat = 0
+              $sumStrict = 0
+              $sumStatus = 0
+              $sumValidated = 0
+              $sumComplete = 0
+              $yearRows = @($t.byYear)
+              for ($i = 0; $i -lt 6; $i++) {
+                $y = $yearRows[$i]
+                if ([int]$y.year -ne (2017 + $i) -or
+                    [int]$y.months -ne 12 -or
+                    [int]$y.flat -le 0 -or
+                    [int]$y.statusReconciled + [int]$y.statusUnresolved -ne [int]$y.flat -or
+                    [int]$y.strictUnresolved -lt [int]$y.statusUnresolved -or
+                    [int]$y.statusCompleteMonths -gt 12) {
+                  throw 'NAR_PC2_TRIAGE_YEAR_COUNTS_CONFLICT'
+                }
+                $sumFlat += [int]$y.flat
+                $sumStrict += [int]$y.strictUnresolved
+                $sumStatus += [int]$y.statusUnresolved
+                $sumValidated += [int]$y.statusReconciled
+                $sumComplete += [int]$y.statusCompleteMonths
+                $byYear += [ordered]@{
+                  year = [int]$y.year
+                  flat = [int]$y.flat
+                  strictUnresolved = [int]$y.strictUnresolved
+                  statusUnresolved = [int]$y.statusUnresolved
+                  statusValidated = [int]$y.statusReconciled
+                  statusCompleteMonths = [int]$y.statusCompleteMonths
+                }
+              }
+              if ($sumFlat -ne [int]$t.fullPeriodFlatRaceDenominator -or
+                  $sumStrict -ne [int]$d.unresolvedFlatRaces -or
+                  $sumStatus -ne [int]$d.statusAwareUnresolvedFlatRaces -or
+                  $sumValidated -ne [int]$d.statusAwareValidatedFlatRaces -or
+                  $sumComplete -ne [int]$d.monthsStatusAwareComplete) {
+                throw 'NAR_PC2_TRIAGE_TOTALS_CONFLICT'
+              }
+              $reasonSum = 0
+              foreach ($p in $t.byReason.PSObject.Properties) {
+                if ($p.Name -cnotmatch '^NAR_[A-Z0-9_]{1,96}$' -or
+                    [int]$p.Value -le 0) {
+                  throw 'NAR_PC2_TRIAGE_REASON_UNSAFE'
+                }
+                $reasonTotals[$p.Name] = [int]$p.Value
+                $reasonSum += [int]$p.Value
+              }
+              $categorySum = 0
+              foreach ($p in $t.byCategory.PSObject.Properties) {
+                if ($p.Name -cnotmatch '^[A-Z_]{4,50}$' -or
+                    [int]$p.Value -le 0) {
+                  throw 'NAR_PC2_TRIAGE_CATEGORY_UNSAFE'
+                }
+                $categoryTotals[$p.Name] = [int]$p.Value
+                $categorySum += [int]$p.Value
+              }
+              if ($reasonSum -ne [int]$d.statusAwareUnresolvedFlatRaces -or
+                  $categorySum -ne [int]$d.statusAwareUnresolvedFlatRaces) {
+                throw 'NAR_PC2_TRIAGE_REASON_TOTALS_CONFLICT'
+              }
+              # The 752 unknown-finish cases are not necessarily all
+              # empty fields. Reject any source-derived arbitrary words.
+              $approvedFinishShapes = @(
+                'KNOWN_RACE_CANCEL_OR_NON_ESTABLISHED_MARKER',
+                'UNRECOGNIZED_NONEMPTY_STATUS_MARKER',
+                'BOTH_FIELDS_BLANK_ONE_HORSE',
+                'BOTH_FIELDS_BLANK_TWO_OR_THREE_HORSES',
+                'BOTH_FIELDS_BLANK_FOUR_OR_MORE_HORSES'
+              )
+              $blankShapeSum = 0
+              foreach ($p in $t.ambiguousFinishShapes.PSObject.Properties) {
+                if ($approvedFinishShapes -cnotcontains $p.Name -or
+                    [int]$p.Value -le 0) {
+                  throw 'NAR_PC2_TRIAGE_UNSAFE_FINISH_SHAPE'
+                }
+                $blankShapeTotals[$p.Name] = [int]$p.Value
+                $blankShapeSum += [int]$p.Value
+              }
+              if ($blankShapeSum -ne [int]$t.byReason.NAR_BLANK_WITHOUT_OFFICIAL_STATUS) {
+                throw 'NAR_PC2_TRIAGE_FINISH_SHAPE_SUM_CONFLICT'
+              }
+              $approvedProfiles = @(
+                'POSSIBLE_PRESTART_EXCLUSION_ABBREVIATION',
+                'POSSIBLE_SCRATCH_VARIANT',
+                'POSSIBLE_DNF_VARIANT',
+                'OTHER_RESULT_EXCEPTION_VARIANT',
+                'UNEXPECTED_NUMERIC_MARGIN',
+                'UNEXPECTED_PUNCTUATION_PLACEHOLDER',
+                'UNRECOGNIZED_TEXT_1_OR_2_CHARS',
+                'UNRECOGNIZED_TEXT_3_TO_5_CHARS',
+                'UNRECOGNIZED_TEXT_6_PLUS_CHARS'
+              )
+              $profileRows = 0
+              foreach ($p in $d.unrecognizedMarkerProfiles.PSObject.Properties) {
+                if ($approvedProfiles -cnotcontains $p.Name -or
+                    [int]$p.Value -le 0) {
+                  throw 'NAR_PC2_TRIAGE_UNKNOWN_MARKER_PROFILE_REJECTED'
+                }
+                $textProfileTotals[$p.Name] = [int]$p.Value
+                $profileRows += [int]$p.Value
+              }
+              if ($profileRows -lt [int]$blankShapeTotals.UNRECOGNIZED_NONEMPTY_STATUS_MARKER -or
+                  $profileRows -gt 18 * [int]$d.statusAwareUnresolvedFlatRaces) {
+                throw 'NAR_PC2_TRIAGE_UNKNOWN_MARKER_PROFILE_COUNT_INVALID'
+              }
+              $unknownRaces = [int]$blankShapeTotals.UNRECOGNIZED_NONEMPTY_STATUS_MARKER
+              $approvedRacePatterns = @(
+                'SAME_UNKNOWN_TEXT_ALL_HORSES',
+                'MIXED_UNKNOWN_TEXT_OR_PARTIAL_HORSES',
+                'OFFICIAL_LIKE_CANCEL_SPELLING_UNVERIFIED',
+                'NOT_OFFICIAL_LIKE_CANCEL_SPELLING'
+              )
+              $racePatternSum = 0
+              $possibleCancelSum = 0
+              foreach ($p in $d.unknownRacePatternCounts.PSObject.Properties) {
+                if ($approvedRacePatterns -cnotcontains $p.Name -or
+                    [int]$p.Value -le 0) {
+                  throw 'NAR_PC2_UNKNOWN_RACE_PATTERN_UNSAFE'
+                }
+                $unknownRacePatternTotals[$p.Name] = [int]$p.Value
+                if ($p.Name -cin @(
+                  'SAME_UNKNOWN_TEXT_ALL_HORSES',
+                  'MIXED_UNKNOWN_TEXT_OR_PARTIAL_HORSES'
+                )) {
+                  $racePatternSum += [int]$p.Value
+                } else {
+                  $possibleCancelSum += [int]$p.Value
+                }
+              }
+              if ($racePatternSum -ne $unknownRaces -or
+                  $possibleCancelSum -ne $unknownRaces) {
+                throw 'NAR_PC2_UNKNOWN_RACE_PATTERN_DENOMINATOR_CONFLICT'
+              }
+              $rankTotal = 0
+              foreach ($p in $d.unknownMarkerRankCellPresence.PSObject.Properties) {
+                if ($p.Name -cnotin @(
+                      'NO_NONEMPTY_FINAL_RANK_CELL','SOME_NONEMPTY_FINAL_RANK_CELL'
+                    ) -or [int]$p.Value -le 0) {
+                  throw 'NAR_PC2_UNKNOWN_RANK_CELL_EVIDENCE_UNSAFE'
+                }
+                $rankPresenceTotals[$p.Name] = [int]$p.Value
+                $rankTotal += [int]$p.Value
+              }
+              $paybackTotal = 0
+              foreach ($p in $d.unknownMarkerOfficialWinPaybackPresence.PSObject.Properties) {
+                if ($p.Name -cnotin @(
+                      'WIN_PAYBACK_FIELDS_PRESENT','WIN_PAYBACK_FIELDS_ABSENT'
+                    ) -or [int]$p.Value -le 0) {
+                  throw 'NAR_PC2_UNKNOWN_PAYOUT_EVIDENCE_UNSAFE'
+                }
+                $winPayoutPresenceTotals[$p.Name] = [int]$p.Value
+                $paybackTotal += [int]$p.Value
+              }
+              $monthlyDistinctSum = [int]$d.unknownMarkerDistinctValuesSummedAcrossMonths
+              $maximumMonthFrequency = [int]$d.unknownMarkerLargestSingleValueFrequencyWithinAnyMonth
+              if ($rankTotal -ne $unknownRaces -or
+                  $paybackTotal -ne $unknownRaces -or
+                  $monthlyDistinctSum -le 0 -or
+                  $monthlyDistinctSum -gt $profileRows -or
+                  $maximumMonthFrequency -le 0 -or
+                  $maximumMonthFrequency -gt $profileRows) {
+                throw 'NAR_PC2_UNKNOWN_RACE_EVIDENCE_TOTALS_INVALID'
+              }
+            }
+            # Output just a fixed allowlist, never the source ZIP names,
+            # source paths, horse identities, race IDs or source text.
+            [ordered]@{
+              schema = 'NAR.PC2.PrivateTrainingDualStatusAggregate.v1'
+              status = 'PRIVATE_POSTEVENT_DIAGNOSTIC_ONLY'
+              monthsPresent = [int]$d.monthsPresent
+              monthsMissing = [int]$d.monthsMissing
+              monthsWithUnresolvedErrors = [int]$d.monthsRequiringReview
+              strictAcceptedFlat = [int]$d.acceptedFlatRaces
+              strictUnresolvedFlat = [int]$d.unresolvedFlatRaces
+              officialStatusValidatedFlat = [int]$d.statusAwareValidatedFlatRaces
+              officialStatusUnresolvedFlat = [int]$d.statusAwareUnresolvedFlatRaces
+              officialStatusCompleteMonths = [int]$d.monthsStatusAwareComplete
+              predeclaredOutOfScope = [int]$d.predeclaredBaneiOutOfScopeRaces
+              observedRaces = [int]$d.observedRaces
+              statusAwareUnresolvedByYear = $byYear
+              statusAwareUnresolvedByReason = $reasonTotals
+              statusAwareUnresolvedByCategory = $categoryTotals
+              ambiguousFinishShapes = $blankShapeTotals
+              unknownMarginTextProfiles = $textProfileTotals
+              unknownRankCellPresence = $rankPresenceTotals
+              unknownWinPaybackPresence = $winPayoutPresenceTotals
+              unknownRacePatterns = $unknownRacePatternTotals
+              unknownMarginDistinctValuesSummedAcrossMonths = $monthlyDistinctSum
+              unknownMarginLargestFrequencyWithinOneMonth = $maximumMonthFrequency
+              licensedSourceBytesUploaded = $false
+              preoffFeatureTimingProven = $false
+              modelTrainingAuthorized = $false
+              realizedRoiComputed = $false
+              independentOosOpened = $false
+              positiveExpectedValueDemonstrated = $false
+            } | ConvertTo-Json -Compress
+            # The Python CLI returns exit 3 by design when months are absent.
+            # The metadata/HOLD audit itself PASSED; normalize shell status.
+            exit 0
+          } catch {
+            Write-Host 'NAR_PRIVATE_STATUS_PREFLIGHT_AGGREGATE_BLOCKED'
+            exit 2
+          }
