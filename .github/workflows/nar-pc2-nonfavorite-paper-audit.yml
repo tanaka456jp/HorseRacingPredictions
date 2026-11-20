@@ -62,7 +62,17 @@ jobs:
                   ).Count
                 }
               }
-              $counts | ConvertTo-Json -Compress
+              # Offline evidence readiness: report aggregate counts only.
+              $readiness = @(& python -B .\\scripts\\audit_nar_nonfavorite_private_pair_readiness.py --private-capture-dir $base 2>&1)
+              if ($LASTEXITCODE -ne 0 -or $readiness.Count -ne 1) {
+                throw 'PRIVATE_READINESS_HOLD'
+              }
+              $d = [string]$readiness[0] | ConvertFrom-Json
+              if ($d.schema -cne 'NAR.PC2.NonfavoritePairReadiness.v1' -or
+                  $d.source_records_exported -ne $false) {
+                throw 'PRIVATE_READINESS_UNTRUSTED'
+              }
+              $d | ConvertTo-Json -Compress
               # Missing real paired evidence is an explicit failed audit,
               # not a green PC2 research validation.
               exit 2
