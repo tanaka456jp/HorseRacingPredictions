@@ -52,6 +52,16 @@ def test_nonfavorite_policy_can_improve_despite_lower_staking():
     assert a.full_policy_official_return_yen==800
     assert a.nonfavorite_policy_hypothetical_stake_yen==100
     assert a.nonfavorite_policy_official_return_yen==600
+    assert a.full_policy_purchased_races==3
+    assert a.nonfavorite_policy_excluded_races==2
+    assert a.full_policy_decided_tickets==3
+    assert a.nonfavorite_policy_decided_tickets==1
+    assert a.full_policy_win_hits==2
+    assert a.nonfavorite_policy_win_hits==1
+    assert a.full_policy_win_hit_rate==2/3
+    assert a.nonfavorite_policy_win_hit_rate==1.0
+    assert a.full_policy_paper_net_yen==500
+    assert a.nonfavorite_policy_paper_net_yen==500
     assert round(a.full_policy_paper_roi,5)==round(5/3,5)
     assert a.nonfavorite_policy_paper_roi==5.0
     assert a.roi_change_percentage_points>0
@@ -141,6 +151,12 @@ def test_refunds_scratches_and_unknown_settlements_are_not_wins():
     assert a.nonfavorite_policy_hypothetical_stake_yen==100
     assert a.nonfavorite_policy_paper_roi==-1
     assert a.selected_nonfavorite_bets==1
+    assert a.unoffered_races==1
+    assert a.refunded_races==1
+    assert a.full_policy_decided_tickets==1
+    assert a.nonfavorite_policy_decided_tickets==1
+    assert a.full_policy_win_hit_rate==0
+    assert a.nonfavorite_policy_win_hit_rate==0
     assert a.actual_tickets_purchased is False
     from dataclasses import replace
     unknown=replace(race(1,3,payout=200),settlement_status="UNKNOWN")
@@ -164,3 +180,24 @@ def test_model_top_pick_must_be_frozen_before_market_and_off():
     after=replace(before,forecast_frozen_utc=before.scheduled_off_utc)
     with pytest.raises(NonfavoriteEvidenceHold,match="INVALID_FROZEN"):
         evaluate(after)
+
+
+def test_market_source_must_be_after_independent_forecast_receipt():
+    from dataclasses import replace
+    r = race(1, 2, payout=600)
+    # ZIP source timestamp is already older than the independent
+    # forecast receipt, even though both are before the race and
+    # the local receipt is later still. This was previously accepted.
+    for seconds_later in (0, 20):
+        invalid = replace(
+            r,
+            hosted_forecast_receipt_utc=(
+                r.official_market_source_utc + timedelta(seconds=seconds_later)
+            ),
+        )
+        audit = evaluate(invalid)
+        assert audit.status.startswith("HOLD")
+        assert audit.missing_or_unverifiable_preoff_prices == 1
+        assert audit.full_policy_paper_roi is None
+        assert audit.nonfavorite_policy_paper_roi is None
+    assert evaluate(r).status.startswith("COMPLETE_")

@@ -30,9 +30,11 @@ Freeze exactly these two arms BEFORE seeing any newly collected outcomes:
 - Full immutable forecast roster and winner top pick, with independent
   GitHub-hosted pre-first-off digest receipt before the market decision.
 - Actual daily pre-off NAR WIN price for the same race and horse,
-  **source-generated and locally received timestamps** more than
-  10 minutes before that race's scheduled off (source freshness
-  <=25 minutes). Popularity rank must be a positive integer within
+  with a **hosted independent forecast receipt strictly earlier than
+  the source-generated market timestamp**, and that timestamp no
+  later than the local receipt. Both source and receipt must be
+  more than 10 minutes before that race's scheduled off (source
+  freshness <=25 minutes). Popularity rank must be a positive integer within
   the entrant count. A final popularity rank is NEVER valid.
 - Complete independently reconciled official final WIN dividends
   AFTER all races, refund/scratch/DNF classes and full original
@@ -90,7 +92,9 @@ booleans, original NAR data, hosted digest or actual execution.
 
 A and B must be compared on the **same frozen race population**.
 Publish both invested stake, gross official payout, net paper P&L,
-and paper ROI, alongside the number and fraction of bets omitted,
+and paper ROI, plus wins and decided-ticket hit rate (excluding refunds
+and non-offered tickets from the hit-rate denominator), alongside
+explicit refund and non-offered counts, and the number and fraction of bets omitted,
 missing odds, refunds, unoffered entries, and complete days.
 An increase in paper ROI alone is not proof of a better strategy if
 total yen profit falls or data coverage deteriorates.

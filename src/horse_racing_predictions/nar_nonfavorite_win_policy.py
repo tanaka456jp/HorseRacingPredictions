@@ -57,6 +57,18 @@ class NonfavoriteWinAudit:
     first_favorite_predictions: int
     nonfavorite_predictions: int
     selected_nonfavorite_bets: int
+    full_policy_purchased_races: int | None
+    nonfavorite_policy_excluded_races: int | None
+    unoffered_races: int
+    refunded_races: int
+    full_policy_decided_tickets: int | None
+    nonfavorite_policy_decided_tickets: int | None
+    full_policy_win_hits: int | None
+    nonfavorite_policy_win_hits: int | None
+    full_policy_win_hit_rate: float | None
+    nonfavorite_policy_win_hit_rate: float | None
+    full_policy_paper_net_yen: int | None
+    nonfavorite_policy_paper_net_yen: int | None
     full_policy_hypothetical_stake_yen: int | None
     full_policy_official_return_yen: int | None
     full_policy_paper_roi: float | None
@@ -88,9 +100,9 @@ def _complete_preoff_price(r: NonfavoriteWinRace) -> bool:
     off = _utc(r.scheduled_off_utc)
     if None in (frozen, witnessed, source, received, off):
         return False
-    if not (frozen <= witnessed < off - _MIN_LEAD
-            and source <= received < off - _MIN_LEAD
-            and witnessed <= received
+    # A witnessed model selection must predate the provider's market
+    # snapshot itself, not merely the later local ZIP receipt.
+    if not (frozen <= witnessed < source <= received < off - _MIN_LEAD
             and timedelta(0) <= received - source <= _MAX_SOURCE_AGE):
         return False
     if (source.astimezone(_JST).date().isoformat() != r.race_day_jst
@@ -189,6 +201,7 @@ def compare_nonfavorite_win_policies(
     unresolved = missing_count
     favorite = other = 0
     full_stake = full_paid = filtered_stake = filtered_paid = 0
+    a_decided = b_decided = a_wins = b_wins = 0
     daily: dict[str, tuple[int, int, int, int]] = {}
     for race_id in frozen_race_days:
         r = rows.get(race_id)
@@ -203,6 +216,14 @@ def compare_nonfavorite_win_policies(
         if not price_ok or settled is None:
             continue
         stake, paid = settled
+        decided = r.settlement_status in ("FINISHED", "DNF_NO_REFUND")
+        won = r.settlement_status == "FINISHED" and paid >= 100
+        if decided:
+            a_decided += 1
+            a_wins += int(won)
+            if r.selected_preoff_popularity != 1:
+                b_decided += 1
+                b_wins += int(won)
         if r.selected_preoff_popularity == 1:
             favorite += 1
             b_stake = b_paid = 0
@@ -240,13 +261,33 @@ def compare_nonfavorite_win_policies(
         unresolved_settlements=unresolved,
         first_favorite_predictions=favorite,
         nonfavorite_predictions=other,
-        selected_nonfavorite_bets=(
-            sum(1 for r in rows.values()
-                if _complete_preoff_price(r)
-                and _settled_amount(r) is not None
-                and r.selected_preoff_popularity != 1
-                and _settled_amount(r)[0] > 0)
-            if ready else 0
+        selected_nonfavorite_bets=(filtered_stake // 100 if ready else 0),
+        full_policy_purchased_races=(full_stake // 100 if ready else None),
+        nonfavorite_policy_excluded_races=(
+            len(frozen_race_days) - filtered_stake // 100 if ready else None
+        ),
+        unoffered_races=sum(
+            r.settlement_status == "SCRATCH_NOT_OFFERED" for r in rows.values()
+        ),
+        refunded_races=sum(
+            r.settlement_status in ("EXCLUDED_REFUND", "RACE_CANCELLED_REFUND")
+            for r in rows.values()
+        ),
+        full_policy_decided_tickets=(a_decided if ready else None),
+        nonfavorite_policy_decided_tickets=(b_decided if ready else None),
+        full_policy_win_hits=(a_wins if ready else None),
+        nonfavorite_policy_win_hits=(b_wins if ready else None),
+        full_policy_win_hit_rate=(
+            a_wins / a_decided if ready and a_decided else None
+        ),
+        nonfavorite_policy_win_hit_rate=(
+            b_wins / b_decided if ready and b_decided else None
+        ),
+        full_policy_paper_net_yen=(
+            full_paid - full_stake if ready else None
+        ),
+        nonfavorite_policy_paper_net_yen=(
+            filtered_paid - filtered_stake if ready else None
         ),
         full_policy_hypothetical_stake_yen=full_stake if ready else None,
         full_policy_official_return_yen=full_paid if ready else None,
