@@ -63,7 +63,9 @@ jobs:
                 }
               }
               $counts | ConvertTo-Json -Compress
-              exit 0
+              # Missing real paired evidence is an explicit failed audit,
+              # not a green PC2 research validation.
+              exit 2
             }
             $raw = @(& python -B .\scripts\evaluate_nar_nonfavorite_preoff_local.py --reviewed-local-json $inputJson 2>&1)
             if ($LASTEXITCODE -ne 0 -or $raw.Count -ne 1) {
