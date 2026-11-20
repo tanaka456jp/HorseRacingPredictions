@@ -27,6 +27,12 @@ def audit(directory: Path) -> dict:
         "quotes_with_popularity_and_win_odds": 0,
         "chronologically_preoff_quotes": 0,
         "unverifiable_or_invalid_quote_rows": 0,
+        "unmatched_race_rows": 0,
+        "missing_popularity_rows": 0,
+        "missing_win_odds_rows": 0,
+        "invalid_price_or_popularity_rows": 0,
+        "failed_preoff_time_rows": 0,
+        "market_snapshot_rows": 0,
         "independently_witnessed_forecasts": 0,
         "officially_settled_races": 0,
         "source_records_exported": False,
@@ -77,8 +83,10 @@ def audit(directory: Path) -> dict:
             received = _utc(doc["captured_utc"])
             selections = doc["selected_quotes_PRIVATE"]["selected_quotes_PRIVATE"]
             for item in selections:
+                result["market_snapshot_rows"] += 1
                 key = (day, item["race_id"])
                 if key not in frozen:
+                    result["unmatched_race_rows"] += 1
                     result["unverifiable_or_invalid_quote_rows"] += 1
                     continue
                 if key not in seen:
@@ -86,9 +94,21 @@ def audit(directory: Path) -> dict:
                     result["quote_rows_matched_to_frozen_races"] += 1
                 popularity = item.get("win_popularity")
                 odds = item.get("win_interim_odds")
-                if (not isinstance(popularity, int) or isinstance(popularity, bool)
-                        or popularity < 1 or not isinstance(odds, (int, float))
-                        or isinstance(odds, bool) or odds <= 0):
+                # Distinguish genuinely missing prices from invalid values.
+                # Counts are per snapshot row, not distinct races.
+                if popularity is None:
+                    result["missing_popularity_rows"] += 1
+                if odds is None:
+                    result["missing_win_odds_rows"] += 1
+                valid_popularity = (isinstance(popularity, int)
+                                    and not isinstance(popularity, bool)
+                                    and popularity >= 1)
+                valid_odds = (isinstance(odds, (int, float))
+                              and not isinstance(odds, bool) and odds > 0)
+                if not valid_popularity or not valid_odds:
+                    if ((popularity is not None and not valid_popularity)
+                            or (odds is not None and not valid_odds)):
+                        result["invalid_price_or_popularity_rows"] += 1
                     result["unverifiable_or_invalid_quote_rows"] += 1
                     continue
                 result["quotes_with_popularity_and_win_odds"] += 1
@@ -96,6 +116,7 @@ def audit(directory: Path) -> dict:
                 if generated <= source <= received < off - LEAD:
                     result["chronologically_preoff_quotes"] += 1
                 else:
+                    result["failed_preoff_time_rows"] += 1
                     result["unverifiable_or_invalid_quote_rows"] += 1
     except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError):
         result["status"] = "HOLD_PRIVATE_EVIDENCE_SCHEMA_OR_PROVENANCE_INVALID"
