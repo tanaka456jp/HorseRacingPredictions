@@ -35,6 +35,7 @@ def audit(directory: Path) -> dict:
         "failed_preoff_time_rows": 0,
         "market_snapshot_rows": 0,
         "eligible_paired_races": 0,
+        "eligible_preoff_quote_rows": 0,
         "excluded_missing_preoff_evidence_races": 0,
         "official_csv_market_rows": 0,
         "official_csv_win_rows": 0,
@@ -80,6 +81,7 @@ def audit(directory: Path) -> dict:
                                _utc(entry["generated_at_utc"]))
         result["frozen_races"] = len(frozen)
         eligible_races = set()
+        eligible_quote_rows = 0
         seen = set()
         for path in quotes:
             if not path.is_file() or path.is_symlink():
@@ -156,12 +158,14 @@ def audit(directory: Path) -> dict:
                 if generated <= source <= received < off - LEAD:
                     result["chronologically_preoff_quotes"] += 1
                     eligible_races.add(key)
+                    eligible_quote_rows += 1
                 else:
                     result["failed_preoff_time_rows"] += 1
                     result["unverifiable_or_invalid_quote_rows"] += 1
     except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError):
         result["status"] = "HOLD_PRIVATE_EVIDENCE_SCHEMA_OR_PROVENANCE_INVALID"
     result["eligible_paired_races"] = len(eligible_races) if "eligible_races" in locals() else 0
+    result["eligible_preoff_quote_rows"] = eligible_quote_rows if "eligible_quote_rows" in locals() else 0
     result["excluded_missing_preoff_evidence_races"] = max(0, result["frozen_races"] - result["eligible_paired_races"])
     if result["status"] == "HOLD_INDEPENDENT_FORECAST_WITNESS_AND_OFFICIAL_SETTLEMENT_REQUIRED":
         if result["odds_provenance_files"] and result["official_csv_market_rows"] == 0:
