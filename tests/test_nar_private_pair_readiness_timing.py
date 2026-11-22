@@ -1,7 +1,6 @@
 """Synthetic-only, offline tests: distinguish empty source CSV from timing failure."""
 from __future__ import annotations
 
-import copy
 import json
 from pathlib import Path
 import sys
@@ -85,8 +84,29 @@ def test_invalid_future_closed_count_is_rejected(tmp_path):
     assert result["status"] == "HOLD_PRIVATE_EVIDENCE_SCHEMA_OR_PROVENANCE_INVALID"
 
 
-def test_after_first_off_can_still_have_future_race_windows(tmp_path):
-    _write(tmp_path, futures=1, closed=0, minutes=-5)
+def test_after_first_off_can_still_have_later_race_window(tmp_path):
+    provenance = _write(tmp_path, futures=1, closed=1, minutes=-6)
+    baseline_path = tmp_path / "x_baseline_forecast_PRIVATE.json"
+    baseline = json.loads(baseline_path.read_text(encoding="utf-8"))
+    # The first race is already closed; the second is still in its
+    # ten-minute-plus preoff window. Both remain in the frozen denominator.
+    baseline["source_races"] = 2
+    baseline["complete_private_forecasts"].append({
+        "race_id": "NAR:20261110:架空競馬場:02", "race_day": DAY,
+        "scheduled_off_utc": "2026-11-10T00:10:00Z",
+        "generated_at_utc": "2026-11-10T00:00:00Z",
+    })
+    baseline_path.write_text(json.dumps(baseline, ensure_ascii=False), encoding="utf-8")
+    provenance["audit_PRIVATE"]["registered_flat_races"] = 2
+    provenance["selected_quotes_PRIVATE"]["selected_quotes_PRIVATE"].append({
+        "race_id": "NAR:20261110:架空競馬場:02",
+        "win_interim_odds": None, "win_popularity": None,
+    })
+    (tmp_path / "x_odds_private_provenance.json").write_text(
+        json.dumps(provenance, ensure_ascii=False), encoding="utf-8"
+    )
     result = audit(tmp_path)
     assert result["empty_source_snapshots_after_first_off"] == 1
     assert result["empty_source_snapshots_with_preoff_eligible_races"] == 1
+    assert result["preoff_eligible_race_observations"] == 1
+    assert result["excluded_missing_preoff_evidence_races"] == 2
