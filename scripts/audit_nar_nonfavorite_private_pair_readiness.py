@@ -43,6 +43,10 @@ def audit(directory: Path) -> dict:
         "selected_win_quote_present_rows": 0,
         "selected_win_popularity_present_rows": 0,
         "snapshots_without_any_win_rows": 0,
+        "empty_source_snapshots_with_preoff_eligible_races": 0,
+        "empty_source_snapshots_before_first_off": 0,
+        "empty_source_snapshots_after_first_off": 0,
+        "preoff_eligible_race_observations": 0,
         "snapshots_with_win_rows_but_no_selected_win_price": 0,
         "independently_witnessed_forecasts": 0,
         "officially_settled_races": 0,
@@ -108,6 +112,26 @@ def audit(directory: Path) -> dict:
                     or source_audit["planned_win_tickets_with_price"] > source_audit["registered_flat_races"]
                     or source_audit["planned_win_tickets_with_price"] < 0):
                 raise ValueError("INCONSISTENT_SOURCE_AUDIT_COUNTS")
+            # The source ZIP might contain only a header even while some
+            # frozen races remain in their allowed pre-off window. Report
+            # aggregate timing, never dates, horses, prices or identifiers.
+            futures = source_audit["future_preoff_eligible_races"]
+            closed = source_audit["past_or_closed_races"]
+            registered = source_audit["registered_flat_races"]
+            minutes = source_audit["minutes_before_first_scheduled_off"]
+            if (any(type(v) is not int for v in (futures, closed, registered, minutes))
+                    or not (0 <= futures <= registered)
+                    or not (0 <= closed <= registered)
+                    or futures + closed != registered):
+                raise ValueError("INCONSISTENT_SOURCE_TIMING_COUNTS")
+            result["preoff_eligible_race_observations"] += futures
+            if source_audit["market_rows"] == 0:
+                if futures:
+                    result["empty_source_snapshots_with_preoff_eligible_races"] += 1
+                if minutes >= 0:
+                    result["empty_source_snapshots_before_first_off"] += 1
+                else:
+                    result["empty_source_snapshots_after_first_off"] += 1
             if source_audit["win_rows"] == 0:
                 result["snapshots_without_any_win_rows"] += 1
             elif source_audit["planned_win_tickets_with_price"] == 0:

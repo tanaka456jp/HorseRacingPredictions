@@ -1,7 +1,7 @@
 # NAR pre-off odds: source specification and prospective evidence gate (2026-11-22)
 
 ## Official source (verified)
-NAR's data download manual (updated 2026-05-18):
+NAR's data download manual (check its current revision/FAQ before changing permissions):
 https://www.keiba.go.jp/pdf/manual/data_pdf_manual.pdf
 
 - **Daily** odds ZIP/CSV is updated approximately every two minutes and **can include interim odds** for races held that day.
@@ -28,3 +28,8 @@ PC2 manual audit run https://github.com/tanaka456jp/HorseRacingPredictions/actio
 
 ## Stop conditions
 No pre-off quote, missing independent witness, absent official settlement, uncertain usage rights, or too-small OOS sample => **HOLD**, not positive-EV proof. No real-money betting.
+
+## Empty-source timing diagnosis (added 2026-11-22)
+The real PC2 source audit counts all CSV data rows before filtering by bet type, so a zero market-row count in a successfully parsed ZIP means no parsed data records, **not** merely a failed selection/horse-key match. The provenance audit also already stores pre-off-eligible race counts and minutes to the first scheduled off. The offline readiness audit now reports only aggregate counts of empty ZIP snapshots with future eligible races, and whether a zero-row capture occurred before or after the first scheduled off. These cannot alone explain *why* the source was empty; do not backfill or infer odds.
+
+NAR's current online PDF text FAQ describes a 2-minute maximum acquisition rate, full snapshots (not deltas), and a limited programmatic download allowance for this download feature; website scraping outside that feature remains separate. Recheck the live source and existing rights gate before any automated fetch. No provider request is made by this audit.
