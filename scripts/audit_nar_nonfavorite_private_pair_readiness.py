@@ -145,6 +145,13 @@ def audit(directory: Path) -> dict:
                     result["unverifiable_or_invalid_quote_rows"] += 1
     except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError):
         result["status"] = "HOLD_PRIVATE_EVIDENCE_SCHEMA_OR_PROVENANCE_INVALID"
+    if result["status"] == "HOLD_INDEPENDENT_FORECAST_WITNESS_AND_OFFICIAL_SETTLEMENT_REQUIRED":
+        if result["odds_provenance_files"] and result["official_csv_market_rows"] == 0:
+            result["status"] = "HOLD_OFFICIAL_ODDS_CSV_NO_MARKET_ROWS"
+        elif result["official_csv_win_rows"] == 0:
+            result["status"] = "HOLD_OFFICIAL_ODDS_CSV_NO_WIN_ROWS"
+        elif result["selected_win_quote_present_rows"] == 0:
+            result["status"] = "HOLD_NO_SELECTED_WIN_QUOTES"
     return result
 
 
