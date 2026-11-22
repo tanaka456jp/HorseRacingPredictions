@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+from decimal import Decimal, InvalidOperation
 from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
@@ -128,8 +129,15 @@ def audit(directory: Path) -> dict:
                 valid_popularity = (isinstance(popularity, int)
                                     and not isinstance(popularity, bool)
                                     and popularity >= 1)
-                valid_odds = (isinstance(odds, (int, float))
-                              and not isinstance(odds, bool) and odds > 0)
+                # Official parser serializes Decimal prices as numeric strings.
+                # Reject booleans, non-finite values and malformed strings.
+                valid_odds = False
+                if type(odds) in (int, float, str):
+                    try:
+                        price = Decimal(str(odds))
+                        valid_odds = price.is_finite() and price > 0
+                    except InvalidOperation:
+                        pass
                 if not valid_popularity or not valid_odds:
                     if ((popularity is not None and not valid_popularity)
                             or (odds is not None and not valid_odds)):
