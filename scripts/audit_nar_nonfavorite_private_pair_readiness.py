@@ -33,6 +33,13 @@ def audit(directory: Path) -> dict:
         "invalid_price_or_popularity_rows": 0,
         "failed_preoff_time_rows": 0,
         "market_snapshot_rows": 0,
+        "official_csv_market_rows": 0,
+        "official_csv_win_rows": 0,
+        "official_csv_place_rows": 0,
+        "selected_win_quote_present_rows": 0,
+        "selected_win_popularity_present_rows": 0,
+        "snapshots_without_any_win_rows": 0,
+        "snapshots_with_win_rows_but_no_selected_win_price": 0,
         "independently_witnessed_forecasts": 0,
         "officially_settled_races": 0,
         "source_records_exported": False,
@@ -81,6 +88,20 @@ def audit(directory: Path) -> dict:
                 raise ValueError("FORECAST_DIGEST_MISMATCH")
             source = _utc(doc["source_generated_utc"])
             received = _utc(doc["captured_utc"])
+            source_audit = doc["audit_PRIVATE"]
+            for key, dest in (
+                ("market_rows", "official_csv_market_rows"),
+                ("win_rows", "official_csv_win_rows"),
+                ("place_rows", "official_csv_place_rows"),
+            ):
+                value = source_audit[key]
+                if type(value) is not int or value < 0:
+                    raise ValueError("INVALID_OFFICIAL_SOURCE_COUNT")
+                result[dest] += value
+            if source_audit["win_rows"] == 0:
+                result["snapshots_without_any_win_rows"] += 1
+            elif source_audit["planned_win_tickets_with_price"] == 0:
+                result["snapshots_with_win_rows_but_no_selected_win_price"] += 1
             selections = doc["selected_quotes_PRIVATE"]["selected_quotes_PRIVATE"]
             for item in selections:
                 result["market_snapshot_rows"] += 1
@@ -93,6 +114,10 @@ def audit(directory: Path) -> dict:
                     seen.add(key)
                     result["quote_rows_matched_to_frozen_races"] += 1
                 popularity = item.get("win_popularity")
+                if popularity is not None:
+                    result["selected_win_popularity_present_rows"] += 1
+                if item.get("win_interim_odds") is not None:
+                    result["selected_win_quote_present_rows"] += 1
                 odds = item.get("win_interim_odds")
                 # Distinguish genuinely missing prices from invalid values.
                 # Counts are per snapshot row, not distinct races.
