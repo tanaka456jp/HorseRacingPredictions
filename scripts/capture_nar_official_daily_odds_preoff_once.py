@@ -461,11 +461,18 @@ def main() -> int:
             "after_cost_positive_ev_verified": False,
         }, sort_keys=True))
         return 2
+    # A valid header-only official ZIP is still a captured source snapshot,
+    # but it is NOT usable research evidence. In particular, PLACE odds alone
+    # cannot establish the preregistered nonfavorite WIN policy.
+    evidence_status = (
+        "HOLD_OFFICIAL_DAILY_CSV_NO_MARKET_ROWS" if a.market_rows == 0
+        else "HOLD_NO_FROZEN_WIN_PREOFF_QUOTES"
+        if a.planned_win_tickets_with_price == 0
+        else "PRIVATE_REAL_INTERIM_WIN_QUOTES_CAPTURED"
+    )
     print(json.dumps({
         "schema": a.schema,
-        "result": ("PRIVATE_REAL_INTERIM_QUOTES_CAPTURED"
-                   if a.planned_win_tickets_with_price + a.planned_place_tickets_with_min_price > 0
-                   else "PRIVATE_OFFICIAL_ZIP_CAPTURED_NO_QUOTED_PRICES_YET"),
+        "result": evidence_status,
         "flat_races": a.registered_flat_races,
         "registered_horses": a.frozen_registered_horses,
         "raw_market_rows": a.market_rows,
@@ -489,7 +496,7 @@ def main() -> int:
         "actual_tickets": 0,
         "after_cost_ev_proven": False,
     }, sort_keys=True))
-    return 0
+    return 0 if evidence_status == "PRIVATE_REAL_INTERIM_WIN_QUOTES_CAPTURED" else 2
 
 
 if __name__ == "__main__":

@@ -47,7 +47,8 @@ def frozen_real_style() -> dict:
 
 
 def zip_odds(*, duplicate=False, bad_number=False, no_prices=False,
-             date_error=False, unknown_race=False, wrong_zip_name=False):
+             date_error=False, unknown_race=False, wrong_zip_name=False,
+             header_only=False):
     fields = ["競馬場", "競走年月日", "レース番号", "賭式",
               "番号1", "番号2", "番号3", "オッズ", "オッズ（最大）", "人気"]
     rows = []
@@ -64,8 +65,11 @@ def zip_odds(*, duplicate=False, bad_number=False, no_prices=False,
                     "オッズ（最大）": "4.1" if kind == "複勝" and not no_prices else "",
                     "人気": str(horse),
                 })
-    rows.append({**rows[0], "賭式":"３連単", "番号1":"1",
-                 "番号2":"2", "番号3":"3", "オッズ":"123.4"})
+    if header_only:
+        rows = []
+    else:
+        rows.append({**rows[0], "賭式":"３連単", "番号1":"1",
+                     "番号2":"2", "番号3":"3", "オッズ":"123.4"})
     if duplicate:
         rows.append(rows[0].copy())
     out = StringIO()
@@ -230,3 +234,41 @@ def test_closed_race_nonempty_prices_cannot_create_fake_retroactive_return():
     assert audit.planned_win_tickets_with_price == 1
     assert audit.after_cutoff_raw_quote_rows_ignored == 8
     assert not audit.after_cost_positive_ev_verified
+
+
+def test_header_only_zip_is_real_capture_but_zero_market_evidence():
+    """An official header-only CSV is not a matched WIN quote."""
+    audit, private = evaluate(zip_odds(header_only=True))
+    assert audit.market_rows == audit.win_rows == audit.place_rows == 0
+    assert audit.registered_flat_races == 2
+    assert audit.future_preoff_eligible_races == 2
+    assert audit.planned_win_tickets_with_price == 0
+    assert audit.missing_win_prices == 2
+    assert all(x["win_interim_odds"] is None
+               for x in private["selected_quotes_PRIVATE"])
+    assert not audit.after_cost_positive_ev_verified
+
+
+@pytest.mark.parametrize("kind,expected_status,expected_exit", [
+    ("empty", "HOLD_OFFICIAL_DAILY_CSV_NO_MARKET_ROWS", 2),
+    ("unpriced", "HOLD_NO_FROZEN_WIN_PREOFF_QUOTES", 2),
+    ("priced", "PRIVATE_REAL_INTERIM_WIN_QUOTES_CAPTURED", 0),
+])
+def test_cli_distinguishes_source_capture_from_win_evidence(
+    monkeypatch, capsys, tmp_path, kind, expected_status, expected_exit,
+):
+    import json
+    import dataclasses
+    base = evaluate(zip_odds(header_only=kind=="empty",
+                             no_prices=kind=="unpriced"))[0]
+    monkeypatch.setattr(S, "capture_private_daily_odds_once", lambda _: base)
+    monkeypatch.setattr(sys, "argv", [
+        "capture_nar_official_daily_odds_preoff_once.py",
+        "--private-capture-dir", str(tmp_path),
+    ])
+    assert S.main() == expected_exit
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["result"] == expected_status
+    assert payload["source_uploaded"] is False
+    assert payload["after_cost_ev_proven"] is False
+    assert payload["actual_tickets"] == 0

@@ -65,12 +65,15 @@ jobs:
           $folder = 'D:\Development\HorseRacingPredictions-PrivateReview\nar-prospective-captures'
           try {
             $raw = @(& python -B .\scripts\capture_nar_official_daily_odds_preoff_once.py --private-capture-dir $folder 2>&1)
-            if ($LASTEXITCODE -ne 0 -or $raw.Count -ne 1) {
+            $captureExitCode = $LASTEXITCODE
+            if ($captureExitCode -notin @(0, 2) -or $raw.Count -ne 1) {
               throw 'NAR_PREOFF_ODDS_RESEARCH_HOLD'
             }
             $d = [string]$raw[0] | ConvertFrom-Json
             if ($d.schema -cne 'NAR.PC2.OfficialDailyInterimOddsAudit.v1' -or
-                $d.result -cnotin @('PRIVATE_REAL_INTERIM_QUOTES_CAPTURED', 'PRIVATE_OFFICIAL_ZIP_CAPTURED_NO_QUOTED_PRICES_YET') -or
+                $d.result -cnotin @('PRIVATE_REAL_INTERIM_WIN_QUOTES_CAPTURED', 'HOLD_NO_FROZEN_WIN_PREOFF_QUOTES', 'HOLD_OFFICIAL_DAILY_CSV_NO_MARKET_ROWS') -or
+                ($captureExitCode -eq 0) -ne ($d.result -ceq 'PRIVATE_REAL_INTERIM_WIN_QUOTES_CAPTURED') -or
+                ($d.result -ceq 'HOLD_OFFICIAL_DAILY_CSV_NO_MARKET_ROWS' -and [int]$d.raw_market_rows -ne 0) -or
                 [int]$d.flat_races -lt 1 -or
                 [int]$d.registered_horses -lt [int]$d.flat_races -or
                 [int]$d.future_preoff_eligible_races -lt 1 -or
@@ -95,6 +98,9 @@ jobs:
               sourceDayJST = $day
               allPreFrozenFlatRaces = [int]$d.flat_races
               frozenRunners = [int]$d.registered_horses
+              parsedSourceMarketRows = [int]$d.raw_market_rows
+              parsedSourceWINRows = [int]$d.win_rows
+              parsedSourcePLACERows = [int]$d.place_rows
               liveFutureRaces = [int]$d.future_preoff_eligible_races
               closedOrTooLateRaces = [int]$d.past_or_closed_races
               rawAfterCutoffWINPLACERowsDiscarded = [int]$d.after_cutoff_raw_quote_rows_ignored
@@ -109,6 +115,12 @@ jobs:
               afterCostEVProven = $false
               rawSourceUploaded = $false
             } | ConvertTo-Json -Compress
+            if ($captureExitCode -ne 0) {
+              # Evidence HOLD after an immutable local capture, not a green
+              # market-readiness pass. Only aggregate diagnostics were logged.
+              Write-Host 'NAR_PREOFF_ODDS_SOURCE_OR_WIN_EVIDENCE_HOLD_NO_EV'
+              exit 2
+            }
           } catch {
             Write-Host 'NAR_PREOFF_ODDS_RESEARCH_HOLD_NO_EV'; exit 2
           }
