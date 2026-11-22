@@ -99,6 +99,10 @@ def audit(directory: Path) -> dict:
                 if type(value) is not int or value < 0:
                     raise ValueError("INVALID_OFFICIAL_SOURCE_COUNT")
                 result[dest] += value
+            if (source_audit["market_rows"] < source_audit["win_rows"] + source_audit["place_rows"]
+                    or source_audit["planned_win_tickets_with_price"] > source_audit["registered_flat_races"]
+                    or source_audit["planned_win_tickets_with_price"] < 0):
+                raise ValueError("INCONSISTENT_SOURCE_AUDIT_COUNTS")
             if source_audit["win_rows"] == 0:
                 result["snapshots_without_any_win_rows"] += 1
             elif source_audit["planned_win_tickets_with_price"] == 0:
