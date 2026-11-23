@@ -129,7 +129,7 @@ def score_private_forward_files(
     )
     if receipt.utcoffset() is None or receipt.astimezone(timezone.utc) <= max(
         datetime.fromisoformat(r.off_utc).astimezone(timezone.utc)
-        for r in races
+        for r in snapshot.races
     ) + timedelta(minutes=15):
         raise ValueError("OFFICIAL_FINAL_SOURCE_TOO_EARLY")
     outcome = score_frozen_shadow(
