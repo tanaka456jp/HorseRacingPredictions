@@ -55,7 +55,11 @@ jobs:
           [ordered]@{
             schema = 'HorseRacing.PC2.FutureFittedModelReadiness.v1'
             status = [string]$d.status
+            NARModelDirectoryPresent = [bool]$d.NAR_candidate_directory_exists
+            NARModelManifestPresent = [bool]$d.NAR_manifest_exists
+            NARBothNativeBinariesPresent = [bool]$d.NAR_both_native_models_exist
             NARModelAvailable = [bool]$d.NAR_model_checksums_verified
+            JRAModelDirectoryPresent = [bool]$d.JRA_candidate_directory_exists
             JRAModelAvailable = [bool]$d.JRA_model_checksums_verified
             NARFutureCardsReady = [int]$d.NAR_complete_future_cards
             JRAFutureCardsReady = [int]$d.JRA_complete_future_cards

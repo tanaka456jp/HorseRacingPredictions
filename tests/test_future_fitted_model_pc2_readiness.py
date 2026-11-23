@@ -75,7 +75,11 @@ def setup_future(root, series, *, missing=False, contaminated=False):
 def test_future_model_and_complete_roster_detection(tmp_path, monkeypatch, series):
     monkeypatch.setenv("COMPUTERNAME", "DESKTOP-MVV1FD4")
     assert M.audit(tmp_path, NOW)["status"].startswith("HOLD")
+    assert M.audit(tmp_path, NOW)[series + "_candidate_directory_exists"] is False
     setup_model(tmp_path, series)
+    assert M.audit(tmp_path, NOW)[series + "_candidate_directory_exists"] is True
+    assert M.audit(tmp_path, NOW)[series + "_manifest_exists"] is True
+    assert M.audit(tmp_path, NOW)[series + "_both_native_models_exist"] is True
     assert M.audit(tmp_path, NOW)[series + "_model_checksums_verified"] is True
     assert M.audit(tmp_path, NOW)[series + "_complete_future_cards"] == 0
     setup_future(tmp_path, series)
@@ -104,3 +108,21 @@ def test_model_tampering_or_wrong_machine_holds(tmp_path, monkeypatch):
     assert M.audit(tmp_path, NOW)["JRA_model_checksums_verified"] is False
     monkeypatch.setenv("COMPUTERNAME", "WRONG-PC")
     assert M.audit(tmp_path, NOW)["status"] == "HOLD_PRIVATE_PC2_CONTEXT_INVALID"
+
+
+def test_incomplete_private_candidate_structure_distinguished_from_absence(
+    tmp_path, monkeypatch,
+):
+    monkeypatch.setenv("COMPUTERNAME", "DESKTOP-MVV1FD4")
+    folder = tmp_path / M.MODEL_LOCATIONS["NAR"]
+    folder.mkdir(parents=True)
+    result = M.audit(tmp_path, NOW)
+    assert result["NAR_candidate_directory_exists"] is True
+    assert result["NAR_manifest_exists"] is False
+    assert result["NAR_both_native_models_exist"] is False
+    assert result["NAR_model_checksums_verified"] is False
+    (folder / "win.cbm").write_bytes(b"SYNTHETIC_WIN")
+    (folder / "outsider.cbm").write_bytes(b"SYNTHETIC_PODIUM")
+    result = M.audit(tmp_path, NOW)
+    assert result["NAR_both_native_models_exist"] is True
+    assert result["NAR_manifest_exists"] is False

@@ -136,6 +136,12 @@ def audit(root: Path, now: datetime) -> dict:
         "status": "HOLD_FITTED_MODEL_OR_PREOFF_FEATURE_INPUT_MISSING",
         "NAR_model_checksums_verified": False,
         "JRA_model_checksums_verified": False,
+        "NAR_candidate_directory_exists": False,
+        "NAR_manifest_exists": False,
+        "NAR_both_native_models_exist": False,
+        "JRA_candidate_directory_exists": False,
+        "JRA_manifest_exists": False,
+        "JRA_both_native_models_exist": False,
         "NAR_complete_future_cards": 0,
         "JRA_complete_future_cards": 0,
         "model_prediction_executed": False,
@@ -154,6 +160,19 @@ def audit(root: Path, now: datetime) -> dict:
     try:
         ready = False
         for series in ("JRA", "NAR"):
+            folder = root / MODEL_LOCATIONS[series]
+            candidate_present = folder.is_dir() and not folder.is_symlink()
+            output[series + "_candidate_directory_exists"] = candidate_present
+            output[series + "_manifest_exists"] = (
+                candidate_present and safe_file(
+                    folder / "candidate_manifest.json", 300_000
+                )
+            )
+            output[series + "_both_native_models_exist"] = (
+                candidate_present
+                and all(safe_file(folder / name, 500_000_000)
+                        for name in ("win.cbm", "outsider.cbm"))
+            )
             features = verified_model_features(root, series)
             output[series + "_model_checksums_verified"] = features is not None
             if features is not None:
