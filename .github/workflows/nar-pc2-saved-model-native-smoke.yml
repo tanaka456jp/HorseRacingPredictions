@@ -46,6 +46,41 @@ jobs:
           }
           $raw = @(& $vpy -B .\scripts\verify_saved_nar_dual_catboost_pc2_inference.py --private-root $root 2>&1)
           if ($LASTEXITCODE -ne 0 -or $raw.Count -ne 1) {
+            if ($raw.Count -eq 1) {
+              try {
+                $held = [string]$raw[0] | ConvertFrom-Json
+                if ($held.schema -ceq 'NAR.PC2.NativeDualCatBoostFictionalInference.v1' -and
+                    [string]$held.staticReason -cmatch '^NAR_[A-Z0-9_]{1,90}
+          $d = [string]$raw[0] | ConvertFrom-Json
+          if ($d.schema -cne 'NAR.PC2.NativeDualCatBoostFictionalInference.v1' -or
+              $d.status -cne 'PRIVATE_REAL_TRAINED_MODELS_EXECUTED_ON_FICTIONAL_ROSTER' -or
+              $d.real_saved_model_binary_checksums_verified -ne $true -or
+              $d.independent_native_win_and_podium_inference_executed -ne $true -or
+              $d.fictional_races_scored -ne 1 -or
+              $d.real_future_races_scored -ne 0 -or
+              $d.positive_ev_proven -ne $false -or
+              $d.source_or_model_bytes_uploaded -ne $false) {
+            Write-Host 'NAR_NATIVE_SMOKE_UNTRUSTED_AUDIT_HOLD'
+            exit 2
+          }
+          [ordered]@{
+            status = [string]$d.status
+            actualStoredCatBoostModelsExecuted = $true
+            fictionalRaces = [int]$d.fictional_races_scored
+            actualFutureRaces = 0
+            realHitRateMeasured = $false
+            realROIMeasured = $false
+            realBets = 0
+            positiveEVProven = $false
+            privateModelOrHorseDataUploaded = $false
+          } | ConvertTo-Json -Compress
+) {
+                  Write-Host ('NAR_NATIVE_SMOKE_STATIC_REASON=' + [string]$held.staticReason)
+                }
+              } catch { }
+            } else {
+              Write-Host 'NAR_NATIVE_SMOKE_MULTI_LINE_RUNTIME_OUTPUT_HOLD'
+            }
             Write-Host 'NAR_NATIVE_SMOKE_INFERENCE_HOLD'
             exit 2
           }

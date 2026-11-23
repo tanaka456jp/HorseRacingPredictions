@@ -38,7 +38,10 @@ def verify_saved_model(private_root: Path) -> dict:
             or private_root.is_symlink()
             or not private_root.is_dir()):
         raise ValueError("NAR_PRIVATE_PC2_CONTEXT_INVALID")
-    loaded = load_dual_research_candidate(private_root / _MODEL)
+    try:
+        loaded = load_dual_research_candidate(private_root / _MODEL)
+    except Exception:
+        raise ValueError("NAR_NATIVE_MODEL_RELOAD_FAILED") from None
     if (tuple(loaded.features) != _FEATURES
             or loaded.train_end != "2021-12-31"
             or len(loaded.digest_by_role) != 2
@@ -64,15 +67,18 @@ def verify_saved_model(private_root: Path) -> dict:
         (loaded.digest_by_role["win.cbm"] +
          loaded.digest_by_role["outsider.cbm"]).encode("ascii")
     ).hexdigest()
-    frozen = freeze_fitted_dual_shadow(
-        jurisdiction="NAR", race_day_jst="2026-12-06",
-        entries=rows, off_by_race={rid: off},
-        winner=loaded.winner, outsider=loaded.outsider,
-        model_trained_through=loaded.train_end,
-        model_sha256_declared=combined,
-        source_asof_utc=generated - timedelta(minutes=2),
-        generated_utc=generated,
-    )
+    try:
+        frozen = freeze_fitted_dual_shadow(
+            jurisdiction="NAR", race_day_jst="2026-12-06",
+            entries=rows, off_by_race={rid: off},
+            winner=loaded.winner, outsider=loaded.outsider,
+            model_trained_through=loaded.train_end,
+            model_sha256_declared=combined,
+            source_asof_utc=generated - timedelta(minutes=2),
+            generated_utc=generated,
+        )
+    except Exception:
+        raise ValueError("NAR_NATIVE_CATBOOST_FORWARD_INFERENCE_FAILED") from None
     if (len(frozen.races) != 1 or len(frozen.races[0].roster) != 4
             or len(frozen.races[0].top3) != 3
             or frozen.races[0].outsider in frozen.races[0].top3
@@ -99,9 +105,18 @@ def main() -> int:
     args = p.parse_args()
     try:
         out = verify_saved_model(args.private_root)
-    except Exception:
+    except Exception as exc:
+        safe_reasons = {
+            "NAR_PRIVATE_PC2_CONTEXT_INVALID",
+            "NAR_NATIVE_MODEL_RELOAD_FAILED",
+            "NAR_PRIVATE_MODEL_SCHEMA_MISMATCH",
+            "NAR_NATIVE_CATBOOST_FORWARD_INFERENCE_FAILED",
+            "NAR_PRIVATE_MODEL_NATIVE_PREDICTION_INVALID",
+        }
+        reason = str(exc) if str(exc) in safe_reasons else "NAR_NATIVE_UNCLASSIFIED_FAILURE"
         print(json.dumps({
             "schema": _SCHEMA,
+            "staticReason": reason,
             "status": "HOLD_NATIVE_PRIVATE_MODEL_INFERENCE_NOT_VERIFIED",
             "source_or_model_bytes_uploaded": False,
             "real_bets": 0,
