@@ -33,6 +33,7 @@ def audit(directory: Path) -> dict:
         "manual_offline_verified_chronology_quote_rows": 0,
         "manual_offline_distinct_races_with_quote": 0,
         "manual_offline_missing_win_quote_rows": 0,
+        "manual_offline_missing_popularity_rows": 0,
         "manual_offline_source_unattested": True,
         "frozen_races": 0,
         "quote_rows_matched_to_frozen_races": 0,
@@ -310,10 +311,12 @@ def audit(directory: Path) -> dict:
                 result["manual_offline_matched_quote_rows"] += 1
                 odds = item.get("win_interim_odds")
                 rank = item.get("win_popularity")
-                if odds is None or rank is None:
+                if odds is None:
                     result["manual_offline_missing_win_quote_rows"] += 1
+                    if rank is None:
+                        result["manual_offline_missing_popularity_rows"] += 1
                     continue
-                if type(rank) is not int or rank < 1 or type(odds) not in (str, int, float):
+                if type(odds) not in (str, int, float):
                     raise ValueError("MANUAL_WIN_QUOTE_INVALID")
                 try:
                     price = Decimal(str(odds))
@@ -321,7 +324,14 @@ def audit(directory: Path) -> dict:
                     raise ValueError("MANUAL_WIN_QUOTE_INVALID") from exc
                 if not price.is_finite() or price < 1:
                     raise ValueError("MANUAL_WIN_QUOTE_INVALID")
+                # Importer's planned_win_tickets_with_price records prices,
+                # independently of whether market popularity is available.
                 priced += 1
+                if rank is None:
+                    result["manual_offline_missing_popularity_rows"] += 1
+                    continue
+                if type(rank) is not int or rank < 1:
+                    raise ValueError("MANUAL_POPULARITY_INVALID")
                 off, generated = frozen[key]
                 if generated <= source <= received < off - LEAD:
                     result["manual_offline_verified_chronology_quote_rows"] += 1

@@ -215,3 +215,15 @@ def test_manual_invalid_digest_is_not_accepted(tmp_path):
     (tmp_path / "x_odds_private_provenance.json").unlink()
     _write_offline_manual_sidecar(tmp_path, bad_digest=True)
     assert audit(tmp_path)["status"] == "HOLD_PRIVATE_EVIDENCE_SCHEMA_OR_PROVENANCE_INVALID"
+
+
+def test_manual_price_without_popularity_is_missing_rank_not_corruption(tmp_path):
+    _write(tmp_path)
+    (tmp_path / "x_odds_private_provenance.json").unlink()
+    _write_offline_manual_sidecar(tmp_path, odds="3.2", popularity=None)
+    result = audit(tmp_path)
+    assert result["status"] == "HOLD_MANUAL_OFFLINE_NO_VERIFIED_PREOFF_WIN_QUOTES"
+    assert result["manual_offline_missing_win_quote_rows"] == 0
+    assert result["manual_offline_missing_popularity_rows"] == 1
+    assert result["manual_offline_verified_chronology_quote_rows"] == 0
+    assert result["after_cost_positive_expected_value_proven"] is False
