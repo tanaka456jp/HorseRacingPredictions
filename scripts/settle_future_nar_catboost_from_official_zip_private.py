@@ -294,9 +294,13 @@ def main() -> int:
             args.private_root, args.final_official_daily_zip,
             now_utc=datetime.now(timezone.utc),
         )
-    except Exception:
+    except Exception as exc:
+        code = str(exc) if isinstance(exc, PrivateNarSettlementHold) else ""
+        if not re.fullmatch(r"NAR_MODEL_[A-Z0-9_]{1,100}", code):
+            code = "NAR_MODEL_UNCLASSIFIED_SOURCE_OR_FORECAST_HOLD"
         print(json.dumps({
             "schema": _SCHEMA,
+            "staticReason": code,
             "status": "HOLD_INCOMPLETE_OR_UNTRUSTED_REAL_FINAL_SETTLEMENT",
             "hypothetical_net_paper_roi": None,
             "private_source_or_predictions_uploaded": False,
