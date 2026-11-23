@@ -40,8 +40,23 @@ def verify_saved_model(private_root: Path) -> dict:
         raise ValueError("NAR_PRIVATE_PC2_CONTEXT_INVALID")
     try:
         loaded = load_dual_research_candidate(private_root / _MODEL)
-    except Exception:
-        raise ValueError("NAR_NATIVE_MODEL_RELOAD_FAILED") from None
+    except Exception as exc:
+        # The real loader's known static failure strings are mapped to
+        # fixed safe codes; never emit unknown native exception text.
+        known = {
+            "candidate directory missing or linked": "NAR_NATIVE_DIRECTORY_INVALID",
+            "missing or nonlocal model research artifact": "NAR_NATIVE_ARTIFACT_FILE_INVALID",
+            "dual research manifest may not authorize release": "NAR_NATIVE_MANIFEST_RIGHTS_GATE",
+            "invalid trained model chronology": "NAR_NATIVE_MODEL_CHRONOLOGY_INVALID",
+            "dual research target/metrics inconsistent": "NAR_NATIVE_METRICS_CONTRACT_INVALID",
+            "dual native binary digests missing": "NAR_NATIVE_DIGEST_SCHEMA_INVALID",
+            "dual binary checksum mismatch": "NAR_NATIVE_BINARY_SHA_MISMATCH",
+            "native dual CatBoost features differ from manifest": "NAR_NATIVE_FEATURE_NAMES_MISMATCH",
+            "real CatBoost runtime unavailable": "NAR_NATIVE_RUNTIME_DEPENDENCY_MISSING",
+            "duplicate dual manifest key": "NAR_NATIVE_MANIFEST_DUPLICATE_KEY",
+        }
+        reason = known.get(str(exc), "NAR_NATIVE_UNCLASSIFIED_LOADER_FAILURE")
+        raise ValueError(reason) from None
     if (tuple(loaded.features) != _FEATURES
             or loaded.train_end != "2021-12-31"
             or len(loaded.digest_by_role) != 2
@@ -108,7 +123,17 @@ def main() -> int:
     except Exception as exc:
         safe_reasons = {
             "NAR_PRIVATE_PC2_CONTEXT_INVALID",
-            "NAR_NATIVE_MODEL_RELOAD_FAILED",
+            "NAR_NATIVE_DIRECTORY_INVALID",
+            "NAR_NATIVE_ARTIFACT_FILE_INVALID",
+            "NAR_NATIVE_MANIFEST_RIGHTS_GATE",
+            "NAR_NATIVE_MODEL_CHRONOLOGY_INVALID",
+            "NAR_NATIVE_METRICS_CONTRACT_INVALID",
+            "NAR_NATIVE_DIGEST_SCHEMA_INVALID",
+            "NAR_NATIVE_BINARY_SHA_MISMATCH",
+            "NAR_NATIVE_FEATURE_NAMES_MISMATCH",
+            "NAR_NATIVE_RUNTIME_DEPENDENCY_MISSING",
+            "NAR_NATIVE_MANIFEST_DUPLICATE_KEY",
+            "NAR_NATIVE_UNCLASSIFIED_LOADER_FAILURE",
             "NAR_PRIVATE_MODEL_SCHEMA_MISMATCH",
             "NAR_NATIVE_CATBOOST_FORWARD_INFERENCE_FAILED",
             "NAR_PRIVATE_MODEL_NATIVE_PREDICTION_INVALID",
