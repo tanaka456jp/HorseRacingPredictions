@@ -201,22 +201,22 @@ def freeze_private_from_saved_daily(root: Path, *, generated_utc: datetime) -> d
         )
         salt2 = secrets.token_bytes(32)
         result = {
-        "schema": _SNAPSHOT_SCHEMA,
-        "frozen_shadow_PRIVATE": asdict(frozen),
-        "salt_hex_PRIVATE": salt2.hex(),
-        "blinded_digest": sha256(
-            b"HORSERACING_FORWARD_DUAL_V1\x00" + salt2 +
-            frozen.commitment_sha256.encode("ascii")
-        ).hexdigest(),
-        "source_feature_mode_PRIVATE": _MODE,
-        "unavailable_feature_names_PRIVATE": list(_MISSING),
-        "model_missing_features_do_not_equal_full_feature_model": True,
-        "source_and_roster_independently_attested": False,
-        "hosted_preoff_receipt_verified": False,
-        "actual_bets": 0,
-        "after_cost_positive_ev_proven": False,
-        "raw_source_uploaded": False,
-    }
+            "schema": _SNAPSHOT_SCHEMA,
+            "frozen_shadow_PRIVATE": asdict(frozen),
+            "salt_hex_PRIVATE": salt2.hex(),
+            "blinded_digest": sha256(
+                b"HORSERACING_FORWARD_DUAL_V1\x00" + salt2 +
+                frozen.commitment_sha256.encode("ascii")
+            ).hexdigest(),
+            "source_feature_mode_PRIVATE": _MODE,
+            "unavailable_feature_names_PRIVATE": list(_MISSING),
+            "model_missing_features_do_not_equal_full_feature_model": True,
+            "source_and_roster_independently_attested": False,
+            "hosted_preoff_receipt_verified": False,
+            "actual_bets": 0,
+            "after_cost_positive_ev_proven": False,
+            "raw_source_uploaded": False,
+        }
         content = json.dumps(result, ensure_ascii=False, sort_keys=True,
                              allow_nan=False).encode("utf-8")
         fd = os.open(target, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
