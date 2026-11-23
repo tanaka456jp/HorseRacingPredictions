@@ -6,8 +6,10 @@ from decimal import Decimal, InvalidOperation
 from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
+import re
 
 LEAD = timedelta(minutes=10)
+_MANUAL_ZIP_NAME = re.compile(r"([0-9]{8})_([1-9][0-9]{8,12})_odds\.zip\Z")
 
 
 def _utc(value: str) -> datetime:
@@ -23,6 +25,15 @@ def audit(directory: Path) -> dict:
         "status": "HOLD_INDEPENDENT_FORECAST_WITNESS_AND_OFFICIAL_SETTLEMENT_REQUIRED",
         "baseline_files": 0,
         "odds_provenance_files": 0,
+        "manual_offline_odds_provenance_files": 0,
+        "manual_offline_market_rows": 0,
+        "manual_offline_win_rows": 0,
+        "manual_offline_place_rows": 0,
+        "manual_offline_matched_quote_rows": 0,
+        "manual_offline_verified_chronology_quote_rows": 0,
+        "manual_offline_distinct_races_with_quote": 0,
+        "manual_offline_missing_win_quote_rows": 0,
+        "manual_offline_source_unattested": True,
         "frozen_races": 0,
         "quote_rows_matched_to_frozen_races": 0,
         "quotes_with_popularity_and_win_odds": 0,
@@ -64,8 +75,10 @@ def audit(directory: Path) -> dict:
         return result
     baselines = sorted(directory.glob("*_baseline_forecast_PRIVATE.json"))
     quotes = sorted(directory.glob("*_odds_private_provenance.json"))
+    manual_quotes = sorted(directory.glob("*_manually_downloaded_odds_PRIVATE.json"))
     result["baseline_files"] = len(baselines)
     result["odds_provenance_files"] = len(quotes)
+    result["manual_offline_odds_provenance_files"] = len(manual_quotes)
     frozen = {}
     digests = {}
     try:
@@ -233,14 +246,102 @@ def audit(directory: Path) -> dict:
                 else:
                     result["failed_preoff_time_rows"] += 1
                     result["unverifiable_or_invalid_quote_rows"] += 1
-    except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError):
+
+        # Offline user-downloaded ZIP imports use a DIFFERENT immutable
+        # sidecar contract. Count these separately; neither a user-reported
+        # source nor a local receipt is independently authenticated.
+        # They must never inflate the automated-source evidence denominator,
+        # independent witness counts, settled ROI, or a positive-EV flag.
+        seen_manual_names = set()
+        manual_quoted_races = set()
+        for path in manual_quotes:
+            if not path.is_file() or path.is_symlink():
+                raise ValueError("UNSAFE_MANUAL_ODDS_PROVENANCE")
+            doc = json.loads(path.read_text(encoding="utf-8"))
+            if (doc.get("schema") != "NAR.PC2.ManuallyDownloadedDailyOddsAuditPrivate.v1"
+                    or doc.get("download_mode") != "USER_SUPPLIED_OFFLINE_NO_PROVIDER_REQUEST"
+                    or doc.get("individual_authorized_automated_polling") is not False
+                    or doc.get("source_hostname_independently_attested") is not False
+                    or doc.get("independent_hosted_receipt_verified") is not False
+                    or doc.get("positive_ev_proven") is not False
+                    or doc.get("actual_order_execution_verified") is not False
+                    or doc.get("source_uploaded") is not False):
+                raise ValueError("UNTRUSTED_MANUAL_ORIGIN_FLAGS")
+            audit_info = doc["audit_PRIVATE"]
+            day = audit_info["source_day_jst"]
+            if day not in digests or doc["frozen_forecast_commitment_PRIVATE"] != digests[day]:
+                raise ValueError("MANUAL_FORECAST_DIGEST_MISMATCH")
+            filename = doc["source_zip_filename_PRIVATE"]
+            m = _MANUAL_ZIP_NAME.fullmatch(filename) if type(filename) is str else None
+            if (m is None or m[1] != day.replace("-", "")
+                    or filename in seen_manual_names):
+                raise ValueError("MANUAL_ORIGINAL_SOURCE_NAME_INVALID")
+            seen_manual_names.add(filename)
+            source = _utc(audit_info["source_generated_at_utc"])
+            received = _utc(doc["local_receipt_utc"])
+            if (_utc(audit_info["observed_at_utc"]) != received
+                    or source > received):
+                raise ValueError("MANUAL_SOURCE_RECEIPT_INCONSISTENT")
+            registered = audit_info["registered_flat_races"]
+            values = [audit_info[k] for k in ("market_rows", "win_rows",
+                      "place_rows", "planned_win_tickets_with_price")]
+            if (type(registered) is not int or registered < 1
+                    or any(type(v) is not int or v < 0 for v in values)
+                    or values[1] + values[2] > values[0]
+                    or values[3] > registered):
+                raise ValueError("MANUAL_SOURCE_COUNTS_INVALID")
+            for name, val in zip(("manual_offline_market_rows",
+                                  "manual_offline_win_rows",
+                                  "manual_offline_place_rows"), values[:3]):
+                result[name] += val
+            rows = doc["quotes_PRIVATE"]["selected_quotes_PRIVATE"]
+            expected_ids = {key[1] for key in frozen if key[0] == day}
+            if (type(rows) is not list or len(rows) != registered
+                    or len(expected_ids) != registered):
+                raise ValueError("MANUAL_QUOTE_DENOMINATOR_MISMATCH")
+            observed_ids = set()
+            priced = 0
+            for item in rows:
+                rid = item["race_id"]
+                key = (day, rid)
+                if rid in observed_ids or rid not in expected_ids:
+                    raise ValueError("MANUAL_DUPLICATE_OR_UNKNOWN_RACE")
+                observed_ids.add(rid)
+                result["manual_offline_matched_quote_rows"] += 1
+                odds = item.get("win_interim_odds")
+                rank = item.get("win_popularity")
+                if odds is None or rank is None:
+                    result["manual_offline_missing_win_quote_rows"] += 1
+                    continue
+                if type(rank) is not int or rank < 1 or type(odds) not in (str, int, float):
+                    raise ValueError("MANUAL_WIN_QUOTE_INVALID")
+                try:
+                    price = Decimal(str(odds))
+                except InvalidOperation as exc:
+                    raise ValueError("MANUAL_WIN_QUOTE_INVALID") from exc
+                if not price.is_finite() or price < 1:
+                    raise ValueError("MANUAL_WIN_QUOTE_INVALID")
+                priced += 1
+                off, generated = frozen[key]
+                if generated <= source <= received < off - LEAD:
+                    result["manual_offline_verified_chronology_quote_rows"] += 1
+                    manual_quoted_races.add(key)
+            if observed_ids != expected_ids or priced != values[3]:
+                raise ValueError("MANUAL_SELECTION_COUNTS_INCONSISTENT")
+        result["manual_offline_distinct_races_with_quote"] = len(manual_quoted_races)
+    except (OSError, ValueError, KeyError, TypeError, AttributeError,
+            OverflowError, json.JSONDecodeError):
         result["status"] = "HOLD_PRIVATE_EVIDENCE_SCHEMA_OR_PROVENANCE_INVALID"
     result["eligible_paired_races"] = len(eligible_races) if "eligible_races" in locals() else 0
     result["eligible_preoff_quote_rows"] = eligible_quote_rows if "eligible_quote_rows" in locals() else 0
     result["excluded_missing_preoff_evidence_races"] = max(0, result["frozen_races"] - result["eligible_paired_races"])
     if result["status"] == "HOLD_INDEPENDENT_FORECAST_WITNESS_AND_OFFICIAL_SETTLEMENT_REQUIRED":
-        if result["odds_provenance_files"] and result["official_csv_market_rows"] == 0:
+        if result["manual_offline_verified_chronology_quote_rows"] > 0:
+            result["status"] = "HOLD_MANUAL_OFFLINE_SOURCE_NOT_INDEPENDENTLY_ATTESTED"
+        elif result["odds_provenance_files"] and result["official_csv_market_rows"] == 0:
             result["status"] = "HOLD_OFFICIAL_ODDS_CSV_NO_MARKET_ROWS"
+        elif result["manual_offline_odds_provenance_files"] and not result["odds_provenance_files"]:
+            result["status"] = "HOLD_MANUAL_OFFLINE_NO_VERIFIED_PREOFF_WIN_QUOTES"
         elif result["official_csv_win_rows"] == 0:
             result["status"] = "HOLD_OFFICIAL_ODDS_CSV_NO_WIN_ROWS"
         elif result["selected_win_quote_present_rows"] == 0:

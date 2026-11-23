@@ -147,3 +147,71 @@ def test_early_empty_source_is_not_mistaken_for_near_off(tmp_path):
     assert result["status"] == "HOLD_OFFICIAL_ODDS_CSV_NO_MARKET_ROWS"
     assert result["empty_source_lead_ge_240min"] == 1
     assert result["empty_source_lead_0_to_29min"] == 0
+
+
+def _write_offline_manual_sidecar(tmp_path, *, odds="3.2", popularity=2,
+                                  bad_digest=False):
+    provenance = {
+        "schema": "NAR.PC2.ManuallyDownloadedDailyOddsAuditPrivate.v1",
+        "download_mode": "USER_SUPPLIED_OFFLINE_NO_PROVIDER_REQUEST",
+        "individual_authorized_automated_polling": False,
+        "source_hostname_independently_attested": False,
+        "independent_hosted_receipt_verified": False,
+        "actual_order_execution_verified": False,
+        "positive_ev_proven": False,
+        "source_uploaded": False,
+        "source_zip_filename_PRIVATE": "20261110_1794269700_odds.zip",
+        "frozen_forecast_commitment_PRIVATE": (
+            "wrong-digest" if bad_digest else "fictional-commitment"),
+        "local_receipt_utc": "2026-11-10T00:16:00Z",
+        "audit_PRIVATE": {
+            "source_day_jst": DAY,
+            "registered_flat_races": 1, "market_rows": 5,
+            "win_rows": 3, "place_rows": 2,
+            "planned_win_tickets_with_price": int(odds is not None),
+            "source_generated_at_utc": "2026-11-10T00:15:00Z",
+            "observed_at_utc": "2026-11-10T00:16:00Z",
+        },
+        "quotes_PRIVATE": {"selected_quotes_PRIVATE": [{
+            "race_id": RACE, "win_interim_odds": odds,
+            "win_popularity": popularity,
+        }]},
+    }
+    path = tmp_path / "a_manually_downloaded_odds_PRIVATE.json"
+    path.write_text(json.dumps(provenance, ensure_ascii=False), encoding="utf-8")
+    return path
+
+
+def test_manual_offline_quote_is_reported_separately_without_ev_proof(tmp_path):
+    _write(tmp_path)
+    (tmp_path / "x_odds_private_provenance.json").unlink()
+    _write_offline_manual_sidecar(tmp_path)
+    result = audit(tmp_path)
+    assert result["status"] == "HOLD_MANUAL_OFFLINE_SOURCE_NOT_INDEPENDENTLY_ATTESTED"
+    assert result["manual_offline_odds_provenance_files"] == 1
+    assert result["manual_offline_market_rows"] == 5
+    assert result["manual_offline_win_rows"] == 3
+    assert result["manual_offline_matched_quote_rows"] == 1
+    assert result["manual_offline_verified_chronology_quote_rows"] == 1
+    assert result["manual_offline_distinct_races_with_quote"] == 1
+    assert result["eligible_paired_races"] == 0
+    assert result["official_csv_market_rows"] == 0
+    assert result["after_cost_positive_expected_value_proven"] is False
+    assert result["source_records_exported"] is False
+
+
+def test_manual_missing_price_is_hold_without_mislabeling_complete(tmp_path):
+    _write(tmp_path)
+    (tmp_path / "x_odds_private_provenance.json").unlink()
+    _write_offline_manual_sidecar(tmp_path, odds=None, popularity=None)
+    result = audit(tmp_path)
+    assert result["status"] == "HOLD_MANUAL_OFFLINE_NO_VERIFIED_PREOFF_WIN_QUOTES"
+    assert result["manual_offline_missing_win_quote_rows"] == 1
+    assert result["manual_offline_distinct_races_with_quote"] == 0
+
+
+def test_manual_invalid_digest_is_not_accepted(tmp_path):
+    _write(tmp_path)
+    (tmp_path / "x_odds_private_provenance.json").unlink()
+    _write_offline_manual_sidecar(tmp_path, bad_digest=True)
+    assert audit(tmp_path)["status"] == "HOLD_PRIVATE_EVIDENCE_SCHEMA_OR_PROVENANCE_INVALID"
