@@ -280,7 +280,10 @@ def audit(directory: Path) -> dict:
             seen_manual_names.add(filename)
             source = _utc(audit_info["source_generated_at_utc"])
             received = _utc(doc["local_receipt_utc"])
-            if (_utc(audit_info["observed_at_utc"]) != received
+            # The original official ZIP filename carries a Unix timestamp.
+            # A sidecar cannot claim a different source-generation instant.
+            if (datetime.fromtimestamp(int(m[2]), timezone.utc) != source
+                    or _utc(audit_info["observed_at_utc"]) != received
                     or source > received):
                 raise ValueError("MANUAL_SOURCE_RECEIPT_INCONSISTENT")
             registered = audit_info["registered_flat_races"]

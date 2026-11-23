@@ -227,3 +227,15 @@ def test_manual_price_without_popularity_is_missing_rank_not_corruption(tmp_path
     assert result["manual_offline_missing_popularity_rows"] == 1
     assert result["manual_offline_verified_chronology_quote_rows"] == 0
     assert result["after_cost_positive_expected_value_proven"] is False
+
+
+def test_manual_filename_source_clock_mismatch_is_rejected(tmp_path):
+    _write(tmp_path)
+    (tmp_path / "x_odds_private_provenance.json").unlink()
+    path = _write_offline_manual_sidecar(tmp_path)
+    document = json.loads(path.read_text(encoding="utf-8"))
+    document["source_zip_filename_PRIVATE"] = "20261110_1794269701_odds.zip"
+    path.write_text(json.dumps(document, ensure_ascii=False), encoding="utf-8")
+    result = audit(tmp_path)
+    assert result["status"] == "HOLD_PRIVATE_EVIDENCE_SCHEMA_OR_PROVENANCE_INVALID"
+    assert result["after_cost_positive_expected_value_proven"] is False
