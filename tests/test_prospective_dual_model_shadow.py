@@ -27,7 +27,8 @@ class NativeFake:
 
 
 def sample(jurisdiction="JRA"):
-    race = jurisdiction + ":20261206:FICTIONAL:01"
+    race = ("JRA-20261206-KYOTO-01" if jurisdiction == "JRA"
+            else "NAR:20261206:架空場:01")
     frame = pd.DataFrame([
         dict(race_id=race, horse_id=str(i), past_starts=i,
              past_top3_rate=8 - abs(i - 2) * 3)
@@ -117,4 +118,14 @@ def test_race_day_and_model_chronology_enforced():
     kw = sample()
     kw["model_trained_through"] = DAY
     with pytest.raises(ProspectiveShadowHold, match="MODEL_OR_RACE_DATE"):
+        freeze_fitted_dual_shadow(**kw)
+
+
+def test_future_jra_canonical_id_must_match_day_and_series():
+    kw = sample("JRA")
+    frame = kw["entries"].copy()
+    frame["race_id"] = "JRA-20261205-KYOTO-01"
+    kw["entries"] = frame
+    kw["off_by_race"] = {"JRA-20261205-KYOTO-01": next(iter(kw["off_by_race"].values()))}
+    with pytest.raises(ProspectiveShadowHold, match="CALENDAR"):
         freeze_fitted_dual_shadow(**kw)

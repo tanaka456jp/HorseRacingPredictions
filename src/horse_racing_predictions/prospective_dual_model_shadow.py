@@ -142,7 +142,8 @@ def freeze_fitted_dual_shadow(
         raise ProspectiveShadowHold("INCOMPLETE_OR_UNSAFE_FUTURE_ROSTER")
     for rid, off in off_by_race.items():
         event = _utc(off)
-        if (type(rid) is not str or not rid.startswith(jurisdiction + ":")
+        if (type(rid) is not str or not (rid.startswith("JRA-" + day.strftime("%Y%m%d") + "-") if jurisdiction == "JRA"
+                        else rid.startswith("NAR:" + day.strftime("%Y%m%d") + ":"))
                 or event.astimezone(_JST).date() != day
                 or event <= gen + _LEAD):
             raise ProspectiveShadowHold("FROZEN_RACE_CALENDAR_INVALID")
