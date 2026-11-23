@@ -1,13 +1,20 @@
 name: NAR PC2 Future CatBoost 3-of-5 Preoff Freeze + Independent Receipt
 
-# No source requests, no JRA-VAN, no odds polling, no real bets.
-# Only use an already captured, salted-hash-verified REAL daily roster.
+# Push only inspects existing local sources. Explicit workflow_dispatch may
+# request ONE permission-checked official NAR DAILY race ZIP before off.
+# No JRA-VAN, odds polling, historical holdout access, wagering or raw upload.
 on:
   push:
     branches: ["feature/weekly-odds-free-note-20261021"]
     paths:
       - ".github/workflows/nar-pc2-future-catboost-preoff-freeze-receipt.yml"
   workflow_dispatch:
+    inputs:
+      single_official_roster_download_authorized:
+        description: "I approve one official current-day NAR race ZIP request for PRIVATE authorized research"
+        type: boolean
+        required: true
+        default: false
 
 permissions:
   contents: read
@@ -19,7 +26,7 @@ concurrency:
 jobs:
   pc2-private-fitted-model-freeze:
     runs-on: [self-hosted, Windows]
-    timeout-minutes: 8
+    timeout-minutes: 11
     outputs:
       ready: ${{ steps.forecast.outputs.ready }}
       digest: ${{ steps.forecast.outputs.digest }}
@@ -31,6 +38,59 @@ jobs:
         with:
           clean: false
           persist-credentials: false
+      - name: Optional ONE authorized NAR daily roster download (never odds)
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.single_official_roster_download_authorized }}
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:COMPUTERNAME -cne 'DESKTOP-MVV1FD4' -or
+              $env:GITHUB_REPOSITORY -cne 'tanaka456jp/HorseRacingPredictions' -or
+              $env:GITHUB_EVENT_NAME -cne 'workflow_dispatch' -or
+              $env:GITHUB_REF_NAME -cne 'feature/weekly-odds-free-note-20261021') {
+            Write-Host 'NAR_FORWARD_CAPTURE_UNAUTHORIZED_PC2_CONTEXT_HOLD'
+            exit 2
+          }
+          $env:PYTHONDONTWRITEBYTECODE = '1'
+          $private = 'D:\Development\HorseRacingPredictions-PrivateReview'
+          $capture = Join-Path $private 'nar-prospective-captures'
+          if (-not (Test-Path -LiteralPath $capture -PathType Container) -or
+              ((Get-Item -LiteralPath $capture -Force).Attributes -band
+                [IO.FileAttributes]::ReparsePoint) -ne 0) {
+            Write-Host 'NAR_FORWARD_CAPTURE_PRIVATE_PATH_HOLD'
+            exit 2
+          }
+          $vpy = Join-Path $private 'nar-exploratory-venv\Scripts\python.exe'
+          if (-not (Test-Path -LiteralPath $vpy -PathType Leaf)) {
+            Write-Host 'NAR_FORWARD_CAPTURE_RUNTIME_HOLD'
+            exit 2
+          }
+          $raw = @(& $vpy -B .\scripts\capture_nar_official_daily_preoff_once.py --private-output-dir $capture 2>&1)
+          if ($LASTEXITCODE -ne 0 -or $raw.Count -ne 1) {
+            # Source can be absent/late; no automatic retries and no
+            # secondary provider requests in this job.
+            Write-Host 'NAR_FORWARD_CAPTURE_SOURCE_NOT_READY_HOLD'
+            exit 0
+          }
+          $d = [string]$raw[0] | ConvertFrom-Json
+          if ($d.schema -cne 'NAR.OfficialDailyPreoffCapture.v1' -or
+              $d.result -cne 'PASS' -or
+              [int]$d.registered_races -lt 1 -or
+              [int]$d.lead_minutes -lt 10 -or
+              $d.preoff_forecast_created -ne $false -or
+              $d.source_bytes_uploaded -ne $false -or
+              $d.positive_ev_proven -ne $false) {
+            Write-Host 'NAR_FORWARD_CAPTURE_UNTRUSTED_SOURCE_AUDIT_HOLD'
+            exit 2
+          }
+          [ordered]@{
+            status = 'AUTHORIZED_OFFICIAL_ROSTER_PRIVATE_CAPTURE_PASS'
+            inScopeFlatRaces = [int]$d.registered_races
+            registeredHorses = [int]$d.registered_horses
+            originalSourceReused = [bool]$d.reused_existing_capture
+            rawSourceUploaded = $false
+            actualWagers = 0
+            positiveEVProven = $false
+          } | ConvertTo-Json -Compress
       - name: Freeze actual fitted NAR model on existing preoff ZIP, or declare HOLD
         id: forecast
         shell: powershell
