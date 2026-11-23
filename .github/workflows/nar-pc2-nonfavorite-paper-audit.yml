@@ -1,13 +1,21 @@
-name: NAR PC2 Preoff Nonfavorite WIN Paper Audit (PRIVATE / MANUAL ONLY)
+name: NAR PC2 Preoff Nonfavorite WIN Paper Audit (PRIVATE / READ-ONLY)
 
+# Only this workflow or its offline audit script changes trigger a PC2 check.
+# No provider network requests, bets, private file modifications, or raw uploads.
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - feature/weekly-odds-free-note-20261021
+    paths:
+      - .github/workflows/nar-pc2-nonfavorite-paper-audit.yml
+      - scripts/audit_nar_nonfavorite_private_pair_readiness.py
 
 permissions:
   contents: read
 
 concurrency:
-  group: nar-pc2-nonfavorite-paper-audit-manual
+  group: nar-pc2-nonfavorite-paper-audit-readonly
   cancel-in-progress: false
 
 jobs:
@@ -26,7 +34,7 @@ jobs:
           if ($env:COMPUTERNAME -cne 'DESKTOP-MVV1FD4' -or
               $env:GITHUB_REPOSITORY -cne 'tanaka456jp/HorseRacingPredictions' -or
               $env:GITHUB_REF_NAME -cne 'feature/weekly-odds-free-note-20261021' -or
-              $env:GITHUB_EVENT_NAME -cne 'workflow_dispatch') {
+              $env:GITHUB_EVENT_NAME -cnotin @('workflow_dispatch', 'push')) {
             Write-Host 'NAR_NONFAVORITE_WRONG_PC_OR_BRANCH'; exit 2
           }
           $env:PYTHONDONTWRITEBYTECODE = '1'
