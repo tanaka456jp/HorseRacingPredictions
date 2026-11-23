@@ -5,13 +5,16 @@ no genuinely frozen historical preoff roster, no economic EV estimator.
 851+ unresolved race outcomes remain in the source denominator.
 Strict production training approval remains HOLD.
 
-Neither print individual race/horse identities nor write model files.
+Default mode never exports models. An explicit private PC2 output directory\nmay opt in to a hash-verified research artifact; no source rows uploaded.
 """
 from __future__ import annotations
 
 import argparse
 from collections import Counter
 from dataclasses import asdict
+from datetime import datetime, timezone
+from hashlib import sha256
+import os
 import json
 import re
 from pathlib import Path
@@ -26,11 +29,106 @@ from horse_racing_predictions.nar_status_aware_training_labels import derive_nar
 from horse_racing_predictions.nar_status_aware_prior_day import reconstruct_nar_status_aware_prior_day
 
 
+def save_nar_exploratory_models_private(
+    winner, outsider, metrics, destination: Path,
+) -> dict:
+    """Optional research-only artifact compatible with the verified loader.
+
+    Only a fresh local directory; no historical licensed rows, filenames,
+    or horse identities appear in the saved model manifest or public logs.
+    """
+    from horse_racing_predictions.modeling import CatBoostProbabilityModel
+    from horse_racing_predictions.nar_exploratory_rank_screen import (
+        _FEATURES, NarExploratoryRankingMetrics,
+    )
+    if (not isinstance(destination, Path) or not destination.is_absolute()
+            or destination.exists() or destination.is_symlink()
+            or not destination.parent.is_dir() or destination.parent.is_symlink()
+            or not isinstance(metrics, NarExploratoryRankingMetrics)
+            or not metrics.independently_fitted_models
+            or metrics.positive_expected_value_demonstrated
+            or not isinstance(winner, CatBoostProbabilityModel)
+            or not isinstance(outsider, CatBoostProbabilityModel)
+            or winner is outsider or winner.model is None
+            or outsider.model is None or winner.model is outsider.model
+            or tuple(winner.feature_columns) != _FEATURES
+            or tuple(outsider.feature_columns) != _FEATURES):
+        raise UnsafeNarSource("NAR_EXPLORATORY_MODEL_EXPORT_GATE_INVALID")
+    destination.mkdir()
+    digests = {}
+    for filename, model in (("win.cbm", winner), ("outsider.cbm", outsider)):
+        target = destination / filename
+        if target.exists() or target.is_symlink():
+            raise UnsafeNarSource("NAR_EXPLORATORY_MODEL_BINARY_ALREADY_EXISTS")
+        model.model.save_model(str(target))
+        if not target.is_file() or target.is_symlink():
+            raise UnsafeNarSource("NAR_EXPLORATORY_MODEL_BINARY_MISSING")
+        digests[filename] = sha256(target.read_bytes()).hexdigest()
+    manifest = {
+        "schemaVersion": 1,
+        "artifactKind": "dual-catboost-oddsfree-research-candidate",
+        "status": "RESEARCH_NOT_APPROVED_FOR_PUBLICATION",
+        "jurisdiction": "NAR",
+        "sourceRef": "nar-personal-2017-2022-72months-reviewed-local",
+        "generatedAt": datetime.now(timezone.utc).isoformat(),
+        "featureColumns": list(_FEATURES),
+        "trainStart": "2017-01-01",
+        "trainEnd": "2021-12-31",
+        "artifactSha256": digests,
+        "researchMetrics": {
+            "fitThrough": "2021-12-31",
+            "winModelTarget": "is_winner",
+            "outsiderModelTarget": "finish_position_le_3_train_only",
+            "trainingRaces": metrics.fit_races_2017_2021,
+            "validationRaces": metrics.tune_races_2022,
+            "validationTop1HitRate": metrics.winner_top1_hit_rate_2022,
+            "publicationAuthorized": False,
+            "positiveExpectedValueDemonstrated": False,
+        },
+        "publicationAuthorized": False,
+        "retrainingOnProtectedHoldoutAllowed": False,
+        "sourceRightsIndependentlyVerified": False,
+        "independentOutsiderModelVerified": False,
+        "modelRuntimeProvenanceVerified": False,
+        "sourceRowsOrRaceIdentitiesExported": False,
+    }
+    target = destination / "candidate_manifest.json"
+    fd = os.open(target, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as out:
+        json.dump(manifest, out, ensure_ascii=False, sort_keys=True,
+                  indent=2, allow_nan=False)
+        out.flush()
+        os.fsync(out.fileno())
+    return {
+        "status": "PRIVATE_NAR_RESEARCH_CANDIDATE_FROZEN_NOT_APPROVED",
+        "artifactSha256": digests,
+        "publicationAuthorized": False,
+        "sourceUploaded": False,
+    }
+
+
 def screen_private_72_month_exploratory(
     folder: Path, *, permission: bool, iterations: int = 40,
+    candidate_output_dir: Path | None = None,
 ) -> dict:
     if permission is not True:
         raise UnsafeNarSource("NAR_EXPLORATORY_PRIVATE_PERMISSION_REQUIRED")
+    # Existing research workflow invokes this with None (no export).
+    # New opt-in requires the physical PC2 and a fresh D: private directory.
+    if candidate_output_dir is not None:
+        private_root = Path(
+            r"D:\Development\HorseRacingPredictions-PrivateReview"
+        )
+        if (os.environ.get("COMPUTERNAME") != "DESKTOP-MVV1FD4"
+                or not candidate_output_dir.is_absolute()
+                or candidate_output_dir.exists() or candidate_output_dir.is_symlink()
+                or not private_root.is_dir() or private_root.is_symlink()
+                or not candidate_output_dir.parent.is_dir()
+                or candidate_output_dir.parent.is_symlink()
+                or not candidate_output_dir.parent.resolve().is_relative_to(
+                    private_root.resolve()
+                )):
+            raise UnsafeNarSource("NAR_EXPLORATORY_MODEL_PRIVATE_PATH_INVALID")
     inventory = inventory_private_nar_training_directory(
         folder, personal_private_permission_confirmed=True,
     )
@@ -124,10 +222,17 @@ def screen_private_72_month_exploratory(
     from horse_racing_predictions.nar_exploratory_rank_screen import (
         explore_nar_2017_2022_ranking_signal,
     )
+    export_summary = {}
+    def _optional_export(winner, outsider, metrics):
+        nonlocal export_summary
+        export_summary = save_nar_exploratory_models_private(
+            winner, outsider, metrics, candidate_output_dir,
+        )
     m = explore_nar_2017_2022_ranking_signal(
         form, flat_races_by_year=dict(annual), iterations=iterations,
         official_win_payouts_2022=official_2022_win_returns,
         official_place_payouts_2022=official_2022_place_returns,
+        on_completed_models=_optional_export if candidate_output_dir is not None else None,
     )
     result = {
         "schema": "NAR.PC2.Exploratory2022RankingSignal.v1",
@@ -142,6 +247,8 @@ def screen_private_72_month_exploratory(
         "historical_complete_coverage": False,
         "source_data_sent_to_github": False,
         "no_prediction_or_source_details_logged": True,
+        "trained_model_exported": bool(export_summary),
+        "research_model_artifact_hashes": export_summary.get("artifactSha256"),
     }
     return result
 
@@ -151,12 +258,17 @@ def main() -> int:
     parser.add_argument("--local-nar-training-zip-directory", type=Path, required=True)
     parser.add_argument("--confirm-personal-private-nar-permission", action="store_true")
     parser.add_argument("--iterations", type=int, default=40)
+    parser.add_argument(
+        "--candidate-output-dir", type=Path,
+        help="OPTIONAL PC2 D: new private research artifact directory",
+    )
     args = parser.parse_args()
     try:
         output = screen_private_72_month_exploratory(
             args.local_nar_training_zip_directory,
             permission=args.confirm_personal_private_nar_permission,
             iterations=args.iterations,
+            candidate_output_dir=args.candidate_output_dir,
         )
     except Exception as exc:
         # Only immutable source-code error identifiers. Never echo a

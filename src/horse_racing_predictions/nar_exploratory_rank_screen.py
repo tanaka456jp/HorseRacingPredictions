@@ -11,7 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date
 from math import isfinite
-from typing import Any
+from typing import Any, Callable
 
 import numpy as np
 import pandas as pd
@@ -137,6 +137,10 @@ def explore_nar_2017_2022_ranking_signal(
     iterations: int = 40,
     official_win_payouts_2022: dict[str, dict[int, int]] | None = None,
     official_place_payouts_2022: dict[str, dict[int, int]] | None = None,
+    on_completed_models: Callable[
+        [CatBoostProbabilityModel, CatBoostProbabilityModel,
+         NarExploratoryRankingMetrics], None
+    ] | None = None,
 ) -> NarExploratoryRankingMetrics:
     """Research-only; retrospectively selected complete labels aren't EV.
 
@@ -151,6 +155,8 @@ def explore_nar_2017_2022_ranking_signal(
             or batch.audit.independent_oos_opened
             or batch.audit.positive_expected_value_demonstrated
             or not batch.targets
+            or (on_completed_models is not None
+                and not callable(on_completed_models))
             or type(iterations) is not int or not 30 <= iterations <= 120
             or type(flat_races_by_year) is not dict
             or set(flat_races_by_year) != set(range(2017, 2023))
@@ -425,7 +431,7 @@ def explore_nar_2017_2022_ranking_signal(
             or ci_low > ci_high):
         raise UnsafeNarSource("NAR_EXPLORATORY_NONFINITE_METRIC")
 
-    return NarExploratoryRankingMetrics(
+    metrics = NarExploratoryRankingMetrics(
         status="NAR_EXPLORATORY_2022_RANKING_ONLY_SELECTION_BIAS_HOLD",
         source_flat_races_2017_2022=batch.audit.source_flat_races,
         unresolved_flat_races_2017_2022=batch.audit.unresolved_flat_races,
@@ -448,3 +454,8 @@ def explore_nar_2017_2022_ranking_signal(
         historical_official_place_payouts_reconciled=official_place_payouts_2022 is not None,
         **economic,
     )
+    # Opt-in callback is invoked only AFTER all 2022 descriptive checks;
+    # default research mode remains in-memory with no exported binaries.
+    if on_completed_models is not None:
+        on_completed_models(winner, outsider, metrics)
+    return metrics

@@ -25,3 +25,6 @@ python -B scripts/freeze_prospective_dual_catboost_private.py --candidate-dir 'D
 ```
 
 **Not yet live:** The 2017–2022 NAR CatBoost screener currently discards its fitted models rather than exporting a verified, reusable two-CBM candidate. JRA future entries and fresh legal pre-off histories are also not presently confirmed available. This command does not pretend either one is ready and will HOLD on missing model/source artifacts.
+
+## NAR fitted-model persistence (optional)
+The 2017–2022 retrospective NAR trainer now accepts an **explicit opt-in** `--candidate-output-dir` when run on physical PC2. Only after completing the full 72-month source audit, 2017–2021 fit and 2022 descriptive metrics does it write the fitted two-CatBoost binaries and checksum manifest under an existing PC2 D: private parent. Without the opt-in (including the legacy self-hosted workflow), behavior stays unchanged: no model export. The export stays research-only, not independently licensed/approved, never accesses 2023–2026 sealed source, and is not a prospective outcome. Once persisted, it can be loaded by the existing verified two-CBM loader for as-of forward inference, if contemporary lawful complete features are actually available.
