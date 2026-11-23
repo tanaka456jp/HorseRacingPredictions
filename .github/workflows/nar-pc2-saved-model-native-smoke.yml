@@ -1,0 +1,74 @@
+name: NAR PC2 Native Fitted Dual CatBoost Smoke (PRIVATE / FICTIONAL INPUT)
+
+# Saved genuine trained model + completely fictional feature rows.
+# The workflow NEVER downloads market data, opens result holdouts or bets.
+on:
+  push:
+    branches: ["feature/weekly-odds-free-note-20261021"]
+    paths:
+      - ".github/workflows/nar-pc2-saved-model-native-smoke.yml"
+      - "scripts/verify_saved_nar_dual_catboost_pc2_inference.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nar-pc2-native-model-only-smoke
+  cancel-in-progress: false
+
+jobs:
+  pc2-native-fitted-model-inference:
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 9
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          clean: false
+          persist-credentials: false
+      - name: Load actual private NAR two-CBM model and score synthetic entrants
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:COMPUTERNAME -cne 'DESKTOP-MVV1FD4' -or
+              $env:GITHUB_REPOSITORY -cne 'tanaka456jp/HorseRacingPredictions' -or
+              $env:GITHUB_REF_NAME -cne 'feature/weekly-odds-free-note-20261021') {
+            Write-Host 'NAR_NATIVE_SMOKE_PC2_CONTEXT_HOLD'
+            exit 2
+          }
+          $env:PYTHONDONTWRITEBYTECODE = '1'
+          $env:PYTHONPATH = Join-Path (Get-Location).Path 'src'
+          $root = 'D:\Development\HorseRacingPredictions-PrivateReview'
+          $vpy = Join-Path $root 'nar-exploratory-venv\Scripts\python.exe'
+          if (-not (Test-Path -LiteralPath $vpy -PathType Leaf)) {
+            Write-Host 'NAR_NATIVE_SMOKE_RUNTIME_MISSING_HOLD'
+            exit 2
+          }
+          $raw = @(& $vpy -B .\scripts\verify_saved_nar_dual_catboost_pc2_inference.py --private-root $root 2>&1)
+          if ($LASTEXITCODE -ne 0 -or $raw.Count -ne 1) {
+            Write-Host 'NAR_NATIVE_SMOKE_INFERENCE_HOLD'
+            exit 2
+          }
+          $d = [string]$raw[0] | ConvertFrom-Json
+          if ($d.schema -cne 'NAR.PC2.NativeDualCatBoostFictionalInference.v1' -or
+              $d.status -cne 'PRIVATE_REAL_TRAINED_MODELS_EXECUTED_ON_FICTIONAL_ROSTER' -or
+              $d.real_saved_model_binary_checksums_verified -ne $true -or
+              $d.independent_native_win_and_podium_inference_executed -ne $true -or
+              $d.fictional_races_scored -ne 1 -or
+              $d.real_future_races_scored -ne 0 -or
+              $d.positive_ev_proven -ne $false -or
+              $d.source_or_model_bytes_uploaded -ne $false) {
+            Write-Host 'NAR_NATIVE_SMOKE_UNTRUSTED_AUDIT_HOLD'
+            exit 2
+          }
+          [ordered]@{
+            status = [string]$d.status
+            actualStoredCatBoostModelsExecuted = $true
+            fictionalRaces = [int]$d.fictional_races_scored
+            actualFutureRaces = 0
+            realHitRateMeasured = $false
+            realROIMeasured = $false
+            realBets = 0
+            positiveEVProven = $false
+            privateModelOrHorseDataUploaded = $false
+          } | ConvertTo-Json -Compress
