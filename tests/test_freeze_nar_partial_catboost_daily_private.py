@@ -114,6 +114,9 @@ def test_live_private_snapshot_is_exclusive_and_no_source_upload(
     assert result["real_preoff_source_races"] == 2
     assert result["available_model_features"] == 3
     assert result["unavailable_model_features"] == 2
+    assert result["race_day_jst"] == "2026-11-10"
+    assert result["earliest_off_utc"] == "2026-11-10T02:35:00Z"
+    assert result["source_observed_at_utc"] == "2026-11-10T00:00:00Z"
     assert result["real_outcome_hits_measured"] is False
     frozen = candidate / "20261110_NAR_partial3of5_dual_catboost_PRIVATE.json"
     original = json.loads(frozen.read_text(encoding="utf-8"))

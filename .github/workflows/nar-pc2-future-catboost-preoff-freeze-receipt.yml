@@ -1,0 +1,155 @@
+name: NAR PC2 Future CatBoost 3-of-5 Preoff Freeze + Independent Receipt
+
+# No source requests, no JRA-VAN, no odds polling, no real bets.
+# Only use an already captured, salted-hash-verified REAL daily roster.
+on:
+  push:
+    branches: ["feature/weekly-odds-free-note-20261021"]
+    paths:
+      - ".github/workflows/nar-pc2-future-catboost-preoff-freeze-receipt.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nar-pc2-future-partial-catboost-freeze-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  pc2-private-fitted-model-freeze:
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 8
+    outputs:
+      ready: ${{ steps.forecast.outputs.ready }}
+      digest: ${{ steps.forecast.outputs.digest }}
+      earliest_off: ${{ steps.forecast.outputs.earliest_off }}
+      race_day: ${{ steps.forecast.outputs.race_day }}
+      races: ${{ steps.forecast.outputs.races }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          clean: false
+          persist-credentials: false
+      - name: Freeze actual fitted NAR model on existing preoff ZIP, or declare HOLD
+        id: forecast
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:COMPUTERNAME -cne 'DESKTOP-MVV1FD4' -or
+              $env:GITHUB_REPOSITORY -cne 'tanaka456jp/HorseRacingPredictions' -or
+              $env:GITHUB_REF_NAME -cne 'feature/weekly-odds-free-note-20261021') {
+            Write-Host 'NAR_FORWARD_CATBOOST_PC2_CONTEXT_HOLD'
+            exit 2
+          }
+          $env:PYTHONDONTWRITEBYTECODE = '1'
+          $env:PYTHONPATH = Join-Path (Get-Location).Path 'src'
+          $private = 'D:\Development\HorseRacingPredictions-PrivateReview'
+          $vpy = Join-Path $private 'nar-exploratory-venv\Scripts\python.exe'
+          if (-not (Test-Path -LiteralPath $vpy -PathType Leaf)) {
+            Write-Host 'NAR_FORWARD_CATBOOST_RUNTIME_MISSING_HOLD'
+            exit 2
+          }
+          $raw = @(& $vpy -B .\scripts\freeze_nar_partial_catboost_daily_private.py --private-root $private 2>&1)
+          if ($LASTEXITCODE -ne 0 -or $raw.Count -ne 1) {
+            # No current verified daily ZIP, late capture, or existing lock:
+            # do NOT invent a new forecast or claim prospective metrics.
+            Write-Host 'NAR_FORWARD_CATBOOST_PREOFF_LOCK_HOLD'
+            Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value 'ready=false'
+            exit 0
+          }
+          try {
+            $d = [string]$raw[0] | ConvertFrom-Json
+            if ($d.schema -cne 'NAR.PC2.FittedModelPartialFeatureFrozen.v1' -or
+                $d.status -cne 'PRIVATE_ACTUAL_MODEL_PARTIAL_FEATURE_PREOFF_FORECAST_FROZEN' -or
+                [int]$d.real_preoff_source_races -lt 1 -or
+                [int]$d.real_preoff_source_runners -lt 4 -or
+                $d.available_model_features -ne 3 -or
+                $d.unavailable_model_features -ne 2 -or
+                $d.independent_preoff_witness_verified -ne $false -or
+                $d.real_outcome_hits_measured -ne $false -or
+                $d.real_roi_measured -ne $false -or
+                $d.raw_data_uploaded -ne $false -or
+                $d.actual_bets -ne 0 -or
+                $d.positive_ev_proven -ne $false -or
+                [string]$d.blinded_digest -cnotmatch '^[0-9a-f]{64}$' -or
+                [string]$d.earliest_off_utc -cnotmatch '^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$' -or
+                [string]$d.race_day_jst -cnotmatch '^\d{4}-\d\d-\d\d$') {
+              throw 'NAR_FORWARD_CATBOOST_PRIVATE_AUDIT_INVALID'
+            }
+            Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value 'ready=true'
+            Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ('digest=' + [string]$d.blinded_digest)
+            Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ('earliest_off=' + [string]$d.earliest_off_utc)
+            Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ('race_day=' + [string]$d.race_day_jst)
+            Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ('races=' + [int]$d.real_preoff_source_races)
+            [ordered]@{
+              status = 'NAR_REAL_FITTED_MODEL_PREOFF_PRIVATE_LOCK_SAVED'
+              partialFeatureAblation = $true
+              verifiedFiveFeatureForecast = $false
+              fullFlatRaceDenominator = [int]$d.real_preoff_source_races
+              registeredRunners = [int]$d.real_preoff_source_runners
+              hostedIndependentReceiptPending = $true
+              futureAccuracyMeasured = $false
+              futureROIMeasured = $false
+              modelOrRacingDataUploaded = $false
+              realBets = 0
+              positiveEVProven = $false
+            } | ConvertTo-Json -Compress
+          } catch {
+            Write-Host 'NAR_FORWARD_CATBOOST_AUDIT_INVALID_HOLD'
+            exit 2
+          }
+
+  github-hosted-preoff-blinded-receipt:
+    needs: pc2-private-fitted-model-freeze
+    if: ${{ needs.pc2-private-fitted-model-freeze.outputs.ready == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      FORECAST_DIGEST: ${{ needs.pc2-private-fitted-model-freeze.outputs.digest }}
+      EARLIEST_OFF: ${{ needs.pc2-private-fitted-model-freeze.outputs.earliest_off }}
+      RACE_DAY: ${{ needs.pc2-private-fitted-model-freeze.outputs.race_day }}
+      RACE_COUNT: ${{ needs.pc2-private-fitted-model-freeze.outputs.races }}
+    steps:
+      - name: Independently timestamp only the blinded commitment before race start
+        shell: bash
+        env:
+          EXPECTED_RUNNER: ${{ runner.environment }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from datetime import date, datetime, timedelta, timezone
+          import json, os, re
+          digest=os.environ["FORECAST_DIGEST"]
+          raw_off=os.environ["EARLIEST_OFF"]
+          raw_day=os.environ["RACE_DAY"]
+          n=os.environ["RACE_COUNT"]
+          now=datetime.now(timezone.utc)
+          assert os.environ["EXPECTED_RUNNER"] == "github-hosted"
+          assert re.fullmatch(r"[a-f0-9]{64}", digest)
+          assert re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ", raw_off)
+          assert re.fullmatch(r"\d{4}-\d\d-\d\d", raw_day)
+          assert re.fullmatch(r"[1-9]\d{0,2}", n)
+          off=datetime.fromisoformat(raw_off.replace("Z","+00:00"))
+          assert off.astimezone(timezone(timedelta(hours=9))).date()==date.fromisoformat(raw_day)
+          assert now < off - timedelta(minutes=5), "PREOFF_RECEIPT_TOO_LATE_HOLD"
+          # Independent clock evidence for the blinded commitment,
+          # not independent authentication of local source and horse picks.
+          print(json.dumps({
+              "schema":"NAR.GitHubHostedCatBoostPartialPreoffReceipt.v1",
+              "status":"BLINDED_3_OF_5_MODEL_COMMITMENT_RECEIVED_BEFORE_FIRST_OFF",
+              "blinded_digest":digest,
+              "github_hosted_observed_utc":now.isoformat().replace("+00:00","Z"),
+              "earliest_off_utc":raw_off,
+              "race_day_jst":raw_day,
+              "frozen_races_declared":int(n),
+              "three_of_five_feature_ablation":True,
+              "private_forecast_contents_verified":False,
+              "source_licence_and_roster_independently_verified":False,
+              "prospective_hit_rate_measured":False,
+              "prospective_roi_measured":False,
+              "actual_bets":0,
+              "positive_ev_proven":False,
+              "private_model_or_horse_data_uploaded":False,
+          },sort_keys=True))
+          PY

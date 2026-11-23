@@ -202,6 +202,11 @@ def freeze_private_from_saved_daily(root: Path, *, generated_utc: datetime) -> d
         "status": "PRIVATE_ACTUAL_MODEL_PARTIAL_FEATURE_PREOFF_FORECAST_FROZEN",
         "real_preoff_source_races": counts["races"],
         "real_preoff_source_runners": counts["runners"],
+        "race_day_jst": day.isoformat(),
+        "earliest_off_utc": min(
+            datetime.fromisoformat(r.off_utc) for r in frozen.races
+        ).astimezone(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "source_observed_at_utc": observed.astimezone(timezone.utc).isoformat().replace("+00:00", "Z"),
         "available_model_features": 3,
         "unavailable_model_features": 2,
         "independent_preoff_witness_verified": False,
