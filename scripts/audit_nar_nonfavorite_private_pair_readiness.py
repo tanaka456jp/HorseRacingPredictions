@@ -47,6 +47,7 @@ def audit(directory: Path) -> dict:
         "empty_source_snapshots_before_first_off": 0,
         "empty_source_snapshots_after_first_off": 0,
         "preoff_eligible_race_observations": 0,
+        "timing_derived_from_legacy_provenance_snapshots": 0,
         "snapshots_with_win_rows_but_no_selected_win_price": 0,
         "independently_witnessed_forecasts": 0,
         "officially_settled_races": 0,
@@ -115,11 +116,45 @@ def audit(directory: Path) -> dict:
             # The source ZIP might contain only a header even while some
             # frozen races remain in their allowed pre-off window. Report
             # aggregate timing, never dates, horses, prices or identifiers.
-            futures = source_audit["future_preoff_eligible_races"]
-            closed = source_audit["past_or_closed_races"]
             registered = source_audit["registered_flat_races"]
-            minutes = source_audit["minutes_before_first_scheduled_off"]
-            if (any(type(v) is not int for v in (futures, closed, registered, minutes))
+            futures = source_audit.get("future_preoff_eligible_races")
+            closed = source_audit.get("past_or_closed_races")
+            minutes = source_audit.get("minutes_before_first_scheduled_off")
+            if type(registered) is not int or registered < 1:
+                raise ValueError("INVALID_SOURCE_RACE_COUNT")
+            day_windows = [
+                (off, generated)
+                for (race_day, _), (off, generated) in frozen.items()
+                if race_day == day
+            ]
+            if len(day_windows) != registered:
+                raise ValueError("SOURCE_REGISTERED_RACE_COUNT_MISMATCH")
+            # Older immutable provenance snapshots did not serialize the
+            # timing counters, or serialized their default (0, 0) before
+            # the counters were populated. Do NOT rewrite private originals
+            # and do NOT classify them as corrupt solely for this reason.
+            # Derive conservative pre-off eligibility from stored source,
+            # receipt, and frozen schedule timestamps. These are recorded
+            # local claims, not independent clock attestation.
+            legacy = (
+                futures is None or closed is None or minutes is None
+                or (futures == 0 and closed == 0 and registered > 0)
+            )
+            if legacy:
+                if any(v is not None and type(v) is not int
+                       for v in (futures, closed, minutes)):
+                    raise ValueError("INVALID_LEGACY_TIMING_FIELD")
+                futures = sum(
+                    generated <= source <= received < off - LEAD
+                    for off, generated in day_windows
+                )
+                closed = registered - futures
+                minutes = int(
+                    (min(off for off, _ in day_windows) - received)
+                    .total_seconds() // 60
+                )
+                result["timing_derived_from_legacy_provenance_snapshots"] += 1
+            if (any(type(v) is not int for v in (futures, closed, minutes))
                     or not (0 <= futures <= registered)
                     or not (0 <= closed <= registered)
                     or futures + closed != registered):

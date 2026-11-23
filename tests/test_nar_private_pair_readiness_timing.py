@@ -110,3 +110,30 @@ def test_after_first_off_can_still_have_later_race_window(tmp_path):
     assert result["empty_source_snapshots_with_preoff_eligible_races"] == 1
     assert result["preoff_eligible_race_observations"] == 1
     assert result["excluded_missing_preoff_evidence_races"] == 2
+
+
+def test_immutable_legacy_provenance_without_timing_fields_remains_auditable(tmp_path):
+    provenance = _write(tmp_path, futures=1, closed=0, minutes=90)
+    for field in ("future_preoff_eligible_races", "past_or_closed_races",
+                  "minutes_before_first_scheduled_off"):
+        provenance["audit_PRIVATE"].pop(field)
+    (tmp_path / "x_odds_private_provenance.json").write_text(
+        json.dumps(provenance, ensure_ascii=False), encoding="utf-8")
+    result = audit(tmp_path)
+    assert result["status"] == "HOLD_OFFICIAL_ODDS_CSV_NO_MARKET_ROWS"
+    assert result["timing_derived_from_legacy_provenance_snapshots"] == 1
+    assert result["preoff_eligible_race_observations"] == 1
+    assert result["empty_source_snapshots_before_first_off"] == 1
+    assert result["eligible_preoff_quote_rows"] == 0
+    assert result["after_cost_positive_expected_value_proven"] is False
+
+
+def test_immutable_legacy_zero_default_timing_remains_auditable(tmp_path):
+    provenance = _write(tmp_path, futures=0, closed=0, minutes=90)
+    (tmp_path / "x_odds_private_provenance.json").write_text(
+        json.dumps(provenance, ensure_ascii=False), encoding="utf-8")
+    result = audit(tmp_path)
+    assert result["status"] == "HOLD_OFFICIAL_ODDS_CSV_NO_MARKET_ROWS"
+    assert result["timing_derived_from_legacy_provenance_snapshots"] == 1
+    assert result["preoff_eligible_race_observations"] == 1
+    assert result["snapshots_without_any_win_rows"] == 1
