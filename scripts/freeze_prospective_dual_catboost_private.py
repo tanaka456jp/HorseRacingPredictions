@@ -20,6 +20,9 @@ import pandas as pd
 from horse_racing_predictions.dual_candidate_private_preview import (
     load_dual_research_candidate,
 )
+from horse_racing_predictions.nar_private_dual_model_loader import (
+    load_nar_private_dual_candidate,
+)
 from horse_racing_predictions.prospective_dual_model_shadow import (
     freeze_fitted_dual_shadow,
 )
@@ -75,7 +78,9 @@ def freeze_private_future(
             or any(type(n) is not int or not 4 <= n <= 18
                    for n in expected.values())):
         raise ValueError("PRIVATE_ROSTER_DENOMINATOR_INVALID")
-    native = load_dual_research_candidate(candidate_dir)
+    native = (load_nar_private_dual_candidate(candidate_dir)
+              if manifest["jurisdiction"] == "NAR"
+              else load_dual_research_candidate(candidate_dir))
     frame = pd.read_csv(
         features_csv, encoding="utf-8-sig",
         dtype={"race_id": "string", "horse_id": "string"},

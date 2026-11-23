@@ -25,7 +25,7 @@ def fixture(tmp_path, monkeypatch):
     a = CatBoostProbabilityModel(feature_columns=list(M._FEATURES))
     b = CatBoostProbabilityModel(feature_columns=list(M._FEATURES))
     a.model, b.model = FakeNative("past_win_rate"), FakeNative("past_top3_rate")
-    monkeypatch.setattr(M, "load_dual_research_candidate", lambda _: SimpleNamespace(
+    monkeypatch.setattr(M, "load_nar_private_dual_candidate", lambda _: SimpleNamespace(
         winner=a, outsider=b, features=M._FEATURES,
         train_end="2021-12-31",
         digest_by_role={"win.cbm":"a"*64, "outsider.cbm":"b"*64},
@@ -46,7 +46,7 @@ def test_synthetic_model_native_smoke_never_claims_real_forward_result(
 
 def test_model_feature_mismatch_and_wrong_machine_block(tmp_path, monkeypatch):
     fixture(tmp_path, monkeypatch)
-    monkeypatch.setattr(M, "load_dual_research_candidate", lambda _: SimpleNamespace(
+    monkeypatch.setattr(M, "load_nar_private_dual_candidate", lambda _: SimpleNamespace(
         winner=None, outsider=None, features=("wrong_feature",),
         train_end="2021-12-31", digest_by_role={},
     ))

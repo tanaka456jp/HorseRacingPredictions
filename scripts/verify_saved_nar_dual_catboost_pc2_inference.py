@@ -15,8 +15,8 @@ from pathlib import Path
 
 import pandas as pd
 
-from horse_racing_predictions.dual_candidate_private_preview import (
-    load_dual_research_candidate,
+from horse_racing_predictions.nar_private_dual_model_loader import (
+    load_nar_private_dual_candidate,
 )
 from horse_racing_predictions.prospective_dual_model_shadow import (
     freeze_fitted_dual_shadow,
@@ -39,7 +39,7 @@ def verify_saved_model(private_root: Path) -> dict:
             or not private_root.is_dir()):
         raise ValueError("NAR_PRIVATE_PC2_CONTEXT_INVALID")
     try:
-        loaded = load_dual_research_candidate(private_root / _MODEL)
+        loaded = load_nar_private_dual_candidate(private_root / _MODEL)
     except Exception as exc:
         # The real loader's known static failure strings are mapped to
         # fixed safe codes; never emit unknown native exception text.

@@ -8,6 +8,7 @@ on:
     paths:
       - ".github/workflows/nar-pc2-saved-model-native-smoke.yml"
       - "scripts/verify_saved_nar_dual_catboost_pc2_inference.py"
+      - "src/horse_racing_predictions/nar_private_dual_model_loader.py"
   workflow_dispatch:
 
 permissions:
