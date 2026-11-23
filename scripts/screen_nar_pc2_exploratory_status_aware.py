@@ -248,7 +248,7 @@ def screen_private_72_month_exploratory(
         "source_data_sent_to_github": False,
         "no_prediction_or_source_details_logged": True,
         "trained_model_exported": bool(export_summary),
-        "research_model_artifact_hashes": export_summary.get("artifactSha256"),
+        "private_model_artifact_hashes_not_logged": True,
     }
     return result
 

@@ -23,11 +23,6 @@ class DummyNative:
 
 
 def metrics():
-    from dataclasses import fields
-    values = {}
-    for f in fields(NarExploratoryRankingMetrics):
-        if f.default is not f.default_factory:
-            pass
     return NarExploratoryRankingMetrics(
         status="NAR_EXPLORATORY_2022_RANKING_ONLY_SELECTION_BIAS_HOLD",
         source_flat_races_2017_2022=79431,
