@@ -272,3 +272,29 @@ def test_cli_distinguishes_source_capture_from_win_evidence(
     assert payload["source_uploaded"] is False
     assert payload["after_cost_ev_proven"] is False
     assert payload["actual_tickets"] == 0
+
+
+@pytest.mark.parametrize("minutes_to_off,expected", [
+    (180, "NAR_PREOFF_ODDS_NO_NEAR_OFF_RACE_YET"),
+    (36, "NAR_PREOFF_ODDS_NO_NEAR_OFF_RACE_YET"),
+    (35, "NEAR_OFF_WINDOW_READY"),
+    (25, "NEAR_OFF_WINDOW_READY"),
+    (11, "NEAR_OFF_WINDOW_READY"),
+    (10, "NAR_PREOFF_ODDS_CAPTURE_WINDOW_CLOSED"),
+    (-2, "NAR_PREOFF_ODDS_CAPTURE_WINDOW_CLOSED"),
+])
+def test_near_off_source_window_is_bounded_before_provider_request(
+    minutes_to_off, expected,
+):
+    frozen = [{"scheduled_off_utc": OFF.isoformat().replace("+00:00", "Z")}]
+    now = OFF - timedelta(minutes=minutes_to_off)
+    assert S._near_off_window_status(frozen, now) == expected
+
+
+def test_later_frozen_race_remains_eligible_after_first_off():
+    rows = [
+        {"scheduled_off_utc": OFF.isoformat().replace("+00:00", "Z")},
+        {"scheduled_off_utc": (OFF + timedelta(hours=3)).isoformat().replace("+00:00", "Z")},
+    ]
+    now = OFF + timedelta(hours=3, minutes=-25)
+    assert S._near_off_window_status(rows, now) == "NEAR_OFF_WINDOW_READY"

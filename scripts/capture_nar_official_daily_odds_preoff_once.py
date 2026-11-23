@@ -41,6 +41,7 @@ _MAX_ROWS = 1_500_000
 _MAX_SNAPSHOTS_PER_DAY = 6
 _MIN_REQUEST_GAP = timedelta(seconds=150)
 _MIN_ALL_RACE_LEAD = timedelta(minutes=10)
+_MAX_NEAR_OFF_LEAD = timedelta(minutes=35)  # bounded prospective observation window
 _REQUIRED = frozenset({
     "競馬場", "競走年月日", "レース番号", "賭式",
     "番号1", "番号2", "番号3", "オッズ", "オッズ（最大）", "人気",
@@ -359,6 +360,29 @@ def validate_private_official_odds_zip(
                    "all_market_per_race_PRIVATE": selection}
 
 
+def _near_off_window_status(rows: list[dict], now: datetime) -> str:
+    """Only allow one-shot observation when an already frozen race is near off.
+
+    Two prior real captures, 2-4 hours before first off, contained zero
+    official market rows. This is an acquisition-efficiency guard, not proof
+    that the market is open or a provider-permission grant.
+    """
+    lead_times = [
+        datetime.fromisoformat(
+            r["scheduled_off_utc"].replace("Z", "+00:00")
+        ).astimezone(timezone.utc) - now
+        for r in rows
+    ]
+    if not any(lead > _MIN_ALL_RACE_LEAD for lead in lead_times):
+        return "NAR_PREOFF_ODDS_CAPTURE_WINDOW_CLOSED"
+    if not any(
+        _MIN_ALL_RACE_LEAD < lead <= _MAX_NEAR_OFF_LEAD
+        for lead in lead_times
+    ):
+        return "NAR_PREOFF_ODDS_NO_NEAR_OFF_RACE_YET"
+    return "NEAR_OFF_WINDOW_READY"
+
+
 def capture_private_daily_odds_once(directory: Path) -> NarPrivateOddsAudit:
     """At most one official request per invocation; never overwrite a snapshot."""
     if not directory.is_dir() or directory.is_symlink():
@@ -375,13 +399,9 @@ def capture_private_daily_odds_once(directory: Path) -> NarPrivateOddsAudit:
     # Do not block legitimate later races just because the first off has
     # passed; exact per-race window is validated after ZIP download.
     # Fail before any network request if NO remaining event is future.
-    if not any(
-        now + _MIN_ALL_RACE_LEAD < datetime.fromisoformat(
-            row["scheduled_off_utc"].replace("Z", "+00:00")
-        ).astimezone(timezone.utc)
-        for row in frozen["complete_private_forecasts"]
-    ):
-        raise NarPreoffDailyHold("NAR_PREOFF_ODDS_CAPTURE_WINDOW_CLOSED")
+    window = _near_off_window_status(frozen["complete_private_forecasts"], now)
+    if window != "NEAR_OFF_WINDOW_READY":
+        raise NarPreoffDailyHold(window)
     existing = list(directory.glob(f"{day:%Y%m%d}_*_odds_private_provenance.json"))
     if len(existing) >= min(_MAX_SNAPSHOTS_PER_DAY, rights.max_requests_per_day):
         raise NarPreoffDailyHold("NAR_PREOFF_ODDS_DAILY_CAPTURE_LIMIT")
