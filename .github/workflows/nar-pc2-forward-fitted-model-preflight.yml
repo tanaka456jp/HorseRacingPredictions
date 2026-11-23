@@ -1,0 +1,66 @@
+name: JRA/NAR PC2 Future Fitted Model Readiness (PRIVATE READ-ONLY)
+
+on:
+  push:
+    branches: ["feature/weekly-odds-free-note-20261021"]
+    paths:
+      - ".github/workflows/nar-pc2-forward-fitted-model-preflight.yml"
+      - "scripts/audit_future_fitted_model_pc2_readiness.py"
+      - "tests/test_future_fitted_model_pc2_readiness.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nar-jra-pc2-fitted-model-readiness
+  cancel-in-progress: false
+
+jobs:
+  pc2-model-and-future-input-readiness:
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          clean: false
+          persist-credentials: false
+      - name: Aggregate private PC2 readiness only, no racing source upload
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:COMPUTERNAME -cne 'DESKTOP-MVV1FD4' -or
+              $env:GITHUB_REPOSITORY -cne 'tanaka456jp/HorseRacingPredictions' -or
+              $env:GITHUB_REF_NAME -cne 'feature/weekly-odds-free-note-20261021') {
+            Write-Host 'FORWARD_MODEL_WRONG_PC_HOLD'
+            exit 2
+          }
+          $env:PYTHONDONTWRITEBYTECODE = '1'
+          $private = 'D:\Development\HorseRacingPredictions-PrivateReview'
+          $raw = @(& python -B .\scripts\audit_future_fitted_model_pc2_readiness.py --private-root $private 2>&1)
+          if ($LASTEXITCODE -ne 0 -or $raw.Count -ne 1) {
+            Write-Host 'FORWARD_MODEL_READINESS_AUDIT_HOLD'
+            exit 2
+          }
+          $d = [string]$raw[0] | ConvertFrom-Json
+          if ($d.schema -cne 'HorseRacing.PC2.FutureFittedModelReadiness.v1' -or
+              $d.provider_requests -ne 0 -or
+              $d.source_model_or_horse_data_uploaded -ne $false -or
+              $d.actual_bets -ne 0 -or
+              $d.positive_ev_proven -ne $false -or
+              $d.model_prediction_executed -ne $false) {
+            Write-Host 'FORWARD_MODEL_READINESS_EVIDENCE_UNTRUSTED'
+            exit 2
+          }
+          [ordered]@{
+            schema = 'HorseRacing.PC2.FutureFittedModelReadiness.v1'
+            status = [string]$d.status
+            NARModelAvailable = [bool]$d.NAR_model_checksums_verified
+            JRAModelAvailable = [bool]$d.JRA_model_checksums_verified
+            NARFutureCardsReady = [int]$d.NAR_complete_future_cards
+            JRAFutureCardsReady = [int]$d.JRA_complete_future_cards
+            realForwardHitRateMeasured = $false
+            realForwardROIMeasured = $false
+            actualBets = 0
+            positiveEVProven = $false
+          } | ConvertTo-Json -Compress
