@@ -60,6 +60,7 @@ def test_empty_market_during_preoff_window_is_source_coverage_hold(tmp_path):
     assert result["status"] == "HOLD_OFFICIAL_ODDS_CSV_NO_MARKET_ROWS"
     assert result["empty_source_snapshots_with_preoff_eligible_races"] == 1
     assert result["empty_source_snapshots_before_first_off"] == 1
+    assert result["empty_source_lead_30_to_119min"] == 1
     assert result["empty_source_snapshots_after_first_off"] == 0
     assert result["preoff_eligible_race_observations"] == 1
     assert result["eligible_paired_races"] == 0
@@ -124,6 +125,7 @@ def test_immutable_legacy_provenance_without_timing_fields_remains_auditable(tmp
     assert result["timing_derived_from_legacy_provenance_snapshots"] == 1
     assert result["preoff_eligible_race_observations"] == 1
     assert result["empty_source_snapshots_before_first_off"] == 1
+    assert result["empty_source_lead_120_to_239min"] == 1
     assert result["eligible_preoff_quote_rows"] == 0
     assert result["after_cost_positive_expected_value_proven"] is False
 
@@ -137,3 +139,11 @@ def test_immutable_legacy_zero_default_timing_remains_auditable(tmp_path):
     assert result["timing_derived_from_legacy_provenance_snapshots"] == 1
     assert result["preoff_eligible_race_observations"] == 1
     assert result["snapshots_without_any_win_rows"] == 1
+
+
+def test_early_empty_source_is_not_mistaken_for_near_off(tmp_path):
+    _write(tmp_path, futures=1, closed=0, minutes=360)
+    result = audit(tmp_path)
+    assert result["status"] == "HOLD_OFFICIAL_ODDS_CSV_NO_MARKET_ROWS"
+    assert result["empty_source_lead_ge_240min"] == 1
+    assert result["empty_source_lead_0_to_29min"] == 0

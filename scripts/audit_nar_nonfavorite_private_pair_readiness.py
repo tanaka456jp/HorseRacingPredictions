@@ -46,6 +46,10 @@ def audit(directory: Path) -> dict:
         "empty_source_snapshots_with_preoff_eligible_races": 0,
         "empty_source_snapshots_before_first_off": 0,
         "empty_source_snapshots_after_first_off": 0,
+        "empty_source_lead_ge_240min": 0,
+        "empty_source_lead_120_to_239min": 0,
+        "empty_source_lead_30_to_119min": 0,
+        "empty_source_lead_0_to_29min": 0,
         "preoff_eligible_race_observations": 0,
         "timing_derived_from_legacy_provenance_snapshots": 0,
         "snapshots_with_win_rows_but_no_selected_win_price": 0,
@@ -165,6 +169,14 @@ def audit(directory: Path) -> dict:
                     result["empty_source_snapshots_with_preoff_eligible_races"] += 1
                 if minutes >= 0:
                     result["empty_source_snapshots_before_first_off"] += 1
+                    if minutes >= 240:
+                        result["empty_source_lead_ge_240min"] += 1
+                    elif minutes >= 120:
+                        result["empty_source_lead_120_to_239min"] += 1
+                    elif minutes >= 30:
+                        result["empty_source_lead_30_to_119min"] += 1
+                    else:
+                        result["empty_source_lead_0_to_29min"] += 1
                 else:
                     result["empty_source_snapshots_after_first_off"] += 1
             if source_audit["win_rows"] == 0:
