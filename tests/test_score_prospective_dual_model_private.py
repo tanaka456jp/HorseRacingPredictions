@@ -64,3 +64,14 @@ def test_missing_official_results_never_produce_cherrypicked_roi(tmp_path,monkey
     results.write_text(json.dumps(doc),encoding="utf-8")
     with pytest.raises(Exception,match="DENOMINATOR"):
         S.score_private_forward_files(frozen,results)
+
+
+def test_shared_private_snapshot_verifier_is_reusable_by_official_importer(
+    tmp_path, monkeypatch,
+):
+    frozen, _ = make_files(tmp_path, monkeypatch)
+    snapshot, doc = S.load_verified_private_forecast(frozen)
+    assert len(snapshot.races) == 1
+    assert snapshot.jurisdiction == "JRA"
+    assert snapshot.commitment_sha256 == doc["frozen_shadow_PRIVATE"]["commitment_sha256"]
+    assert doc["source_and_roster_independently_attested"] is False

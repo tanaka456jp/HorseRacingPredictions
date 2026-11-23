@@ -23,16 +23,21 @@ _RESULTS_SCHEMA = "HorseRacing.PC2.ReviewedOfficialResults.v1"
 _SHA = re.compile(r"[0-9a-f]{64}\Z")
 
 
-def score_private_forward_files(
-    frozen_file: Path, reviewed_official_results: Path,
-) -> dict:
-    if os.environ.get("COMPUTERNAME") != "DESKTOP-MVV1FD4":
-        raise ValueError("WRONG_PRIVATE_MACHINE")
-    for path in (frozen_file, reviewed_official_results):
-        if (not isinstance(path, Path) or not path.is_absolute()
-                or not path.is_file() or path.is_symlink()
-                or not 100 < path.stat().st_size <= 25_000_000):
-            raise ValueError("INVALID_PRIVATE_SOURCE")
+def load_verified_private_forecast(
+    frozen_file: Path,
+) -> tuple[FrozenModelShadow, dict]:
+    """Verify full PRIVATE model snapshot and salted immutable commitment.
+
+    No network or output. Reusable for a separately authenticated official
+    postevent ZIP importer without weakening the existing review gate.
+    """
+    if (os.environ.get("COMPUTERNAME") != "DESKTOP-MVV1FD4"
+            or not isinstance(frozen_file, Path)
+            or not frozen_file.is_absolute()
+            or not frozen_file.is_file()
+            or frozen_file.is_symlink()
+            or not 100 < frozen_file.stat().st_size <= 25_000_000):
+        raise ValueError("INVALID_PRIVATE_SOURCE")
     doc = json.loads(frozen_file.read_text(encoding="utf-8"))
     if (type(doc) is not dict or doc.get("schema") != _PRIVATE_SCHEMA
             or doc.get("source_and_roster_independently_attested") is not False
@@ -90,6 +95,20 @@ def score_private_forward_files(
         model_sha256_declared=original["model_sha256_declared"],
         races=races, commitment_sha256=commitment,
     )
+    return snapshot, doc
+
+
+def score_private_forward_files(
+    frozen_file: Path, reviewed_official_results: Path,
+) -> dict:
+    if os.environ.get("COMPUTERNAME") != "DESKTOP-MVV1FD4":
+        raise ValueError("WRONG_PRIVATE_MACHINE")
+    for path in (frozen_file, reviewed_official_results):
+        if (not isinstance(path, Path) or not path.is_absolute()
+                or not path.is_file() or path.is_symlink()
+                or not 100 < path.stat().st_size <= 25_000_000):
+            raise ValueError("INVALID_PRIVATE_SOURCE")
+    snapshot, doc = load_verified_private_forecast(frozen_file)
     official = json.loads(reviewed_official_results.read_text(encoding="utf-8"))
     if (type(official) is not dict
             or set(official) != {
