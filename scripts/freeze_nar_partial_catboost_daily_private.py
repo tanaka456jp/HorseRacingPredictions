@@ -31,6 +31,8 @@ from horse_racing_predictions.nar_private_dual_model_loader import (
 from horse_racing_predictions.prospective_dual_model_shadow import (
     freeze_fitted_dual_shadow,
 )
+from score_prospective_dual_model_private import load_verified_private_forecast
+
 
 _SNAPSHOT_SCHEMA = "HorseRacing.PC2.ProspectiveDualModelPrivate.v1"
 _MODE = "NAR_OFFICIAL_CAREER_3_OF_5_RESEARCH_ABLATION"
@@ -167,13 +169,38 @@ def freeze_private_from_saved_daily(root: Path, *, generated_utc: datetime) -> d
     model = load_nar_private_dual_candidate(
         root / "nar-forward-models" / "2017-2021-fit-2022-tune-v1"
     )
-    frozen, counts = freeze_partial_from_official_source(
-        blob, day=day, observed_utc=observed,
-        generated_utc=generated_utc, loaded=model,
-    )
     target = capture / f"{day:%Y%m%d}_NAR_partial3of5_dual_catboost_PRIVATE.json"
-    salt2 = secrets.token_bytes(32)
-    result = {
+    existing_verified = False
+    if target.exists() or target.is_symlink():
+        # An already frozen forecast must never be regenerated from the
+        # current clock. Verify its immutable contents, the original
+        # provenance ZIP, and the current native model binaries against the
+        # ORIGINAL saved generation time. This can recover a failed hosted
+        # receipt before off without changing picks or secret salt.
+        previous, previous_doc = load_verified_private_forecast(target)
+        if (previous.jurisdiction != "NAR"
+                or previous.race_day_jst != day.isoformat()
+                or previous_doc.get("source_feature_mode_PRIVATE") != _MODE
+                or previous_doc.get("model_missing_features_do_not_equal_full_feature_model") is not True
+                or previous_doc.get("raw_source_uploaded") is not False
+                or previous_doc.get("hosted_preoff_receipt_verified") is not False):
+            raise ValueError("NAR_PARTIAL_EXISTING_COMMITMENT_WRONG_CONTRACT")
+        old_generated = datetime.fromisoformat(previous.generated_utc)
+        frozen, counts = freeze_partial_from_official_source(
+            blob, day=day, observed_utc=observed,
+            generated_utc=old_generated, loaded=model,
+        )
+        if frozen != previous:
+            raise ValueError("NAR_PARTIAL_EXISTING_MODEL_FORECAST_MISMATCH")
+        result = previous_doc
+        existing_verified = True
+    else:
+        frozen, counts = freeze_partial_from_official_source(
+            blob, day=day, observed_utc=observed,
+            generated_utc=generated_utc, loaded=model,
+        )
+        salt2 = secrets.token_bytes(32)
+        result = {
         "schema": _SNAPSHOT_SCHEMA,
         "frozen_shadow_PRIVATE": asdict(frozen),
         "salt_hex_PRIVATE": salt2.hex(),
@@ -190,16 +217,21 @@ def freeze_private_from_saved_daily(root: Path, *, generated_utc: datetime) -> d
         "after_cost_positive_ev_proven": False,
         "raw_source_uploaded": False,
     }
-    content = json.dumps(result, ensure_ascii=False, sort_keys=True,
-                         allow_nan=False).encode("utf-8")
-    fd = os.open(target, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
-    with os.fdopen(fd, "wb") as stream:
-        stream.write(content)
-        stream.flush()
-        os.fsync(stream.fileno())
+        content = json.dumps(result, ensure_ascii=False, sort_keys=True,
+                             allow_nan=False).encode("utf-8")
+        fd = os.open(target, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+        with os.fdopen(fd, "wb") as stream:
+            stream.write(content)
+            stream.flush()
+            os.fsync(stream.fileno())
     return {
         "schema": "NAR.PC2.FittedModelPartialFeatureFrozen.v1",
-        "status": "PRIVATE_ACTUAL_MODEL_PARTIAL_FEATURE_PREOFF_FORECAST_FROZEN",
+        "status": (
+            "PRIVATE_EXISTING_PREOFF_CATBOOST_COMMITMENT_VERIFIED"
+            if existing_verified else
+            "PRIVATE_ACTUAL_MODEL_PARTIAL_FEATURE_PREOFF_FORECAST_FROZEN"
+        ),
+        "existing_private_forecast_reused": existing_verified,
         "real_preoff_source_races": counts["races"],
         "real_preoff_source_runners": counts["runners"],
         "race_day_jst": day.isoformat(),

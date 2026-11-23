@@ -121,7 +121,11 @@ jobs:
           try {
             $d = [string]$raw[0] | ConvertFrom-Json
             if ($d.schema -cne 'NAR.PC2.FittedModelPartialFeatureFrozen.v1' -or
-                $d.status -cne 'PRIVATE_ACTUAL_MODEL_PARTIAL_FEATURE_PREOFF_FORECAST_FROZEN' -or
+                [string]$d.status -cnotin @(
+                  'PRIVATE_ACTUAL_MODEL_PARTIAL_FEATURE_PREOFF_FORECAST_FROZEN',
+                  'PRIVATE_EXISTING_PREOFF_CATBOOST_COMMITMENT_VERIFIED'
+                ) -or
+                $null -eq $d.existing_private_forecast_reused -or
                 [int]$d.real_preoff_source_races -lt 1 -or
                 [int]$d.real_preoff_source_runners -lt 4 -or
                 $d.available_model_features -ne 3 -or
@@ -144,6 +148,7 @@ jobs:
             Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ('races=' + [int]$d.real_preoff_source_races)
             [ordered]@{
               status = 'NAR_REAL_FITTED_MODEL_PREOFF_PRIVATE_LOCK_SAVED'
+              existingImmutableForecastReused = [bool]$d.existing_private_forecast_reused
               partialFeatureAblation = $true
               verifiedFiveFeatureForecast = $false
               fullFlatRaceDenominator = [int]$d.real_preoff_source_races

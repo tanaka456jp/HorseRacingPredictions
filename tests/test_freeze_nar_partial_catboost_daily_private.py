@@ -122,5 +122,42 @@ def test_live_private_snapshot_is_exclusive_and_no_source_upload(
     original = json.loads(frozen.read_text(encoding="utf-8"))
     assert original["source_feature_mode_PRIVATE"].endswith("RESEARCH_ABLATION")
     assert original["model_missing_features_do_not_equal_full_feature_model"]
-    with pytest.raises(FileExistsError):
-        M.freeze_private_from_saved_daily(tmp_path, generated_utc=GEN)
+    initial_bytes = frozen.read_bytes()
+    again = M.freeze_private_from_saved_daily(
+        tmp_path, generated_utc=GEN + timedelta(minutes=1),
+    )
+    assert again["status"] == "PRIVATE_EXISTING_PREOFF_CATBOOST_COMMITMENT_VERIFIED"
+    assert again["existing_private_forecast_reused"] is True
+    assert again["blinded_digest"] == result["blinded_digest"]
+    assert frozen.read_bytes() == initial_bytes
+
+
+def test_existing_frozen_source_tamper_fails_instead_of_regenerating(tmp_path,monkeypatch):
+    monkeypatch.setenv("COMPUTERNAME","DESKTOP-MVV1FD4")
+    folder=tmp_path / "nar-prospective-captures"
+    folder.mkdir()
+    blob=fictional_daily_zip()
+    original=folder / "20261110_20261110T000000Z_race.zip"
+    original.write_bytes(blob)
+    salt=bytes(range(32))
+    (folder / original.name.replace("_race.zip","_private_provenance.json")).write_text(
+        json.dumps({
+            "schema":"NAR.OfficialDailyPreoffCapture.v1",
+            "salt_hex_PRIVATE":salt.hex(),
+            "salted_zip_sha256_PRIVATE":sha256(
+                b"NAR_OFFICIAL_DAILY_RACE_V1\x00"+salt+blob
+            ).hexdigest(),
+            "host_captured_utc":OBS.isoformat(),
+        }),encoding="utf-8"
+    )
+    monkeypatch.setattr(M,"load_nar_private_dual_candidate",
+                        lambda _: fake_model())
+    M.freeze_private_from_saved_daily(tmp_path,generated_utc=GEN)
+    frozen=folder / "20261110_NAR_partial3of5_dual_catboost_PRIVATE.json"
+    old=json.loads(frozen.read_text(encoding="utf-8"))
+    old["frozen_shadow_PRIVATE"]["races"][0]["top3"][0]="999"
+    frozen.write_text(json.dumps(old,ensure_ascii=False),encoding="utf-8")
+    with pytest.raises(ValueError, match="COMMITMENT"):
+        M.freeze_private_from_saved_daily(
+            tmp_path, generated_utc=GEN+timedelta(minutes=1)
+        )
