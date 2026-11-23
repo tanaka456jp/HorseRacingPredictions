@@ -1,0 +1,81 @@
+name: NAR PC2 Real Preoff Roster + Actual Dual CatBoost REPLAY (PRIVATE / NO EV)
+
+# Real preoff source from Nov 10 + already fitted private CatBoost; use
+# READ-ONLY historical replay, NOT a prospective pre-result model freeze.
+on:
+  push:
+    branches: ["feature/weekly-odds-free-note-20261021"]
+    paths:
+      - ".github/workflows/nar-pc2-real-preoff-native-model-replay.yml"
+      - "scripts/replay_nar_20261110_preoff_real_model_private.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nar-pc2-historic-preoff-real-model-replay
+  cancel-in-progress: false
+
+jobs:
+  pc2-native-on-real-preoff-roster-replay:
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          clean: false
+          persist-credentials: false
+      - name: Replay actual stored NAR CatBoost models on old verified preoff source ONLY
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:COMPUTERNAME -cne 'DESKTOP-MVV1FD4' -or
+              $env:GITHUB_REPOSITORY -cne 'tanaka456jp/HorseRacingPredictions' -or
+              $env:GITHUB_REF_NAME -cne 'feature/weekly-odds-free-note-20261021') {
+            Write-Host 'NAR_REAL_ROSTER_REPLAY_WRONG_PC_HOLD'
+            exit 2
+          }
+          $env:PYTHONDONTWRITEBYTECODE = '1'
+          $env:PYTHONPATH = Join-Path (Get-Location).Path 'src'
+          $root = 'D:\Development\HorseRacingPredictions-PrivateReview'
+          $vpy = Join-Path $root 'nar-exploratory-venv\Scripts\python.exe'
+          if (-not (Test-Path -LiteralPath $vpy -PathType Leaf)) {
+            Write-Host 'NAR_REAL_ROSTER_REPLAY_MISSING_RUNTIME_HOLD'
+            exit 2
+          }
+          $raw = @(& $vpy -B .\scripts\replay_nar_20261110_preoff_real_model_private.py --private-root $root 2>&1)
+          if ($LASTEXITCODE -ne 0 -or $raw.Count -ne 1) {
+            Write-Host 'NAR_REAL_ROSTER_MODEL_REPLAY_HOLD'
+            exit 2
+          }
+          $d = [string]$raw[0] | ConvertFrom-Json
+          if ($d.schema -cne 'NAR.PC2.HistoricalRealPreoffSourceNativeCatBoostReplay.v1' -or
+              $d.status -cne 'REAL_PREOFF_SOURCE_AND_REAL_FITTED_NAR_MODELS_REPLAYED_AFTER_EVENT' -or
+              $d.official_prior_preoff_flat_races -ne 59 -or
+              $d.official_prior_preoff_runners -ne 641 -or
+              $d.model_observed_career_features -ne 3 -or
+              $d.model_missing_historical_features -ne 2 -or
+              $d.actual_native_two_catboost_models_executed -ne $true -or
+              $d.prospective_model_selection_frozen_before_results -ne $false -or
+              $d.prospective_hit_rate_measured -ne $false -or
+              $d.prospective_roi_measured -ne $false -or
+              $d.private_bytes_uploaded -ne $false -or
+              $d.private_files_modified -ne $false -or
+              $d.positive_ev_proven -ne $false) {
+            Write-Host 'NAR_REAL_ROSTER_MODEL_REPLAY_UNTRUSTED_RESULT_HOLD'
+            exit 2
+          }
+          [ordered]@{
+            status = [string]$d.status
+            realHistoricalPreoffRacesScoredAfterEvent = [int]$d.official_prior_preoff_flat_races
+            realHistoricalPreoffRunnersScoredAfterEvent = [int]$d.official_prior_preoff_runners
+            observedModelFeatures = 3
+            unavailableModelFeatures = 2
+            genuineFuturePredictionsFrozen = 0
+            prospectivelyMeasuredHitRate = $false
+            prospectivelyMeasuredROI = $false
+            privateSourceUploaded = $false
+            actualBets = 0
+            positiveEVProven = $false
+          } | ConvertTo-Json -Compress
