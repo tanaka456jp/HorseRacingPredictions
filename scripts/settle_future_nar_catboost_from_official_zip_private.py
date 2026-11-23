@@ -56,15 +56,18 @@ def _daily_tables(blob: bytes, day: date, *, final: bool) -> dict:
             or not blob.startswith(b"PK\x03\x04")):
         raise PrivateNarSettlementHold("NAR_MODEL_OFFICIAL_FINAL_ZIP_INVALID")
     prefix = day.strftime("%Y%m%d")
-    names = {
+    required = {
         f"{prefix}_racelist.csv",
         f"{prefix}_horselist.csv",
-        f"{prefix}_payback.csv",
     }
+    allowed = required | {f"{prefix}_payback.csv"}
     try:
         with ZipFile(BytesIO(blob)) as archive:
             infos = archive.infolist()
-            if (len(infos) != 3 or set(x.filename for x in infos) != names
+            actual = set(x.filename for x in infos)
+            if (len(infos) != len(actual)
+                    or (actual != allowed if final
+                        else not required.issubset(actual) or not actual.issubset(allowed))
                     or sum(x.file_size for x in infos) > 4 * _MAX_SOURCE
                     or any(x.is_dir() or x.flag_bits & 1 or
                            x.file_size > _MAX_SOURCE for x in infos)
