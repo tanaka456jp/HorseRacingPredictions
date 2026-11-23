@@ -154,15 +154,23 @@ def main() -> int:
             "positive_ev_proven": False,
         }, sort_keys=True))
         return 2
+    # A sidecar/source ZIP may have been safely preserved even if no
+    # executable research-price evidence exists. In particular, PLACE
+    # quotes alone cannot validate the preregistered nonfavorite WIN test.
+    # Do not turn an empty/header-only source into a green import audit.
+    status = (
+        "HOLD_MANUAL_OFFLINE_CSV_NO_MARKET_ROWS" if a.market_rows == 0
+        else "HOLD_MANUAL_OFFLINE_NO_SELECTED_WIN_QUOTES"
+        if a.planned_win_tickets_with_price == 0
+        else "PRIVATE_OFFLINE_WIN_QUOTES_SEEN_INDICATIVE_ONLY"
+    )
     print(json.dumps({
         "schema": "NAR.PC2.ManualDailyOddsOfflineAudit.v1",
-        "status": (
-            "PRIVATE_OFFLINE_INTERIM_QUOTES_SEEN_INDICATIVE_ONLY"
-            if a.planned_win_tickets_with_price
-            or a.planned_place_tickets_with_min_price
-            else "PRIVATE_OFFLINE_SOURCE_READ_ZERO_VALID_QUOTES"
-        ),
+        "status": status,
         "source_day_jst": a.source_day_jst,
+        "source_market_rows": a.market_rows,
+        "source_win_rows": a.win_rows,
+        "source_place_rows": a.place_rows,
         "frozen_flat_races": a.registered_flat_races,
         "future_preoff_eligible_races": a.future_preoff_eligible_races,
         "past_or_closed_races": a.past_or_closed_races,
@@ -177,7 +185,7 @@ def main() -> int:
         "positive_ev_proven": False,
         "private_source_uploaded": False,
     }, sort_keys=True))
-    return 0
+    return 0 if status == "PRIVATE_OFFLINE_WIN_QUOTES_SEEN_INDICATIVE_ONLY" else 2
 
 
 if __name__ == "__main__":

@@ -23,20 +23,21 @@ OFF1 = NOW + timedelta(hours=1)
 OFF2 = NOW + timedelta(hours=4)
 
 
-def _archive() -> bytes:
+def _archive(*, empty_market=False, missing_win_prices=False) -> bytes:
     names = ["競馬場", "競走年月日", "レース番号", "賭式",
              "番号1", "番号2", "番号3", "オッズ", "オッズ（最大）", "人気"]
     text = StringIO()
     wr = csv.DictWriter(text, fieldnames=names)
     wr.writeheader()
-    for r in (1, 2):
+    for r in (() if empty_market else (1, 2)):
         for kind in ("単勝", "複勝"):
             for h in (1, 2, 3, 4):
                 wr.writerow({
                     "競馬場": "架空場", "競走年月日": "20261119",
                     "レース番号":str(r), "賭式":kind,
                     "番号1":str(h), "番号2":"", "番号3":"",
-                    "オッズ":"2.5", "オッズ（最大）":"3.1" if kind=="複勝" else "",
+                    "オッズ":"" if missing_win_prices and kind=="単勝" else "2.5",
+                    "オッズ（最大）":"3.1" if kind=="複勝" else "",
                     "人気":str(h),
                 })
     sink = BytesIO()
@@ -62,12 +63,12 @@ def _frozen():
     }
 
 
-def _setup(tmp_path,monkeypatch):
+def _setup(tmp_path,monkeypatch,*,archive=None):
     inbox=tmp_path / "manual-odds-inbox"
     inbox.mkdir()
     filename=f"20261119_{int(SOURCE.timestamp())}_odds.zip"
     path=inbox / filename
-    path.write_bytes(_archive())
+    path.write_bytes(_archive() if archive is None else archive)
     monkeypatch.setattr(M,"_now_utc",lambda:NOW)
     monkeypatch.setattr(M,"_load_original_frozen_forecast",
                         lambda folder,day:(_frozen(), b"FICTIONAL ONLY"))
@@ -164,3 +165,36 @@ def test_post_first_off_later_race_quote_only_with_frozen_denominator(
     assert a.missing_win_prices==1
     assert a.missing_place_min_prices==1
     assert a.after_cutoff_raw_quote_rows_ignored==8
+
+
+@pytest.mark.parametrize("mode,expected_status,expected_exit", [
+    ("market_empty", "HOLD_MANUAL_OFFLINE_CSV_NO_MARKET_ROWS", 2),
+    ("place_only", "HOLD_MANUAL_OFFLINE_NO_SELECTED_WIN_QUOTES", 2),
+    ("win_quotes", "PRIVATE_OFFLINE_WIN_QUOTES_SEEN_INDICATIVE_ONLY", 0),
+])
+def test_manual_offline_cli_never_reports_win_readiness_without_win_prices(
+    tmp_path, monkeypatch, capsys, mode, expected_status, expected_exit,
+):
+    """Source preservation is not the same as usable preoff WIN evidence."""
+    kwargs = {
+        "empty_market": mode == "market_empty",
+        "missing_win_prices": mode == "place_only",
+    }
+    candidate = _setup(tmp_path, monkeypatch, archive=_archive(**kwargs))
+    monkeypatch.setattr(sys, "argv", [
+        "import_nar_manual_daily_odds_offline.py",
+        "--private-capture-dir", str(tmp_path),
+    ])
+    assert M.main() == expected_exit
+    output = json.loads(capsys.readouterr().out)
+    assert output["status"] == expected_status
+    assert output["source_market_rows"] == (0 if mode == "market_empty" else 16)
+    assert output["quoted_selected_win"] == (2 if mode == "win_quotes" else 0)
+    assert output["provider_network_requests"] == 0
+    assert output["private_source_uploaded"] is False
+    assert output["positive_ev_proven"] is False
+    assert candidate.read_bytes() == _archive(**kwargs)
+    # Immutable local source preserved even when its research audit is HOLD.
+    assert (tmp_path / candidate.name.replace(
+        "_odds.zip", "_manually_downloaded_odds_PRIVATE.json"
+    )).exists()
