@@ -161,3 +161,37 @@ def test_existing_frozen_source_tamper_fails_instead_of_regenerating(tmp_path,mo
         M.freeze_private_from_saved_daily(
             tmp_path, generated_utc=GEN+timedelta(minutes=1)
         )
+
+
+def test_staged_manual_zip_flows_into_model_freeze(tmp_path, monkeypatch):
+    import import_nar_manual_daily_race_offline as importer
+    monkeypatch.setenv("COMPUTERNAME","DESKTOP-MVV1FD4")
+    monkeypatch.setattr(importer,"_now_utc",lambda: OBS)
+    monkeypatch.setattr(M,"load_nar_private_dual_candidate",lambda _: fake_model())
+    folder=tmp_path/"nar-prospective-captures"
+    inbox=folder/"manual-race-inbox"
+    inbox.mkdir(parents=True)
+    original=inbox/f"20261110_{int(OBS.timestamp())}_race.zip"
+    original_bytes=fictional_daily_zip()
+    original.write_bytes(original_bytes)
+    assert M.prepare_manual_source_if_needed(tmp_path,now=OBS) is True
+    out=M.freeze_private_from_saved_daily(tmp_path,generated_utc=GEN)
+    assert out["real_preoff_source_races"]==2
+    assert out["real_preoff_source_runners"]==8
+    assert M.prepare_manual_source_if_needed(tmp_path,now=GEN) is False
+    assert original.read_bytes()==original_bytes
+    again=M.freeze_private_from_saved_daily(tmp_path,generated_utc=GEN)
+    assert again["blinded_digest"]==out["blinded_digest"]
+
+
+def test_manual_inbox_ambiguity_blocks_without_archiving(tmp_path,monkeypatch):
+    monkeypatch.setenv("COMPUTERNAME","DESKTOP-MVV1FD4")
+    folder=tmp_path/"nar-prospective-captures"
+    inbox=folder/"manual-race-inbox"
+    inbox.mkdir(parents=True)
+    for offset in (0,1):
+        (inbox/f"20261110_{int(OBS.timestamp())+offset}_race.zip").write_bytes(
+            fictional_daily_zip())
+    with pytest.raises(ValueError,match="AMBIGUOUS"):
+        M.prepare_manual_source_if_needed(tmp_path,now=OBS)
+    assert not list(folder.glob("20261110_????????T??????Z_race.zip"))

@@ -1,6 +1,6 @@
 name: NAR PC2 Future CatBoost 3-of-5 Preoff Freeze + Independent Receipt
 
-# Push only inspects existing local sources. Explicit workflow_dispatch may
+# Push uses existing local archives or one already user-staged manual ZIP. Explicit workflow_dispatch may
 # request ONE permission-checked official NAR DAILY race ZIP before off.
 # No JRA-VAN, odds polling, historical holdout access, wagering or raw upload.
 on:
@@ -8,6 +8,7 @@ on:
     branches: ["feature/weekly-odds-free-note-20261021"]
     paths:
       - ".github/workflows/nar-pc2-future-catboost-preoff-freeze-receipt.yml"
+      - "scripts/freeze_nar_partial_catboost_daily_private.py"
   workflow_dispatch:
     inputs:
       single_official_roster_download_authorized:
@@ -110,7 +111,7 @@ jobs:
             Write-Host 'NAR_FORWARD_CATBOOST_RUNTIME_MISSING_HOLD'
             exit 2
           }
-          $raw = @(& $vpy -B .\scripts\freeze_nar_partial_catboost_daily_private.py --private-root $private 2>&1)
+          $raw = @(& $vpy -B .\scripts\freeze_nar_partial_catboost_daily_private.py --private-root $private --import-manual-if-needed 2>&1)
           if ($LASTEXITCODE -ne 0 -or $raw.Count -ne 1) {
             # No current verified daily ZIP, late capture, or existing lock:
             # do NOT invent a new forecast or claim prospective metrics.
@@ -148,6 +149,7 @@ jobs:
             Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ('races=' + [int]$d.real_preoff_source_races)
             [ordered]@{
               status = 'NAR_REAL_FITTED_MODEL_PREOFF_PRIVATE_LOCK_SAVED'
+              manualSourceImported = [bool]$d.manual_source_imported_this_run
               existingImmutableForecastReused = [bool]$d.existing_private_forecast_reused
               partialFeatureAblation = $true
               verifiedFiveFeatureForecast = $false

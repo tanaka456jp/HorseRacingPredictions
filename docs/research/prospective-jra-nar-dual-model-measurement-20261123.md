@@ -77,3 +77,6 @@ GitHub documents that `workflow_dispatch` and scheduled actions must have a work
 
 ## 2026-11-26 outcome exceptions
 Explicit non-refund DNF markers and competition ranks including tied winners with matching official WIN payout maps now preserve all frozen races in descriptive metrics. Numeric rank <=3 defines podium hits including ties; DNF is a miss. At least three numeric finishers are required. Scratches, refund ambiguity, missing outcomes and inconsistent ranking still HOLD the whole cohort. Synthetic regression only, not real forward results.
+
+## 2026-11-26: offline user-staged roster to actual model lock
+The forward CatBoost workflow now passes --import-manual-if-needed. If a valid original archive does not exist, it tries exactly one current-day official ZIP already placed by the operator in the private manual-race-inbox; ambiguity, late data, incomplete rosters or changed provenance remain HOLD. It never downloads from NAR on push, never replaces a saved archive, and records the actual local import time before model inference. It subsequently uses the same immutable private CatBoost freeze and independent hosted digest receipt. On an empty inbox it remains HOLD. The separate explicit authorized dispatch download is unchanged. Synthetic tests only until an actual preoff input becomes available.

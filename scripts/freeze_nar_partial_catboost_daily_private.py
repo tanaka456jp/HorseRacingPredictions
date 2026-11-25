@@ -32,6 +32,9 @@ from horse_racing_predictions.prospective_dual_model_shadow import (
     freeze_fitted_dual_shadow,
 )
 from score_prospective_dual_model_private import load_verified_private_forecast
+from import_nar_manual_daily_race_offline import (
+    import_user_downloaded_preoff_race, _OFFICIAL_NAME,
+)
 
 
 _SNAPSHOT_SCHEMA = "HorseRacing.PC2.ProspectiveDualModelPrivate.v1"
@@ -251,14 +254,53 @@ def freeze_private_from_saved_daily(root: Path, *, generated_utc: datetime) -> d
     }
 
 
+def prepare_manual_source_if_needed(root: Path, *, now: datetime) -> bool:
+    """Only stage one current-day original, never access a provider.
+    
+    Existing immutable sources take precedence; ambiguous inboxes HOLD.
+    The importer uses its own actual observation clock, not file mtime.
+    """
+    if (os.environ.get("COMPUTERNAME") != "DESKTOP-MVV1FD4"
+            or not root.is_absolute() or not root.is_dir() or root.is_symlink()
+            or now.utcoffset() is None):
+        raise ValueError("NAR_PARTIAL_PRIVATE_PC2_CONTEXT_INVALID")
+    capture = root / "nar-prospective-captures"
+    if not capture.is_dir() or capture.is_symlink():
+        raise ValueError("NAR_PARTIAL_PRIVATE_CAPTURE_DIR_MISSING")
+    day = now.astimezone(_JST).strftime("%Y%m%d")
+    if list(capture.glob(f"{day}_????????T??????Z_race.zip")):
+        return False
+    inbox = capture / "manual-race-inbox"
+    if not inbox.exists() and not inbox.is_symlink():
+        return False
+    if not inbox.is_dir() or inbox.is_symlink():
+        raise ValueError("NAR_PARTIAL_MANUAL_INBOX_INVALID")
+    candidates = [x for x in inbox.iterdir()
+                  if x.name.startswith(day + "_") and _OFFICIAL_NAME.fullmatch(x.name)]
+    if not candidates:
+        return False
+    if len(candidates) != 1:
+        raise ValueError("NAR_PARTIAL_MANUAL_SOURCE_AMBIGUOUS")
+    import_user_downloaded_preoff_race(capture, candidates[0])
+    return True
+
+
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--private-root", type=Path, required=True)
+    p.add_argument("--import-manual-if-needed", action="store_true",
+                   help="Offline only; accept a single user-staged current-day ZIP.")
     args = p.parse_args()
     try:
+        imported = False
+        if args.import_manual_if_needed:
+            imported = prepare_manual_source_if_needed(
+                args.private_root, now=datetime.now(timezone.utc),
+            )
         output = freeze_private_from_saved_daily(
             args.private_root, generated_utc=datetime.now(timezone.utc),
         )
+        output["manual_source_imported_this_run"] = imported
     except Exception:
         print(json.dumps({
             "schema": "NAR.PC2.FittedModelPartialFeatureFrozen.v1",
