@@ -78,7 +78,7 @@ jobs:
           if ($d.schema -cne 'NAR.PC2.PosteventRealModelPaperAccuracyROI.v1' -or
               $d.status -cne 'COMPLETE_DESCRIPTIVE_WIN_HITS_AND_PAPER_ROI_NO_EV_PROOF' -or
               $d.frozen_race_denominator -le 0 -or
-              $d.ordinary_fully_settled_races -ne $d.frozen_race_denominator -or
+              $d.fully_settled_races -ne $d.frozen_race_denominator -or
               $d.top1_win_hits -lt 0 -or
               $d.top1_win_hits -gt $d.frozen_race_denominator -or
               $d.top3_numeric_podium_hits -gt 3*$d.frozen_race_denominator -or
@@ -99,7 +99,10 @@ jobs:
             status = [string]$d.status
             model = 'NAR_2017_2021_CATBOOST_PARTIAL_3_OF_5'
             frozenRaces = [int]$d.frozen_race_denominator
-            racesWithCompleteOfficialOutcome = [int]$d.ordinary_fully_settled_races
+            racesWithCompleteOfficialOutcome = [int]$d.fully_settled_races
+            ordinaryRaces = [int]$d.ordinary_fully_settled_races
+            racesWithExplicitDNF = [int]$d.races_with_explicit_dnf
+            racesWithNumericDeadHeat = [int]$d.races_with_numeric_dead_heat
             top1WinHits = [int]$d.top1_win_hits
             top1WinHitRate = [double]$d.top1_win_hit_rate
             top3PodiumHits = [int]$d.top3_numeric_podium_hits

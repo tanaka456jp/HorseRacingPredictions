@@ -1,8 +1,8 @@
 """PC2-only OFFLINE final official NAR ZIP -> immutable model paper accuracy/ROI.
 
-This is a conservative ALL-RACES, ordinary numeric-finishes-only settlement.
-ANY missing official result, scratch, DNF, dead heat, payout inconsistency, or
-changed horse name keeps the whole day's ROI in HOLD: no favorable subset.
+All-races settlement accepts explicit non-refund DNF and valid numeric ties.
+Missing results, scratches, uncertain refunds, payout conflicts or changed
+horse names keep the whole day's metrics in HOLD: no favorable subset.
 Requires a previously frozen tamper-checked private model forecast and its
 original official preoff ZIP. Does not download, write or upload sources.
 """
@@ -24,7 +24,7 @@ from capture_nar_official_daily_preoff_once import (
 )
 from score_prospective_dual_model_private import load_verified_private_forecast
 from horse_racing_predictions.prospective_dual_model_shadow import (
-    score_frozen_shadow,
+    ShadowAccuracyAndReturn,
 )
 
 _SCHEMA = "NAR.PC2.PosteventRealModelPaperAccuracyROI.v1"
@@ -91,6 +91,14 @@ def _daily_tables(blob: bytes, day: date, *, final: bool) -> dict:
         raise PrivateNarSettlementHold("NAR_MODEL_OFFICIAL_FINAL_UNREADABLE") from exc
 
 
+def _valid_ranks(finishes: dict) -> bool:
+    # Competition ranks: 1,1,3 is valid, 1,1,2 is not.
+    ranks = sorted(v for v in finishes.values() if v is not None)
+    return len(ranks) >= 3 and all(
+        type(v) is int and v == ranks.index(v) + 1 for v in ranks
+    )
+
+
 def _model_final_outcomes(
     preoff_zip: bytes, final_zip: bytes, *,
     day: date, races: tuple,
@@ -137,14 +145,15 @@ def _model_final_outcomes(
                 number in finishes.setdefault(rid, {})):
             raise PrivateNarSettlementHold("NAR_MODEL_FINAL_HORSE_IDENTITY_CHANGED")
         rank = row["着順"].strip()
-        if (not rank.isascii() or not rank.isdecimal()
-                or not 1 <= int(rank) <= len(expected[rid].roster)):
+        if rank in {"中止", "競走中止"}:
+            finishes[rid][number] = None
+        elif rank.isascii() and rank.isdecimal() and 1 <= int(rank) <= len(expected[rid].roster):
+            finishes[rid][number] = int(rank)
+        else:
             raise PrivateNarSettlementHold("NAR_MODEL_NON_NUMERIC_OR_AMBIGUOUS_FINISH")
-        finishes[rid][number] = int(rank)
     for rid, race in expected.items():
         if (set(finishes.get(rid, {})) != set(race.roster)
-                or sorted(finishes[rid].values()) !=
-                list(range(1, len(race.roster) + 1))):
+                or not _valid_ranks(finishes[rid])):
             raise PrivateNarSettlementHold("NAR_MODEL_UNRESOLVED_FINISH_DENOMINATOR")
     win_pays = {}
     saw_payback = set()
@@ -174,7 +183,7 @@ def _model_final_outcomes(
     for rid, race in expected.items():
         winners = {h for h, rank in finishes[rid].items() if rank == 1}
         payouts = win_pays.get(rid, {})
-        if len(winners) != 1 or set(payouts) != winners:
+        if not winners or set(payouts) != winners:
             raise PrivateNarSettlementHold("NAR_MODEL_OFFICIAL_WINNER_PAYOUT_MISMATCH")
         selected = race.top3[0]
         data[rid] = {
@@ -182,6 +191,39 @@ def _model_final_outcomes(
             "selected_top1_win_return_per_100_yen": payouts.get(selected, 0),
         }
     return data
+
+
+def _score_resolved_nar(frozen, outcomes: dict) -> ShadowAccuracyAndReturn:
+    """Complete original denominator, explicit DNF counts as a miss."""
+    if not frozen.races or set(outcomes) != {r.race_id for r in frozen.races}:
+        raise PrivateNarSettlementHold("NAR_MODEL_OUTCOME_COHORT_INCOMPLETE")
+    hits = podium = outsiders = returned = 0
+    for race in frozen.races:
+        row = outcomes[race.race_id]
+        ranks = row["finish_by_horse"]
+        amount = row["selected_top1_win_return_per_100_yen"]
+        if (set(ranks) != set(race.roster) or not _valid_ranks(ranks)
+                or type(amount) is not int or not 0 <= amount <= 500_000):
+            raise PrivateNarSettlementHold("NAR_MODEL_OUTCOME_INCONSISTENT")
+        win = ranks[race.top3[0]] == 1
+        if (win and amount < 100) or (not win and amount != 0):
+            raise PrivateNarSettlementHold("NAR_MODEL_SELECTED_PAYOUT_INCONSISTENT")
+        hits += int(win)
+        podium += sum(ranks[h] is not None and ranks[h] <= 3 for h in race.top3)
+        rank = ranks[race.outsider]
+        outsiders += int(rank is not None and rank <= 3)
+        returned += amount
+    n = len(frozen.races)
+    stake = 100 * n
+    return ShadowAccuracyAndReturn(
+        status="COMPLETE_DESCRIPTIVE_PROSPECTIVE_PAPER_NO_EV_PROOF",
+        jurisdiction=frozen.jurisdiction, frozen_races=n,
+        outcome_complete_races=n, top1_win_hits=hits, top1_win_hit_rate=hits/n,
+        top3_numeric_podium_hits=podium, top3_numeric_podium_precision=podium/(3*n),
+        outsider_numeric_top3_hits=outsiders, outsider_numeric_top3_hit_rate=outsiders/n,
+        stake_yen=stake, official_paper_returns_yen=returned,
+        paper_roi_after_stake=(returned-stake)/stake,
+    )
 
 
 def score_private_postevent_zip(
@@ -257,7 +299,16 @@ def score_private_postevent_zip(
         preoff_blob, final_zip_path.read_bytes(),
         day=day, races=frozen.races,
     )
-    result = score_frozen_shadow(frozen, final_by_race=outcomes)
+    result = _score_resolved_nar(frozen, outcomes)
+    dnf = ties = exceptional = 0
+    for row in outcomes.values():
+        values = list(row["finish_by_horse"].values())
+        numeric = [r for r in values if r is not None]
+        has_dnf = None in values
+        has_tie = len(numeric) != len(set(numeric))
+        dnf += int(has_dnf)
+        ties += int(has_tie)
+        exceptional += int(has_dnf or has_tie)
     if not result.status.startswith("COMPLETE_"):
         raise PrivateNarSettlementHold("NAR_MODEL_ALL_RACES_ECONOMIC_RESULT_HOLD")
     return {
@@ -265,7 +316,10 @@ def score_private_postevent_zip(
         "status": "COMPLETE_DESCRIPTIVE_WIN_HITS_AND_PAPER_ROI_NO_EV_PROOF",
         "jurisdiction": "NAR", "race_day_jst": day.isoformat(),
         "frozen_race_denominator": result.frozen_races,
-        "ordinary_fully_settled_races": result.outcome_complete_races,
+        "ordinary_fully_settled_races": result.outcome_complete_races - exceptional,
+        "fully_settled_races": result.outcome_complete_races,
+        "races_with_explicit_dnf": dnf,
+        "races_with_numeric_dead_heat": ties,
         "top1_win_hits": result.top1_win_hits,
         "top1_win_hit_rate": result.top1_win_hit_rate,
         "top3_numeric_podium_hits": result.top3_numeric_podium_hits,

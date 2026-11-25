@@ -34,7 +34,7 @@ def _csv(rows):
     return io.getvalue().encode("utf-8-sig")
 
 
-def completed_zip(*, scratch=False, payout_mismatch=False):
+def completed_zip(*, scratch=False, payout_mismatch=False, dnf=False, dead_heat=False, invalid_tie=False):
     ymd="20261110"
     races=[{"競馬場":"架空地方場","競走年月日":ymd,
             "レース番号":str(r),"頭数":"4"}
@@ -45,6 +45,12 @@ def completed_zip(*, scratch=False, payout_mismatch=False):
             rank=str(h)
             if scratch and r==2 and h==4:
                 rank="取消"
+            if dnf and r==2 and h==4:
+                rank="競走中止"
+            if (dead_heat or invalid_tie) and r==2 and h==2:
+                rank="1"
+            if invalid_tie and r==2 and h==3:
+                rank="2"
             horses.append({
                 "競馬場":"架空地方場","競走年月日":ymd,
                 "レース番号":str(r),"馬番":str(h),
@@ -55,6 +61,9 @@ def completed_zip(*, scratch=False, payout_mismatch=False):
         "レース番号":str(r),"単勝組番":("4" if payout_mismatch else "1"),
         "単勝払戻金（円）":str(200+r*100),
     } for r in (1,2)]
+    if dead_heat or invalid_tie:
+        payouts.append({"競馬場":"架空地方場","競走年月日":ymd,
+                        "レース番号":"2","単勝組番":"2","単勝払戻金（円）":"190"})
     out=BytesIO()
     with ZipFile(out,"w") as z:
         z.writestr(ymd+"_racelist.csv",_csv(races))
@@ -133,4 +142,25 @@ def test_frozen_model_tampering_never_enters_official_settlement(tmp_path,monkey
     doc["frozen_shadow_PRIVATE"]["races"][0]["top3"][0]="4"
     snap.write_text(json.dumps(doc),encoding="utf-8")
     with pytest.raises(ValueError,match="COMMITMENT"):
+        M.score_private_postevent_zip(tmp_path,final,now_utc=RECEIVED)
+
+
+@pytest.mark.parametrize("kind", ["dnf", "dead_heat"])
+def test_resolved_exception_keeps_all_races(tmp_path, monkeypatch, kind):
+    final=prepared(tmp_path,monkeypatch)
+    final.write_bytes(completed_zip(**{kind: True}))
+    result=M.score_private_postevent_zip(tmp_path,final,now_utc=RECEIVED)
+    assert result["fully_settled_races"]==2
+    assert result["ordinary_fully_settled_races"]==1
+    assert result["races_with_explicit_dnf"]==int(kind=="dnf")
+    assert result["races_with_numeric_dead_heat"]==int(kind=="dead_heat")
+    assert result["hypothetical_100_yen_win_stake"]==200
+    assert result["hypothetical_official_return_yen"]==700
+    assert not result["positive_ev_proven"]
+
+
+def test_invalid_rank_tie_still_holds(tmp_path, monkeypatch):
+    final=prepared(tmp_path,monkeypatch)
+    final.write_bytes(completed_zip(invalid_tie=True))
+    with pytest.raises(M.PrivateNarSettlementHold, match="UNRESOLVED_FINISH"):
         M.score_private_postevent_zip(tmp_path,final,now_utc=RECEIVED)
