@@ -23,6 +23,9 @@ from horse_racing_predictions.dual_candidate_private_preview import (
 from horse_racing_predictions.nar_private_dual_model_loader import (
     load_nar_private_dual_candidate,
 )
+from horse_racing_predictions.jra_future_shadow_features import (
+    prepare_jra_future_shadow_features,
+)
 from horse_racing_predictions.prospective_dual_model_shadow import (
     freeze_fitted_dual_shadow,
 )
@@ -42,6 +45,7 @@ def freeze_private_future(
     *, candidate_dir: Path, features_csv: Path,
     calendar_json: Path, private_output_dir: Path,
     now_utc: datetime,
+    jra_history_csv: Path | None = None,
 ) -> dict:
     """Write exactly one new, local-only snapshot, never revise old picks.
 
@@ -60,6 +64,8 @@ def freeze_private_future(
             or not private_output_dir.is_dir()):
         raise ValueError("PRIVATE_PC2_CONTEXT_INVALID")
     _file(features_csv, 35_000_000)
+    if jra_history_csv is not None:
+        _file(jra_history_csv, 400_000_000)
     _file(calendar_json, 1_000_000)
     manifest = json.loads(calendar_json.read_text(encoding="utf-8"))
     if (type(manifest) is not dict or set(manifest) != {
@@ -85,6 +91,16 @@ def freeze_private_future(
         features_csv, encoding="utf-8-sig",
         dtype={"race_id": "string", "horse_id": "string"},
     )
+    if jra_history_csv is not None:
+        if manifest["jurisdiction"] != "JRA":
+            raise ValueError("JRA_RAW_SOURCE_MODE_ONLY")
+        history = pd.read_csv(jra_history_csv, encoding="utf-8-sig")
+        frame = prepare_jra_future_shadow_features(
+            native, history=history, entries=frame,
+            race_day_jst=manifest["race_day_jst"],
+            source_asof=datetime.fromisoformat(manifest["source_asof_utc"].replace("Z", "+00:00")),
+            generated_at=now_utc, expected_runner_counts=expected,
+        )
     counts = frame.groupby("race_id").size().to_dict()
     if counts != expected:
         raise ValueError("PRIVATE_ROSTER_COVERAGE_INVALID")
@@ -153,14 +169,21 @@ def freeze_private_future(
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--candidate-dir", type=Path, required=True)
-    p.add_argument("--preoff-features-csv", type=Path, required=True)
+    group = p.add_mutually_exclusive_group(required=True)
+    group.add_argument("--preoff-features-csv", type=Path)
+    group.add_argument("--jra-entries-csv", type=Path)
+    p.add_argument("--jra-history-csv", type=Path,
+                   help="Explicit separately reviewed JRA prior-result CSV; never a sealed evaluation dataset.")
     p.add_argument("--reviewed-calendar-json", type=Path, required=True)
     p.add_argument("--private-output-dir", type=Path, required=True)
     args = p.parse_args()
     try:
+        if (args.jra_entries_csv is None) != (args.jra_history_csv is None):
+            raise ValueError("JRA_ENTRIES_AND_HISTORY_MUST_BE_PAIRED")
         summary = freeze_private_future(
             candidate_dir=args.candidate_dir,
-            features_csv=args.preoff_features_csv,
+            features_csv=args.preoff_features_csv or args.jra_entries_csv,
+            jra_history_csv=args.jra_history_csv,
             calendar_json=args.reviewed_calendar_json,
             private_output_dir=args.private_output_dir,
             now_utc=datetime.now(timezone.utc),

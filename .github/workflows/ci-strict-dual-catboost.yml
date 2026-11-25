@@ -4,6 +4,9 @@ on:
   push:
     branches: ["feature/weekly-odds-free-note-20261021"]
     paths:
+      - "src/horse_racing_predictions/jra_future_shadow_features.py"
+      - "tests/test_jra_future_shadow_features.py"
+      - "scripts/freeze_prospective_dual_catboost_private.py"
       - "src/horse_racing_predictions/strict_dual_catboost_candidate.py"
       - "tests/test_strict_dual_catboost_candidate.py"
       - "src/horse_racing_predictions/dual_candidate_private_preview.py"
@@ -26,6 +29,9 @@ on:
   pull_request:
     branches: [main]
     paths:
+      - "src/horse_racing_predictions/jra_future_shadow_features.py"
+      - "tests/test_jra_future_shadow_features.py"
+      - "scripts/freeze_prospective_dual_catboost_private.py"
       - "src/horse_racing_predictions/strict_dual_catboost_candidate.py"
       - "tests/test_strict_dual_catboost_candidate.py"
       - "src/horse_racing_predictions/dual_candidate_private_preview.py"
@@ -72,4 +78,4 @@ jobs:
           python -m pip install --disable-pip-version-check -e ".[dev,research]"
       - name: Actually train and freeze independent CatBoost models on fictional pre-2025 races
         run: |
-          pytest -q tests/test_strict_dual_catboost_candidate.py tests/test_dual_candidate_private_preview.py tests/test_friday_predraw_dual_preview.py tests/test_friday_feature_projection.py tests/test_nar_private_catboost_screening.py tests/test_nar_local_screening.py tests/test_nar_exploratory_rank_screen.py -rs
+          pytest -q tests/test_jra_future_shadow_features.py tests/test_strict_dual_catboost_candidate.py tests/test_dual_candidate_private_preview.py tests/test_friday_predraw_dual_preview.py tests/test_friday_feature_projection.py tests/test_nar_private_catboost_screening.py tests/test_nar_local_screening.py tests/test_nar_exploratory_rank_screen.py -rs
