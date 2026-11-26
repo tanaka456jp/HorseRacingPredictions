@@ -112,3 +112,44 @@ def test_reviewed_full_form_refuses_unverified_coverage(issue):
     with pytest.raises(ValueError):
         prepare_reviewed_nar_full_form(h, e, race_day_jst=DAY,
             source_asof_utc=NOW, expected_runner_counts={RID: 4})
+
+
+def test_disqualified_prior_start_matches_training_denominator():
+    h = history()
+    h.loc[1, "official_status"] = "DISQUALIFIED_REVIEW"
+    h.loc[0, "horse_name"] = " 架空馬1 "
+    out = prepare_reviewed_nar_full_form(
+        h, reviewed_entries(), race_day_jst=DAY,
+        source_asof_utc=NOW, expected_runner_counts={RID: 4},
+    )
+    assert out.iloc[0]["past_starts"] == 2
+    assert out.iloc[0]["past_win_rate"] == 0.5
+    assert out.iloc[0]["past_mean_finish"] == 1
+    assert out.iloc[0]["days_since_last_start"] == 4
+
+
+@pytest.mark.parametrize("issue", [
+    "bad_birthday", "birth_after_race", "same_horse_twice",
+    "duplicate_index", "naive_release", "before_race_release",
+    "whitespace_duplicate_history",
+])
+def test_shared_projector_rejects_identity_and_time_mismatch(issue):
+    h, e = history(), entries()
+    if issue == "bad_birthday":
+        e.loc[0, "birth_ymd"] = "20210230"
+    elif issue == "birth_after_race":
+        h.loc[0, "birth_ymd"] = "20261119"
+    elif issue == "same_horse_twice":
+        e.loc[1, "horse_name"] = " 架空馬1 "
+    elif issue == "duplicate_index":
+        e.index = [0, 0, 1, 2]
+    elif issue == "naive_release":
+        h.loc[0, "result_released_utc"] = "2026-11-18T10:00:00"
+    elif issue == "before_race_release":
+        h.loc[0, "result_released_utc"] = "2026-11-17T10:00:00Z"
+    else:
+        extra = h.iloc[:1].copy()
+        extra["horse_name"] = " 架空馬1 "
+        h = pd.concat([h, extra], ignore_index=True)
+    with pytest.raises(ValueError):
+        nar_future_form_features(h, e, race_day_jst=DAY, source_asof_utc=NOW)

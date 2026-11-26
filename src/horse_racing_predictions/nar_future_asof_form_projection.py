@@ -20,9 +20,18 @@ _HISTORY = {
     "result_released_utc", "official_status", "finish_rank",
 }
 _ENTRIES = {"race_id", "horse_id", "horse_name", "birth_ymd"}
-_START = {"FINISHED", "DNF_NO_REFUND"}
+_START = {"FINISHED", "DNF_NO_REFUND", "DISQUALIFIED_REVIEW"}
 _SKIP = {"SCRATCH_NOT_OFFERED", "EXCLUDED_REFUND"}
 _BIRTH = re.compile(r"[0-9]{8}\Z")
+
+
+def _birth_before(value: str, day: date) -> bool:
+    try:
+        return bool(_BIRTH.fullmatch(value)) and datetime.strptime(
+            value, "%Y%m%d"
+        ).date() < day
+    except (TypeError, ValueError):
+        return False
 
 
 def nar_future_form_features(
@@ -40,6 +49,7 @@ def nar_future_form_features(
             or source_asof_utc.utcoffset() is None
             or history.columns.duplicated().any()
             or entries.columns.duplicated().any()
+            or not entries.index.is_unique
             or set(history) != _HISTORY or set(entries) != _ENTRIES
             or not 1 <= len(entries) <= 10_000
             or len(history) > 1_000_000):
@@ -52,7 +62,10 @@ def nar_future_form_features(
             or entries.duplicated(["race_id", "horse_id"]).any()
             or any(type(x) is not str or not x.strip()
                    for field in _ENTRIES for x in entries[field])
-            or any(not _BIRTH.fullmatch(x) for x in entries["birth_ymd"])
+            or any(not _birth_before(x, target) for x in entries["birth_ymd"])
+            or entries.assign(
+                horse_name=entries["horse_name"].str.strip()
+            ).duplicated(["horse_name", "birth_ymd"]).any()
             or not all(
                 x.startswith("NAR:" + target.strftime("%Y%m%d") + ":")
                 for x in entries["race_id"]
@@ -68,9 +81,19 @@ def nar_future_form_features(
             or not all(_BIRTH.fullmatch(x) for x in history["birth_ymd"])):
         raise ValueError("INVALID_NAR_HISTORICAL_IDENTITY")
     if not history.empty:
+        history = history.copy()
+        history["horse_name"] = history["horse_name"].str.strip()
         hdays = pd.to_datetime(
             history["race_day_jst"], format="%Y-%m-%d", errors="raise",
         ).dt.date
+        jst = timezone(timedelta(hours=9))
+        for day, birth, value in zip(
+                hdays, history["birth_ymd"], history["result_released_utc"]):
+            stamp = datetime.fromisoformat(value.replace("Z", "+00:00"))
+            if (pd.isna(day) or not _birth_before(birth, day)
+                    or stamp.utcoffset() is None
+                    or stamp.astimezone(jst).date() < day):
+                raise ValueError("NAR_HISTORICAL_IDENTITY_OR_RELEASE_INVALID")
         published = pd.to_datetime(
             history["result_released_utc"], utc=True, errors="raise",
         )
@@ -96,8 +119,9 @@ def nar_future_form_features(
         parsed = history.copy()
         parsed["__day"] = pd.Series(dtype="object")
         parsed["__rank"] = pd.Series(dtype="float64")
-    # A scratch or exclusion never contributes a prior start. DNF counts
-    # as a start, but not as a numeric finisher (same as training logic).
+    # A scratch or exclusion never contributes a prior start. DNF and
+    # disqualification count as starts, not numeric finishers, as in the
+    # status-aware training projector.
     prior = {}
     for (name, birth), group in parsed.groupby(
         ["horse_name", "birth_ymd"], sort=False,
@@ -117,7 +141,7 @@ def nar_future_form_features(
         out[field] = float("nan")
     for i, entry in entries.iterrows():
         features = prior.get(
-            (entry["horse_name"], entry["birth_ymd"]),
+            (entry["horse_name"].strip(), entry["birth_ymd"]),
             (0, 0.0, 0.0, float("nan"), float("nan")),
         )
         for field, value in zip(_FEATURES, features):
@@ -154,15 +178,7 @@ def prepare_reviewed_nar_full_form(
             or not expected_runner_counts
             or entries.groupby("race_id").size().to_dict() != expected_runner_counts):
         raise ValueError("NAR_FULL_FORM_REVIEW_CONTRACT_INVALID")
-    # A timestamp with no zone or before its race day cannot establish
-    # historical availability; reject instead of assuming UTC.
-    jst = timezone(timedelta(hours=9))
-    for day_text, released in zip(history["race_day_jst"],
-                                  history["result_released_utc"]):
-        stamp = datetime.fromisoformat(released.replace("Z", "+00:00"))
-        if (stamp.utcoffset() is None
-                or stamp.astimezone(jst).date() < date.fromisoformat(day_text)):
-            raise ValueError("NAR_FULL_FORM_RELEASE_TIME_INVALID")
+    # Identity and publication chronology are checked in the shared projector.
     reviewed = entries[list(_ENTRIES)].copy().reset_index(drop=True)
     frame = nar_future_form_features(
         history, reviewed, race_day_jst=race_day_jst,
