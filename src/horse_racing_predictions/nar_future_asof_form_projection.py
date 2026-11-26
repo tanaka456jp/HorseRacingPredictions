@@ -6,7 +6,7 @@ must not be opened or repurposed without a separate research decision.
 """
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 import re
 
 import pandas as pd
@@ -127,3 +127,59 @@ def nar_future_form_features(
             or not out.index.equals(entries.index)):
         raise ValueError("NAR_FUTURE_FORM_OUTPUT_INCOMPLETE")
     return out[["race_id", "horse_id", *_FEATURES]]
+
+
+def prepare_reviewed_nar_full_form(
+    history: pd.DataFrame, entries: pd.DataFrame, *,
+    race_day_jst: str, source_asof_utc: datetime,
+    expected_runner_counts: dict[str, int],
+) -> pd.DataFrame:
+    """Require independently reviewed career totals to guard missing history.
+
+    Reviewed counts are from a separate permitted source as of the same
+    cutoff, not generated from the supplied history. A mismatch is HOLD.
+    Career totals must refer to the same flat-racing scope as the training
+    history; this function cannot authenticate the review or rights.
+    """
+    counts = {"reviewed_starts", "reviewed_wins", "reviewed_top3"}
+    if (not isinstance(entries, pd.DataFrame)
+            or entries.columns.duplicated().any()
+            or set(entries) != _ENTRIES | counts
+            or not isinstance(history, pd.DataFrame)
+            or history.columns.duplicated().any()
+            or set(history) != _HISTORY
+            or not isinstance(source_asof_utc, datetime)
+            or source_asof_utc.utcoffset() is None
+            or type(expected_runner_counts) is not dict
+            or not expected_runner_counts
+            or entries.groupby("race_id").size().to_dict() != expected_runner_counts):
+        raise ValueError("NAR_FULL_FORM_REVIEW_CONTRACT_INVALID")
+    # A timestamp with no zone or before its race day cannot establish
+    # historical availability; reject instead of assuming UTC.
+    jst = timezone(timedelta(hours=9))
+    for day_text, released in zip(history["race_day_jst"],
+                                  history["result_released_utc"]):
+        stamp = datetime.fromisoformat(released.replace("Z", "+00:00"))
+        if (stamp.utcoffset() is None
+                or stamp.astimezone(jst).date() < date.fromisoformat(day_text)):
+            raise ValueError("NAR_FULL_FORM_RELEASE_TIME_INVALID")
+    reviewed = entries[list(_ENTRIES)].copy().reset_index(drop=True)
+    frame = nar_future_form_features(
+        history, reviewed, race_day_jst=race_day_jst,
+        source_asof_utc=source_asof_utc,
+    )
+    totals = entries[list(counts)].apply(pd.to_numeric, errors="raise").reset_index(drop=True)
+    if (totals.isna().any().any() or (totals < 0).any().any()
+            or totals.mod(1).ne(0).any().any()
+            or totals["reviewed_wins"].gt(totals["reviewed_top3"]).any()
+            or totals["reviewed_top3"].gt(totals["reviewed_starts"]).any()):
+        raise ValueError("NAR_FULL_FORM_REVIEW_COUNTS_INVALID")
+    # Match integer totals, including zero-start horses. A missing history
+    # row for an experienced horse cannot silently become a debut.
+    if (frame["past_starts"].ne(totals["reviewed_starts"]).any()
+            or (frame["past_starts"] * frame["past_win_rate"]
+                - totals["reviewed_wins"]).abs().gt(1e-8).any()
+            or (frame["past_starts"] * frame["past_top3_rate"]
+                - totals["reviewed_top3"]).abs().gt(1e-8).any()):
+        raise ValueError("NAR_FULL_FORM_HISTORY_COVERAGE_MISMATCH")
+    return frame

@@ -4,7 +4,7 @@ import pandas as pd
 import pytest
 
 from horse_racing_predictions.nar_future_asof_form_projection import (
-    nar_future_form_features,
+    nar_future_form_features, prepare_reviewed_nar_full_form,
 )
 
 UTC = timezone.utc
@@ -76,3 +76,39 @@ def test_duplicate_horse_date_and_roster_breach_rejected():
             history(), entries().iloc[:3].copy(),
             race_day_jst=DAY, source_asof_utc=NOW,
         )
+
+
+def reviewed_entries():
+    out = entries()
+    out["reviewed_starts"] = [2, 0, 0, 0]
+    out["reviewed_wins"] = [1, 0, 0, 0]
+    out["reviewed_top3"] = [1, 0, 0, 0]
+    return out
+
+
+def test_full_history_matches_reviewed_counts():
+    result = prepare_reviewed_nar_full_form(
+        history(), reviewed_entries(), race_day_jst=DAY,
+        source_asof_utc=NOW, expected_runner_counts={RID: 4},
+    )
+    assert result.iloc[0]["past_starts"] == 2
+    assert result.iloc[0]["days_since_last_start"] == 4
+    assert pd.isna(result.iloc[1]["past_mean_finish"])
+
+
+@pytest.mark.parametrize("issue", ["missing_history", "missing_runner", "naive", "before_race", "wrong_total"])
+def test_reviewed_full_form_refuses_unverified_coverage(issue):
+    h, e = history(), reviewed_entries()
+    if issue == "missing_history":
+        h = h.iloc[1:]
+    elif issue == "missing_runner":
+        e = e.iloc[:-1]
+    elif issue == "naive":
+        h.loc[0, "result_released_utc"] = "2026-11-18T10:00:00"
+    elif issue == "before_race":
+        h.loc[0, "result_released_utc"] = "2026-11-17T00:00:00Z"
+    else:
+        e.loc[0, "reviewed_top3"] = 2
+    with pytest.raises(ValueError):
+        prepare_reviewed_nar_full_form(h, e, race_day_jst=DAY,
+            source_asof_utc=NOW, expected_runner_counts={RID: 4})

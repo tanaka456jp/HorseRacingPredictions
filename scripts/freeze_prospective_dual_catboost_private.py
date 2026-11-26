@@ -26,6 +26,9 @@ from horse_racing_predictions.nar_private_dual_model_loader import (
 from horse_racing_predictions.jra_future_shadow_features import (
     prepare_jra_future_shadow_features,
 )
+from horse_racing_predictions.nar_future_asof_form_projection import (
+    prepare_reviewed_nar_full_form,
+)
 from horse_racing_predictions.prospective_dual_model_shadow import (
     freeze_fitted_dual_shadow,
 )
@@ -46,6 +49,7 @@ def freeze_private_future(
     calendar_json: Path, private_output_dir: Path,
     now_utc: datetime,
     jra_history_csv: Path | None = None,
+    nar_history_csv: Path | None = None,
 ) -> dict:
     """Write exactly one new, local-only snapshot, never revise old picks.
 
@@ -66,6 +70,10 @@ def freeze_private_future(
     _file(features_csv, 35_000_000)
     if jra_history_csv is not None:
         _file(jra_history_csv, 400_000_000)
+    if nar_history_csv is not None:
+        _file(nar_history_csv, 400_000_000)
+    if jra_history_csv is not None and nar_history_csv is not None:
+        raise ValueError("PRIVATE_HISTORY_MODE_CONFLICT")
     _file(calendar_json, 1_000_000)
     manifest = json.loads(calendar_json.read_text(encoding="utf-8"))
     if (type(manifest) is not dict or set(manifest) != {
@@ -100,6 +108,23 @@ def freeze_private_future(
             race_day_jst=manifest["race_day_jst"],
             source_asof=datetime.fromisoformat(manifest["source_asof_utc"].replace("Z", "+00:00")),
             generated_at=now_utc, expected_runner_counts=expected,
+        )
+    if nar_history_csv is not None:
+        if manifest["jurisdiction"] != "NAR":
+            raise ValueError("NAR_RAW_SOURCE_MODE_ONLY")
+        # Read identity columns as strings so numeric birthdays do not
+        # lose their exact representation.
+        frame = pd.read_csv(features_csv, encoding="utf-8-sig", dtype={
+            "race_id": str, "horse_id": str, "horse_name": str, "birth_ymd": str,
+        })
+        history = pd.read_csv(nar_history_csv, encoding="utf-8-sig", dtype={
+            "horse_name": str, "birth_ymd": str, "race_day_jst": str,
+            "result_released_utc": str, "official_status": str,
+        })
+        frame = prepare_reviewed_nar_full_form(
+            history, frame, race_day_jst=manifest["race_day_jst"],
+            source_asof_utc=datetime.fromisoformat(manifest["source_asof_utc"].replace("Z", "+00:00")),
+            expected_runner_counts=expected,
         )
     counts = frame.groupby("race_id").size().to_dict()
     if counts != expected:
@@ -138,6 +163,7 @@ def freeze_private_future(
             frozen.commitment_sha256.encode("ascii")
         ).hexdigest(),
         "candidate_binary_checksums_verified": True,
+        "reviewed_nar_history_coverage_checked": nar_history_csv is not None,
         "source_and_roster_independently_attested": False,
         "hosted_preoff_receipt_verified": False,
         "model_results_or_odds_observed_before_freeze": False,
@@ -172,6 +198,8 @@ def main() -> int:
     group = p.add_mutually_exclusive_group(required=True)
     group.add_argument("--preoff-features-csv", type=Path)
     group.add_argument("--jra-entries-csv", type=Path)
+    group.add_argument("--nar-entries-csv", type=Path)
+    p.add_argument("--nar-history-csv", type=Path, help="Explicit permitted prior NAR results, not protected holdout.")
     p.add_argument("--jra-history-csv", type=Path,
                    help="Explicit separately reviewed JRA prior-result CSV; never a sealed evaluation dataset.")
     p.add_argument("--reviewed-calendar-json", type=Path, required=True)
@@ -180,9 +208,12 @@ def main() -> int:
     try:
         if (args.jra_entries_csv is None) != (args.jra_history_csv is None):
             raise ValueError("JRA_ENTRIES_AND_HISTORY_MUST_BE_PAIRED")
+        if (args.nar_entries_csv is None) != (args.nar_history_csv is None):
+            raise ValueError("NAR_ENTRIES_AND_HISTORY_MUST_BE_PAIRED")
         summary = freeze_private_future(
             candidate_dir=args.candidate_dir,
-            features_csv=args.preoff_features_csv or args.jra_entries_csv,
+            features_csv=args.preoff_features_csv or args.jra_entries_csv or args.nar_entries_csv,
+            nar_history_csv=args.nar_history_csv,
             jra_history_csv=args.jra_history_csv,
             calendar_json=args.reviewed_calendar_json,
             private_output_dir=args.private_output_dir,
