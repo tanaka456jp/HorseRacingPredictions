@@ -23,6 +23,7 @@ from capture_nar_official_daily_preoff_once import (
     _JST, _rows, validate_official_daily_race_zip,
 )
 from score_prospective_dual_model_private import load_verified_private_forecast
+from verify_nar_catboost_hosted_receipt import match_private_receipt
 from horse_racing_predictions.prospective_dual_model_shadow import (
     ShadowAccuracyAndReturn,
 )
@@ -228,7 +229,7 @@ def _score_resolved_nar(frozen, outcomes: dict) -> ShadowAccuracyAndReturn:
 
 def score_private_postevent_zip(
     root: Path, final_zip_path: Path, *,
-    now_utc: datetime,
+    now_utc: datetime, hosted_receipt: dict | None = None,
 ) -> dict:
     if (os.environ.get("COMPUTERNAME") != "DESKTOP-MVV1FD4"
             or not isinstance(root, Path) or not root.is_absolute()
@@ -262,6 +263,11 @@ def score_private_postevent_zip(
             or private_doc.get("source_feature_mode_PRIVATE") != _MODE
             or private_doc.get("model_missing_features_do_not_equal_full_feature_model") is not True):
         raise PrivateNarSettlementHold("NAR_MODEL_PRIVATE_FROZEN_MODE_INVALID")
+    # This flag only matches the supplied receipt data. Its API origin is
+    # checked by the separate GitHub-hosted workflow job, not by this CLI.
+    receipt_matched = False
+    if hosted_receipt is not None:
+        receipt_matched = match_private_receipt(frozen, private_doc, hosted_receipt)
     last_off = max(datetime.fromisoformat(r.off_utc).astimezone(timezone.utc)
                    for r in frozen.races)
     if generated < last_off + _WAIT or capture_time < last_off + _WAIT:
@@ -331,6 +337,7 @@ def score_private_postevent_zip(
         "hypothetical_net_paper_roi": result.paper_roi_after_stake,
         "three_of_five_feature_ablation": True,
         "independent_prediction_receipt_checked": False,
+        "supplied_hosted_receipt_matches_private_forecast": receipt_matched,
         "independent_source_authentication": False,
         "real_wagers": 0, "positive_ev_proven": False,
         "private_source_or_predictions_uploaded": False,
@@ -347,6 +354,8 @@ def main() -> int:
         result = score_private_postevent_zip(
             args.private_root, args.final_official_daily_zip,
             now_utc=datetime.now(timezone.utc),
+            hosted_receipt=json.loads(os.environ["NAR_HOSTED_RECEIPT_JSON"])
+            if os.environ.get("NAR_HOSTED_RECEIPT_JSON") else None,
         )
     except Exception as exc:
         code = str(exc) if isinstance(exc, PrivateNarSettlementHold) else ""

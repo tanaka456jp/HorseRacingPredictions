@@ -9,16 +9,41 @@ on:
         description: "Exact official YYYYMMDD_UNIXEPOCH_race.zip in PC2 private postevent-inbox"
         type: string
         required: true
+      preoff_receipt_run_id:
+        description: "Successful preoff receipt GitHub Actions run ID (not postevent run)"
+        type: string
+        required: true
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: nar-pc2-model-postevent-reconciliation
   cancel-in-progress: false
 
 jobs:
+  verify-hosted-receipt:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      receipt: ${{ steps.receipt.outputs.receipt }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Retrieve and validate GitHub Actions receipt only
+        id: receipt
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RECEIPT_RUN_ID: ${{ inputs.preoff_receipt_run_id }}
+        run: |
+          set -euo pipefail
+          receipt="$(python3 scripts/verify_nar_catboost_hosted_receipt.py)"
+          printf 'receipt=%s\n' "$receipt" >> "$GITHUB_OUTPUT"
   pc2-real-model-accuracy-and-return:
+    needs: verify-hosted-receipt
     runs-on: [self-hosted, Windows]
     timeout-minutes: 9
     steps:
@@ -30,6 +55,7 @@ jobs:
         shell: powershell
         env:
           OFFICIAL_FINAL_FILENAME: ${{ inputs.official_final_zip_filename }}
+          NAR_HOSTED_RECEIPT_JSON: ${{ needs.verify-hosted-receipt.outputs.receipt }}
         run: |
           $ErrorActionPreference = 'Stop'
           if ($env:COMPUTERNAME -cne 'DESKTOP-MVV1FD4' -or
@@ -87,6 +113,7 @@ jobs:
               $null -eq $d.hypothetical_net_paper_roi -or
               $d.three_of_five_feature_ablation -ne $true -or
               $d.independent_prediction_receipt_checked -ne $false -or
+              $d.supplied_hosted_receipt_matches_private_forecast -ne $true -or
               $d.private_source_or_predictions_uploaded -ne $false -or
               $d.private_files_modified -ne $false -or
               $d.real_wagers -ne 0 -or
@@ -112,6 +139,7 @@ jobs:
             hypotheticalPaperStakeJPY = [int]$d.hypothetical_100_yen_win_stake
             hypotheticalOfficialReturnsJPY = [int]$d.hypothetical_official_return_yen
             hypotheticalPaperNetROI = [double]$d.hypothetical_net_paper_roi
+            githubHostedBlindedReceiptMatched = $true
             independentlyWitnessedPreoffForecast = $false
             privateSourceUploaded = $false
             actualBets = 0
