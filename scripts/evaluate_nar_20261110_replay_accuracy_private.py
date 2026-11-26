@@ -68,6 +68,54 @@ def metrics(picks, ranks, statuses, pays):
     }
 
 
+def paired_accuracy(basic, fitted, ranks):
+    """Matched-race descriptive counts, not a significance or EV claim.
+
+    A single calendar day cannot support a race-day cluster uncertainty
+    estimate. Do not optimize model parameters from these counts.
+    """
+    if not ranks or set(basic) != set(fitted) or set(basic) != set(ranks):
+        raise ValueError("REPLAY_PAIRED_COHORT_MISMATCH")
+    def cross_table(pairs):
+        out = {"both_hit": 0, "catboost_only_hit": 0,
+               "baseline_only_hit": 0, "neither_hit": 0}
+        for b, c in pairs:
+            key = ("both_hit" if b and c else
+                   "catboost_only_hit" if c else
+                   "baseline_only_hit" if b else "neither_hit")
+            out[key] += 1
+        return out
+    top1, outsider = [], []
+    better = worse = equal = same_top1 = 0
+    for rid, (b3, bo) in basic.items():
+        c3, co = fitted[rid]
+        row = ranks[rid]
+        if (len(b3) != 3 or len(c3) != 3
+                or len(set(b3)) != 3 or len(set(c3)) != 3
+                or bo in b3 or co in c3
+                or not set((*b3, bo, *c3, co)).issubset(row)):
+            raise ValueError("REPLAY_PAIRED_PICKS_INVALID")
+        top1.append((row[b3[0]] == 1, row[c3[0]] == 1))
+        outsider.append((0 < row[bo] <= 3, 0 < row[co] <= 3))
+        b_count = sum(0 < row[h] <= 3 for h in b3)
+        c_count = sum(0 < row[h] <= 3 for h in c3)
+        better += int(c_count > b_count)
+        worse += int(c_count < b_count)
+        equal += int(c_count == b_count)
+        same_top1 += int(b3[0] == c3[0])
+    return {
+        "matched_races": len(ranks),
+        "top1": cross_table(top1),
+        "outsider_top3": cross_table(outsider),
+        "top3_overlap_comparison": {"catboost_better": better,
+                                    "baseline_better": worse, "equal": equal},
+        "same_top1_selection_count": same_top1,
+        "independent_race_days": 1,
+        "day_cluster_confidence_interval": None,
+        "statistical_superiority_established": False,
+    }
+
+
 def _read_final(folder, baseline):
     files = list(folder.glob("20261110_*_official_postevent_race.zip"))
     if len(files) != 1:
@@ -154,6 +202,7 @@ def evaluate(root: Path):
         "race_day": _TARGET.isoformat(), "races": 59, "runners": 641,
         "career_baseline": metrics(basic, ranks, statuses, payouts),
         "catboost_partial_3_of_5": metrics(fitted, ranks, statuses, payouts),
+        "paired_accuracy": paired_accuracy(basic, fitted, ranks),
         "catboost_selection_before_event": False,
         "prospective_hit_rate_measured": False, "prospective_roi_measured": False,
         "positive_ev_proven": False, "actual_bets": 0,

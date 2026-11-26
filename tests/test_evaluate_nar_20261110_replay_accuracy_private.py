@@ -4,7 +4,7 @@ import sys
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]/"scripts"))
-from evaluate_nar_20261110_replay_accuracy_private import metrics
+from evaluate_nar_20261110_replay_accuracy_private import metrics, paired_accuracy
 
 
 def test_full_denominator_and_refund():
@@ -31,3 +31,25 @@ def test_full_denominator_and_refund():
     pay["b"]=({"3":150},{})
     with pytest.raises(ValueError):
         metrics(picks,ranks,statuses,pay)
+
+
+def test_matched_race_counts_no_statistical_claim():
+    basic = {"a": (("1","2","3"),"4"), "b": (("1","2","3"),"4"),
+             "c": (("1","2","3"),"4"), "d": (("1","2","3"),"4")}
+    fitted = {"a": (("1","2","3"),"4"), "b": (("2","1","4"),"3"),
+              "c": (("2","3","4"),"1"), "d": (("2","1","3"),"4")}
+    ranks = {"a":{"1":1,"2":2,"3":3,"4":4},
+             "b":{"1":2,"2":1,"3":4,"4":3},
+             "c":{"1":1,"2":2,"3":3,"4":4},
+             "d":{"1":2,"2":3,"3":1,"4":4}}
+    out = paired_accuracy(basic, fitted, ranks)
+    assert out["top1"] == {"both_hit":1,"catboost_only_hit":1,
+                           "baseline_only_hit":1,"neither_hit":1}
+    assert out["top3_overlap_comparison"] == {
+        "catboost_better":1,"baseline_better":1,"equal":2}
+    assert out["same_top1_selection_count"] == 1
+    assert out["independent_race_days"] == 1
+    assert out["day_cluster_confidence_interval"] is None
+    assert not out["statistical_superiority_established"]
+    with pytest.raises(ValueError):
+        paired_accuracy(basic, fitted, {"a":ranks["a"]})
