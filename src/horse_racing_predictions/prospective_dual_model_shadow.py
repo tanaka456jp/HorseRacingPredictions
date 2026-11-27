@@ -214,8 +214,11 @@ def score_frozen_shadow(
 ) -> ShadowAccuracyAndReturn:
     """Audit all frozen races against REVIEWED official post-event outcomes.
 
-    Input requires a full per-horse numeric finish map and selected WIN
-    official payout per 100 yen. This cannot authenticate the source and
+    Input requires a complete per-horse finish map (numeric competition
+    rank or explicit None for a confirmed non-refund DNF) and the selected
+    WIN official payout per 100 yen. Refunds, exclusions and cancellations
+    remain HOLD until their own settlement contract is implemented.
+    This cannot authenticate the source and
     never grants betting authorization. Any race absent/ambiguous => HOLD
     for the entire cohort (no profitable cherry-picked subset).
     """
@@ -233,19 +236,28 @@ def score_frozen_shadow(
         finishes = row["finish_by_horse"]
         amount = row["selected_top1_win_return_per_100_yen"]
         if (type(finishes) is not dict or set(finishes) != set(race.roster)
-                or any(type(v) is not int or v < 1 or v > len(race.roster)
+                or any(v is not None and
+                       (type(v) is not int or v < 1 or v > len(race.roster))
                        for v in finishes.values())
-                or not any(v == 1 for v in finishes.values())
-                or not any(v == 2 for v in finishes.values())
-                or not any(v == 3 for v in finishes.values())
                 or type(amount) is not int or not 0 <= amount <= 1_000_000):
+            break
+        # Competition ranks allow 1,1,3 or 1,2,2,4, but not 1,1,2.
+        # None denotes reviewed non-refund DNF, never a missing result.
+        numeric = sorted(v for v in finishes.values() if v is not None)
+        if len(numeric) < 3 or any(
+            rank != numeric.index(rank) + 1 for rank in numeric
+        ):
             break
         win = finishes[race.top3[0]] == 1
         if (win and amount < 100) or (not win and amount != 0):
             break
         hits += int(win)
-        overlap += sum(finishes[horse] <= 3 for horse in race.top3)
-        outsiders += int(finishes[race.outsider] <= 3)
+        overlap += sum(
+            finishes[horse] is not None and finishes[horse] <= 3
+            for horse in race.top3
+        )
+        outsider_rank = finishes[race.outsider]
+        outsiders += int(outsider_rank is not None and outsider_rank <= 3)
         returned += amount
         complete += 1
     ready = complete == len(frozen.races)
