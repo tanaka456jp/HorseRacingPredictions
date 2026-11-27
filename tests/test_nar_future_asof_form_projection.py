@@ -153,3 +153,24 @@ def test_shared_projector_rejects_identity_and_time_mismatch(issue):
         h = pd.concat([h, extra], ignore_index=True)
     with pytest.raises(ValueError):
         nar_future_form_features(h, e, race_day_jst=DAY, source_asof_utc=NOW)
+
+
+@pytest.mark.parametrize("invalid_rank", ["malformed", "取消", True, False])
+def test_invalid_source_rank_not_silently_coerced(invalid_rank):
+    h = history()
+    h["finish_rank"] = h["finish_rank"].astype(object)
+    # The DNF must have a genuinely absent rank; arbitrary text and
+    # Boolean values are not valid missing-rank encodings.
+    h.loc[1, "finish_rank"] = invalid_rank
+    with pytest.raises(ValueError, match="INVALID_NAR_FINISH_RANK"):
+        nar_future_form_features(h, entries(), race_day_jst=DAY,
+                                 source_asof_utc=NOW)
+
+
+def test_boolean_rank_not_treated_as_first_place():
+    h = history()
+    h["finish_rank"] = h["finish_rank"].astype(object)
+    h.loc[0, "finish_rank"] = True
+    with pytest.raises(ValueError, match="INVALID_NAR_FINISH_RANK"):
+        nar_future_form_features(h, entries(), race_day_jst=DAY,
+                                 source_asof_utc=NOW)
