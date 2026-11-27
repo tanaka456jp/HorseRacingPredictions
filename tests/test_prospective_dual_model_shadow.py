@@ -129,3 +129,49 @@ def test_future_jra_canonical_id_must_match_day_and_series():
     kw["off_by_race"] = {"JRA-20261205-KYOTO-01": next(iter(kw["off_by_race"].values()))}
     with pytest.raises(ProspectiveShadowHold, match="CALENDAR"):
         freeze_fitted_dual_shadow(**kw)
+
+
+@pytest.mark.parametrize("jurisdiction", ["JRA", "NAR"])
+@pytest.mark.parametrize("ranks,payout,win,podium,outsider", [
+    ([2, 3, None, 1], 180, 1, 2, 1),
+    ([1, 3, 4, 1], 150, 1, 2, 1),
+    ([1, 2, 2, 4], 0, 0, 2, 1),
+    ([1, 2, 3, None], 0, 0, 2, 1),
+])
+def test_reviewed_nonrefund_dnf_and_competition_ties_preserve_denominator(
+    jurisdiction, ranks, payout, win, podium, outsider,
+):
+    frozen = freeze_fitted_dual_shadow(**sample(jurisdiction))
+    rid = frozen.races[0].race_id
+    result = score_frozen_shadow(frozen, final_by_race={rid: {
+        "finish_by_horse": dict(zip(("1", "2", "3", "4"), ranks)),
+        "selected_top1_win_return_per_100_yen": payout,
+    }})
+    assert result.status.startswith("COMPLETE_DESCRIPTIVE")
+    assert result.outcome_complete_races == result.frozen_races == 1
+    assert result.top1_win_hits == win
+    assert result.top3_numeric_podium_hits == podium
+    assert result.outsider_numeric_top3_hits == outsider
+    assert result.stake_yen == 100
+    assert result.official_paper_returns_yen == payout
+    assert not result.positive_expected_value_proven
+
+
+@pytest.mark.parametrize("ranks,payout", [
+    ([1, 1, 2, 3], 0),  # Invalid competition ranking.
+    ([1, 2, None, None], 0),  # Insufficient finishers.
+    ([1, 2, 3, None], 100),  # DNF cannot be assumed refunded.
+    ([1, 2, 3, True], 180),  # Boolean is not a finish rank.
+    ([1, 2, 3, "SCRATCH"], 100),  # Unresolved settlement.
+])
+def test_unresolved_or_inconsistent_results_hold_whole_cohort(ranks, payout):
+    frozen = freeze_fitted_dual_shadow(**sample("NAR"))
+    rid = frozen.races[0].race_id
+    result = score_frozen_shadow(frozen, final_by_race={rid: {
+        "finish_by_horse": dict(zip(("1", "2", "3", "4"), ranks)),
+        "selected_top1_win_return_per_100_yen": payout,
+    }})
+    assert result.status.startswith("HOLD")
+    assert result.frozen_races == 1
+    assert result.stake_yen is None
+    assert result.paper_roi_after_stake is None
