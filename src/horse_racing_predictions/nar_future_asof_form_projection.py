@@ -107,6 +107,14 @@ def nar_future_form_features(
         parsed = history.copy()
         parsed["__day"] = hdays
         parsed["__rank"] = pd.to_numeric(parsed["finish_rank"], errors="coerce")
+        # A missing rank is legitimate only for non-finishers. Do not
+        # silently reinterpret malformed source tokens or Boolean ranks
+        # as missing/first place when reconstructing prior form.
+        if ((parsed["finish_rank"].notna() & parsed["__rank"].isna()).any()
+                or parsed["finish_rank"].map(
+                    lambda value: isinstance(value, bool)
+                ).any()):
+            raise ValueError("INVALID_NAR_FINISH_RANK")
         if (parsed["__rank"].notna() &
                 (parsed["__rank"].lt(1) |
                  parsed["__rank"].gt(18) |
