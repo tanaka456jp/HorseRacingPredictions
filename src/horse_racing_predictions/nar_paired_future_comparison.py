@@ -84,3 +84,88 @@ def compare_nar_future_rankings(*, official_partial: pd.DataFrame,
             "runner_count": len(full),
             "independent_preoff_receipt_verified": False,
             "outcomes_measured": False}
+
+
+def seal_paired_comparison(comparison: dict, *, source_sha256: dict,
+                           private_salt: bytes) -> dict:
+    """Bind all three selections, input hashes and shared chronology at once.
+
+    The returned private record is not an external timestamp. The source
+    hashes must come from the actual reviewed input bytes, not placeholders.
+    """
+    import json
+    import re
+    from dataclasses import asdict
+
+    if (type(private_salt) is not bytes or len(private_salt) != 32
+            or type(source_sha256) is not dict
+            or set(source_sha256) != {"official_preoff_zip", "reviewed_entries",
+                                     "reviewed_prior_history"}
+            or any(type(v) is not str or not re.fullmatch(r"[0-9a-f]{64}", v)
+                   for v in source_sha256.values())):
+        raise ValueError("NAR_PAIRED_COMMITMENT_SOURCE_INVALID")
+    partial = comparison["catboost_3_of_5"]
+    complete = comparison["catboost_reviewed_5_feature"]
+    baseline = comparison["fixed_career_baseline"]
+    if (partial.jurisdiction != "NAR" or complete.jurisdiction != "NAR"
+            or any(getattr(partial, field) != getattr(complete, field)
+                   for field in ("race_day_jst", "generated_utc",
+                                 "source_asof_utc", "model_trained_through",
+                                 "model_sha256_declared"))
+            or not partial.races
+            or len(partial.races) != len(complete.races)
+            or len(partial.races) != len(baseline)):
+        raise ValueError("NAR_PAIRED_COMMITMENT_COHORT_INVALID")
+    for a, b, c in zip(partial.races, complete.races, baseline):
+        if (a.race_id != b.race_id or a.race_id != c["race_id"]
+                or a.roster != b.roster or a.off_utc != b.off_utc
+                or len(c["top3"]) != 3 or len(set(c["top3"])) != 3
+                or not set(c["top3"]).issubset(a.roster)
+                or c["outsider"] not in a.roster
+                or c["outsider"] in c["top3"]):
+            raise ValueError("NAR_PAIRED_COMMITMENT_ROSTER_INVALID")
+    payload = {
+        "schema": "NAR.PC2.PairedThreeSeriesPrivate.v1",
+        "source_sha256_PRIVATE": dict(source_sha256),
+        "catboost_3_of_5_PRIVATE": asdict(partial),
+        "catboost_reviewed_5_feature_PRIVATE": asdict(complete),
+        "fixed_career_baseline_PRIVATE": baseline,
+        "baseline_policy": "NAR_OFFICIAL_CAREER_FORM_BASELINE_V1_FIXED_20261110",
+        "independent_preoff_receipt_verified": False,
+        "outcomes_measured": False,
+        "actual_bets": 0,
+        "positive_ev_proven": False,
+    }
+    data = json.dumps(payload, ensure_ascii=False, sort_keys=True,
+                      separators=(",", ":"), allow_nan=False).encode("utf-8")
+    digest = sha256(b"NAR_PAIRED_THREE_SERIES_V1" + bytes([0])
+                    + private_salt + data).hexdigest()
+    return {"payload_PRIVATE": payload, "salt_hex_PRIVATE": private_salt.hex(),
+            "blinded_digest": digest}
+
+
+def verify_paired_commitment(record: dict, expected_digest: str) -> bool:
+    """Verify against a separately obtained digest; never authenticate its time."""
+    import json
+    import re
+    import secrets
+
+    try:
+        if (type(record) is not dict
+                or set(record) != {"payload_PRIVATE", "salt_hex_PRIVATE",
+                                   "blinded_digest"}
+                or type(expected_digest) is not str
+                or not re.fullmatch(r"[0-9a-f]{64}", expected_digest)
+                or not re.fullmatch(r"[0-9a-f]{64}", record["salt_hex_PRIVATE"])
+                or record["payload_PRIVATE"]["schema"]
+                   != "NAR.PC2.PairedThreeSeriesPrivate.v1"):
+            return False
+        data = json.dumps(record["payload_PRIVATE"], ensure_ascii=False,
+                          sort_keys=True, separators=(",", ":"),
+                          allow_nan=False).encode("utf-8")
+        actual = sha256(b"NAR_PAIRED_THREE_SERIES_V1" + bytes([0])
+                        + bytes.fromhex(record["salt_hex_PRIVATE"]) + data).hexdigest()
+        return (secrets.compare_digest(actual, expected_digest)
+                and secrets.compare_digest(actual, record["blinded_digest"]))
+    except (KeyError, ValueError, TypeError, AttributeError):
+        return False
