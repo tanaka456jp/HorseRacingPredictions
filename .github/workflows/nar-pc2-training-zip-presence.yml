@@ -1,0 +1,28 @@
+name: NAR PC2 Approved Training ZIP Presence (Metadata Only)
+on:
+  push:
+    branches: ["feature/weekly-odds-free-note-20261021"]
+    paths:
+      - ".github/workflows/nar-pc2-training-zip-presence.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: nar-pc2-training-zip-presence
+  cancel-in-progress: false
+jobs:
+  pc2-metadata-only:
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 8
+    steps:
+      - name: Checkout without cleaning local files
+        uses: actions/checkout@v4
+        with:
+          clean: false
+          persist-credentials: false
+      - name: Count exact NAR candidate D ZIP filenames only
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          & .\scripts\inspect_pc2_nar_training_zip_presence_readonly.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

@@ -1,0 +1,102 @@
+name: NAR PC2 Official Daily Preoff ZIP Capture (PRIVATE / NO EV)
+
+on:
+  push:
+    branches: ["feature/weekly-odds-free-note-20261021"]
+    paths:
+      - ".github/workflows/nar-pc2-official-daily-preoff-capture.yml"
+      - "scripts/capture_nar_official_daily_preoff_once.py"
+      - "tests/test_nar_official_daily_preoff.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nar-pc2-official-daily-one-shot
+  cancel-in-progress: false
+
+jobs:
+  pc2-capture-one-real-official-race-zip:
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 8
+    steps:
+      - name: Checkout source; never clean or touch PC2 private archives
+        uses: actions/checkout@v4
+        with:
+          clean: false
+          persist-credentials: false
+      - name: Verify private PC2 D drive destination and no extra rights
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:COMPUTERNAME -cne 'DESKTOP-MVV1FD4' -or
+              $env:GITHUB_REPOSITORY -cne 'tanaka456jp/HorseRacingPredictions' -or
+              $env:GITHUB_REF_NAME -cne 'feature/weekly-odds-free-note-20261021') {
+            Write-Host 'NAR_PREOFF_PC2_WRONG_EXECUTION_CONTEXT'
+            exit 2
+          }
+          $review = 'D:\Development\HorseRacingPredictions-PrivateReview'
+          $base = 'D:\Development\HorseRacingPredictions'
+          $dest = Join-Path $review 'nar-prospective-captures'
+          foreach ($p in @('D:\Development', $base, $review)) {
+            if (-not (Test-Path -LiteralPath $p -PathType Container) -or
+                ((Get-Item -LiteralPath $p -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+              Write-Host 'NAR_PREOFF_PRIVATE_D_DESTINATION_HOLD'
+              exit 2
+            }
+          }
+          if (-not (Test-Path -LiteralPath $dest)) {
+            New-Item -Path $dest -ItemType Directory -ErrorAction Stop | Out-Null
+          }
+          if (-not (Test-Path -LiteralPath $dest -PathType Container) -or
+              ((Get-Item -LiteralPath $dest -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+            Write-Host 'NAR_PREOFF_PRIVATE_DESTINATION_NOT_DIRECT'
+            exit 2
+          }
+          if (-not (Test-Path -LiteralPath '.\scripts\capture_nar_official_daily_preoff_once.py' -PathType Leaf)) {
+            Write-Host 'NAR_PREOFF_CAPTURE_SCRIPT_MISSING'
+            exit 2
+          }
+          Write-Host 'NAR_PREOFF_PC2_PRIVATE_STORAGE_READY'
+      - name: Download one NAR official DAILY race ZIP into PC2 only, validate before all off-times
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $env:PYTHONDONTWRITEBYTECODE = '1'
+          $dest = 'D:\Development\HorseRacingPredictions-PrivateReview\nar-prospective-captures'
+          try {
+            $raw = @(& python -B .\scripts\capture_nar_official_daily_preoff_once.py --private-output-dir $dest 2>&1)
+            if ($LASTEXITCODE -ne 0 -or $raw.Count -ne 1) {
+              throw 'NAR_PREOFF_OFFICIAL_CAPTURE_NOT_READY'
+            }
+            $d = [string]$raw[0] | ConvertFrom-Json
+            if ($d.schema -cne 'NAR.OfficialDailyPreoffCapture.v1' -or
+                $d.result -cne 'PASS' -or
+                [int]$d.registered_races -lt 1 -or
+                [int]$d.registered_horses -lt 4 -or
+                [int]$d.lead_minutes -lt 10 -or
+                $d.preoff_forecast_created -ne $false -or
+                $d.independent_preoff_proof -ne $false -or
+                $d.source_bytes_uploaded -ne $false -or
+                $d.positive_ev_proven -ne $false) {
+              throw 'NAR_PREOFF_UNTRUSTED_RESULT'
+            }
+            # No horse names, race identifiers, raw data, ZIP path, digest or salt in log.
+            [ordered]@{
+              schema = 'NAR.PC2.OfficialDailyPreoffReadOnly.v1'
+              status = 'STRUCTURE_CHECK_PASS_NOT_INDEPENDENT_TIME_PROOF'
+              inScopeFlatRaces = [int]$d.registered_races
+              registeredHorses = [int]$d.registered_horses
+              excludedBaneiRaces = [int]$d.excluded_banei_races
+              earliestOffLeadMinutes = [int]$d.lead_minutes
+              privateOriginalsModified = $false
+              rawSourceUploaded = $false
+              independentPreoffForecastProof = $false
+              actualWagers = 0
+              positiveExpectedValueProven = $false
+            } | ConvertTo-Json -Compress
+          } catch {
+            Write-Host 'NAR_PREOFF_OFFICIAL_CAPTURE_RESEARCH_HOLD'
+            exit 2
+          }

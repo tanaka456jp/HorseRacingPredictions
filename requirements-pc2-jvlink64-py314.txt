@@ -1,0 +1,4 @@
+# Python 3.14 Windows x86_64 wheel from https://pypi.org/project/pywin32/312/
+# pywin32-312-cp314-cp314-win_amd64.whl (SHA256 published on PyPI).
+# For other Python architectures/versions, refuse instead of guessing.
+pywin32==312 --hash=sha256:a4dd3a848290ef724347b19f301045831d8e802fa4464f491b98b1e0a081432e

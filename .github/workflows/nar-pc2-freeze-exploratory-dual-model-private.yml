@@ -1,0 +1,130 @@
+name: NAR PC2 Freeze Real Trained Dual CatBoost (PRIVATE / ONE-SHOT)
+
+# Existing 2017-2022 personal research permission; one-shot private freeze.
+# Scoped push activates once for the workflow update, not every research commit.
+# No new provider access, real bets, source uploads, or future result use.
+on:
+  push:
+    branches: ["feature/weekly-odds-free-note-20261021"]
+    paths:
+      - ".github/workflows/nar-pc2-freeze-exploratory-dual-model-private.yml"
+  workflow_dispatch:
+    inputs:
+      explicit_personal_nar_research_permission:
+        description: "I reviewed NAR source use and approve PRIVATE 2017-2021 CatBoost artifact persistence on PC2"
+        type: boolean
+        required: true
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nar-pc2-private-exploratory-model-freeze
+  cancel-in-progress: false
+
+jobs:
+  freeze-dual-model-pc2:
+    if: ${{ github.event_name == 'push' || inputs.explicit_personal_nar_research_permission }}
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          clean: false
+          persist-credentials: false
+      - name: Fit authorized old data only; save CBM to immutable PC2 private D directory
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:COMPUTERNAME -cne 'DESKTOP-MVV1FD4' -or
+              $env:GITHUB_REPOSITORY -cne 'tanaka456jp/HorseRacingPredictions' -or
+              $env:GITHUB_REF_NAME -cne 'feature/weekly-odds-free-note-20261021' -or
+              $env:GITHUB_EVENT_NAME -cnotin @('workflow_dispatch', 'push')) {
+            Write-Host 'NAR_DUAL_MODEL_WRONG_PC_OR_BRANCH'
+            exit 2
+          }
+          $env:PYTHONDONTWRITEBYTECODE = '1'
+          $env:PYTHONPATH = Join-Path (Get-Location).Path 'src'
+          $private = 'D:\Development\HorseRacingPredictions-PrivateReview'
+          $source = 'D:\Development\HorseRacingPredictions\nar-personal'
+          $vpy = Join-Path $private 'nar-exploratory-venv\Scripts\python.exe'
+          $candidates = Join-Path $private 'nar-forward-models'
+          $dest = Join-Path $candidates '2017-2021-fit-2022-tune-v1'
+          foreach ($folder in @($private, $source)) {
+            if (-not (Test-Path -LiteralPath $folder -PathType Container) -or
+                ((Get-Item -LiteralPath $folder -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+              Write-Host 'NAR_DUAL_MODEL_PRIVATE_SOURCE_HOLD'
+              exit 2
+            }
+          }
+          if (-not (Test-Path -LiteralPath $vpy -PathType Leaf)) {
+            Write-Host 'NAR_DUAL_MODEL_ENV_OR_DEST_ALREADY_EXISTS_HOLD'
+            exit 2
+          }
+          if (-not (Test-Path -LiteralPath $candidates -PathType Container)) {
+            New-Item -ItemType Directory -Path $candidates -ErrorAction Stop | Out-Null
+          }
+          if (((Get-Item -LiteralPath $candidates -Force).Attributes -band
+                [IO.FileAttributes]::ReparsePoint) -ne 0 -or
+              (Get-PSDrive -Name D).Free -lt 1073741824) {
+            Write-Host 'NAR_DUAL_MODEL_PRIVATE_STORAGE_HOLD'
+            exit 2
+          }
+          try {
+            if (-not (Test-Path -LiteralPath $dest)) {
+            $raw = @(& $vpy -B .\scripts\screen_nar_pc2_exploratory_status_aware.py --local-nar-training-zip-directory $source --confirm-personal-private-nar-permission --iterations 40 --candidate-output-dir $dest 2>&1)
+            if ($LASTEXITCODE -ne 0 -or $raw.Count -ne 1) {
+              throw 'NAR_DUAL_MODEL_TRAIN_OR_SAVE_HOLD'
+            }
+            $d = [string]$raw[0] | ConvertFrom-Json
+            if ($d.schema -cne 'NAR.PC2.Exploratory2022RankingSignal.v1' -or
+                $d.status -cne 'NAR_EXPLORATORY_2022_RANKING_ONLY_SELECTION_BIAS_HOLD' -or
+                $d.trained_model_exported -ne $true -or
+                $d.private_model_artifact_hashes_not_logged -ne $true -or
+                $d.independently_fitted_models -ne $true -or
+                $d.protected_final_holdout_opened -ne $false -or
+                $d.source_data_sent_to_github -ne $false -or
+                $d.positive_expected_value_demonstrated -ne $false) {
+              throw 'NAR_DUAL_MODEL_UNTRUSTED_AUDIT'
+            }
+            }
+            # If an immutable candidate already exists, never retrain or
+            # overwrite it. In both cases validate the native CBM binaries,
+            # model chronology, and SHA256 from the private manifest.
+            $check = @(& $vpy -B -c "from pathlib import Path; from horse_racing_predictions.nar_private_dual_model_loader import load_nar_private_dual_candidate; x=load_nar_private_dual_candidate(Path(r'$dest')); assert x.train_end == '2021-12-31' and len(x.features) == 5 and x.winner.model is not x.outsider.model; print('NAR_PRIVATE_DUAL_MODEL_VERIFIED')" 2>&1)
+            if ($LASTEXITCODE -ne 0 -or $check.Count -ne 1 -or
+                [string]$check[0] -cne 'NAR_PRIVATE_DUAL_MODEL_VERIFIED') {
+              throw 'NAR_DUAL_MODEL_NATIVE_RELOAD_HOLD'
+            }
+            # This later-read-only audit can report NAR model readiness
+            # without exposing a local path, race ID, horse or native bytes.
+            $preflight = @(& $vpy -B .\scripts\audit_future_fitted_model_pc2_readiness.py --private-root $private 2>&1)
+            if ($LASTEXITCODE -ne 0 -or $preflight.Count -ne 1) {
+              throw 'NAR_DUAL_MODEL_PREFLIGHT_HOLD'
+            }
+            $ready = [string]$preflight[0] | ConvertFrom-Json
+            if ($ready.schema -cne 'HorseRacing.PC2.FutureFittedModelReadiness.v1' -or
+                $ready.NAR_model_checksums_verified -ne $true -or
+                $ready.model_prediction_executed -ne $false -or
+                $ready.positive_ev_proven -ne $false -or
+                $ready.source_model_or_horse_data_uploaded -ne $false) {
+              throw 'NAR_DUAL_MODEL_PREFLIGHT_INCONSISTENT'
+            }
+            [ordered]@{
+              schema = 'NAR.PC2.PrivateDualCatBoostForwardResearch.v1'
+              status = 'PRIVATE_FITTED_MODEL_SAVED_NOT_PROSPECTIVE_PROOF'
+              nativeDualCatBoostVerified = $true
+              existingOrNewPrivateModelIntegrityPass = $true
+              NARModelAvailableForFeatureScoring = [bool]$ready.NAR_model_checksums_verified
+              NARCompleteFutureCards = [int]$ready.NAR_complete_future_cards
+              candidateModelSavedPrivately = $true
+              rawModelOrRacingDataUploaded = $false
+              futureHitRateMeasured = $false
+              positiveExpectedValueProven = $false
+              actualWagers = 0
+            } | ConvertTo-Json -Compress
+          } catch {
+            Write-Host 'NAR_DUAL_MODEL_PRIVATE_RESEARCH_HOLD_NO_EV'
+            exit 2
+          }

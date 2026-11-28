@@ -1,0 +1,147 @@
+name: NAR PC2 CatBoost Real Forward Hit Rate & Paper ROI (PRIVATE POSTEVENT)
+
+# Always postevent, no provider request, no gambling and no private upload.
+# Manually stage original official YYYYMMDD_epoch_race.zip in PC2 D: inbox.
+on:
+  workflow_dispatch:
+    inputs:
+      official_final_zip_filename:
+        description: "Exact official YYYYMMDD_UNIXEPOCH_race.zip in PC2 private postevent-inbox"
+        type: string
+        required: true
+      preoff_receipt_run_id:
+        description: "Successful preoff receipt GitHub Actions run ID (not postevent run)"
+        type: string
+        required: true
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: nar-pc2-model-postevent-reconciliation
+  cancel-in-progress: false
+
+jobs:
+  verify-hosted-receipt:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      receipt: ${{ steps.receipt.outputs.receipt }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Retrieve and validate GitHub Actions receipt only
+        id: receipt
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RECEIPT_RUN_ID: ${{ inputs.preoff_receipt_run_id }}
+        run: |
+          set -euo pipefail
+          receipt="$(python3 scripts/verify_nar_catboost_hosted_receipt.py)"
+          printf 'receipt=%s\n' "$receipt" >> "$GITHUB_OUTPUT"
+  pc2-real-model-accuracy-and-return:
+    needs: verify-hosted-receipt
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 9
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          clean: false
+          persist-credentials: false
+      - name: Verify full private frozen denominator and read only authentic final ZIP
+        shell: powershell
+        env:
+          OFFICIAL_FINAL_FILENAME: ${{ inputs.official_final_zip_filename }}
+          NAR_HOSTED_RECEIPT_JSON: ${{ needs.verify-hosted-receipt.outputs.receipt }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:COMPUTERNAME -cne 'DESKTOP-MVV1FD4' -or
+              $env:GITHUB_REPOSITORY -cne 'tanaka456jp/HorseRacingPredictions' -or
+              $env:GITHUB_REF_NAME -cne 'feature/weekly-odds-free-note-20261021' -or
+              $env:GITHUB_EVENT_NAME -cne 'workflow_dispatch') {
+            Write-Host 'NAR_MODEL_POSTEVENT_PC2_CONTEXT_HOLD'
+            exit 2
+          }
+          if ($env:OFFICIAL_FINAL_FILENAME -cnotmatch '^[0-9]{8}_[1-9][0-9]{8,12}_race\.zip$') {
+            Write-Host 'NAR_MODEL_POSTEVENT_SOURCE_FILENAME_INVALID'
+            exit 2
+          }
+          $env:PYTHONDONTWRITEBYTECODE = '1'
+          $env:PYTHONPATH = Join-Path (Get-Location).Path 'src'
+          $private = 'D:\Development\HorseRacingPredictions-PrivateReview'
+          $vpy = Join-Path $private 'nar-exploratory-venv\Scripts\python.exe'
+          $inbox = Join-Path $private 'nar-prospective-captures\postevent-inbox'
+          if (-not (Test-Path -LiteralPath $vpy -PathType Leaf) -or
+              -not (Test-Path -LiteralPath $inbox -PathType Container) -or
+              ((Get-Item -LiteralPath $inbox -Force).Attributes -band
+                [IO.FileAttributes]::ReparsePoint) -ne 0) {
+            Write-Host 'NAR_MODEL_POSTEVENT_PRIVATE_INBOX_OR_RUNTIME_HOLD'
+            exit 2
+          }
+          $file = Join-Path $inbox $env:OFFICIAL_FINAL_FILENAME
+          if (-not (Test-Path -LiteralPath $file -PathType Leaf)) {
+            Write-Host 'NAR_MODEL_POSTEVENT_OFFICIAL_FINAL_ZIP_NOT_STAGED_HOLD'
+            exit 2
+          }
+          $raw = @(& $vpy -B .\scripts\settle_future_nar_catboost_from_official_zip_private.py --private-root $private --final-official-daily-zip $file 2>&1)
+          if ($LASTEXITCODE -ne 0 -or $raw.Count -ne 1) {
+            if ($raw.Count -eq 1) {
+              try {
+                $held = [string]$raw[0] | ConvertFrom-Json
+                if ($held.schema -ceq 'NAR.PC2.PosteventRealModelPaperAccuracyROI.v1' -and
+                    [string]$held.staticReason -cmatch '^NAR_MODEL_[A-Z0-9_]{1,100}$') {
+                  Write-Host ('NAR_MODEL_POSTEVENT_STATIC_HOLD=' + [string]$held.staticReason)
+                }
+              } catch { }
+            }
+            Write-Host 'NAR_MODEL_POSTEVENT_WHOLE_DAY_METRICS_HOLD'
+            exit 2
+          }
+          $d = [string]$raw[0] | ConvertFrom-Json
+          if ($d.schema -cne 'NAR.PC2.PosteventRealModelPaperAccuracyROI.v1' -or
+              $d.status -cne 'COMPLETE_DESCRIPTIVE_WIN_HITS_AND_PAPER_ROI_NO_EV_PROOF' -or
+              $d.frozen_race_denominator -le 0 -or
+              $d.fully_settled_races -ne $d.frozen_race_denominator -or
+              $d.top1_win_hits -lt 0 -or
+              $d.top1_win_hits -gt $d.frozen_race_denominator -or
+              $d.top3_numeric_podium_hits -gt 3*$d.frozen_race_denominator -or
+              $d.hypothetical_100_yen_win_stake -ne 100*$d.frozen_race_denominator -or
+              $d.hypothetical_official_return_yen -lt 0 -or
+              $null -eq $d.hypothetical_net_paper_roi -or
+              $d.three_of_five_feature_ablation -ne $true -or
+              $d.independent_prediction_receipt_checked -ne $false -or
+              $d.supplied_hosted_receipt_matches_private_forecast -ne $true -or
+              $d.private_source_or_predictions_uploaded -ne $false -or
+              $d.private_files_modified -ne $false -or
+              $d.real_wagers -ne 0 -or
+              $d.positive_ev_proven -ne $false) {
+            Write-Host 'NAR_MODEL_POSTEVENT_RESULT_SCHEMA_UNTRUSTED'
+            exit 2
+          }
+          [ordered]@{
+            schema = [string]$d.schema
+            status = [string]$d.status
+            model = 'NAR_2017_2021_CATBOOST_PARTIAL_3_OF_5'
+            frozenRaces = [int]$d.frozen_race_denominator
+            racesWithCompleteOfficialOutcome = [int]$d.fully_settled_races
+            ordinaryRaces = [int]$d.ordinary_fully_settled_races
+            racesWithExplicitDNF = [int]$d.races_with_explicit_dnf
+            racesWithNumericDeadHeat = [int]$d.races_with_numeric_dead_heat
+            top1WinHits = [int]$d.top1_win_hits
+            top1WinHitRate = [double]$d.top1_win_hit_rate
+            top3PodiumHits = [int]$d.top3_numeric_podium_hits
+            top3Precision = [double]$d.top3_numeric_podium_precision
+            outsiderTop3Hits = [int]$d.outsider_top3_hits
+            outsiderTop3HitRate = [double]$d.outsider_top3_hit_rate
+            hypotheticalPaperStakeJPY = [int]$d.hypothetical_100_yen_win_stake
+            hypotheticalOfficialReturnsJPY = [int]$d.hypothetical_official_return_yen
+            hypotheticalPaperNetROI = [double]$d.hypothetical_net_paper_roi
+            githubHostedBlindedReceiptMatched = $true
+            independentlyWitnessedPreoffForecast = $false
+            privateSourceUploaded = $false
+            actualBets = 0
+            positiveEVProven = $false
+          } | ConvertTo-Json -Compress

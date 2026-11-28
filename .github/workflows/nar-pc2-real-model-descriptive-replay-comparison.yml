@@ -1,0 +1,57 @@
+name: NAR PC2 Historical CatBoost Accuracy Comparison (READ ONLY, NOT FORWARD)
+
+on:
+  push:
+    branches: ["feature/weekly-odds-free-note-20261021"]
+    paths:
+      - ".github/workflows/nar-pc2-real-model-descriptive-replay-comparison.yml"
+      - "scripts/evaluate_nar_20261110_replay_accuracy_private.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nar-pc2-nov10-descriptive-comparison
+  cancel-in-progress: false
+
+jobs:
+  pc2-historical-descriptive-comparison:
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          clean: false
+          persist-credentials: false
+      - name: Compare on already reviewed November 10 files only
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:COMPUTERNAME -cne 'DESKTOP-MVV1FD4' -or
+              $env:GITHUB_REPOSITORY -cne 'tanaka456jp/HorseRacingPredictions' -or
+              $env:GITHUB_REF_NAME -cne 'feature/weekly-odds-free-note-20261021') {
+            throw 'NAR_REPLAY_WRONG_PC_OR_BRANCH'
+          }
+          $env:PYTHONDONTWRITEBYTECODE = '1'
+          $env:PYTHONPATH = Join-Path (Get-Location).Path 'src'
+          $root = 'D:\Development\HorseRacingPredictions-PrivateReview'
+          $vpy = Join-Path $root 'nar-exploratory-venv\Scripts\python.exe'
+          $raw = @(& $vpy -B .\scripts\evaluate_nar_20261110_replay_accuracy_private.py --private-root $root 2>&1)
+          if ($LASTEXITCODE -ne 0 -or $raw.Count -ne 1) {
+            throw 'NAR_DESCRIPTIVE_REPLAY_COMPARISON_HOLD'
+          }
+          $d = [string]$raw[0] | ConvertFrom-Json
+          if ($d.schema -cne 'NAR.PC2.HistoricalDescriptiveModelComparison.v1' -or
+              $d.status -cne 'COMPLETE_HISTORICAL_DESCRIPTIVE_REPLAY_NOT_FORWARD' -or
+              $d.races -ne 59 -or $d.runners -ne 641 -or
+              $d.catboost_selection_before_event -ne $false -or
+              $d.prospective_hit_rate_measured -ne $false -or
+              $d.prospective_roi_measured -ne $false -or
+              $d.positive_ev_proven -ne $false -or
+              $d.actual_bets -ne 0 -or $d.private_source_uploaded -ne $false -or
+              $d.original_files_modified -ne $false -or $d.protected_holdout_opened -ne $false) {
+            throw 'NAR_DESCRIPTIVE_REPLAY_COMPARISON_UNTRUSTED'
+          }
+          # Only schema, counts, and aggregate metrics leave the private PC2.
+          $d | ConvertTo-Json -Depth 5 -Compress

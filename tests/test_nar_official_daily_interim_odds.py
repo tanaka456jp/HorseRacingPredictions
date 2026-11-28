@@ -1,0 +1,300 @@
+"""No-network fictional NAR official interim odds ZIP contract tests."""
+from __future__ import annotations
+
+from datetime import date, datetime, timedelta, timezone
+from io import BytesIO, StringIO
+import csv
+import importlib.util
+from pathlib import Path
+import sys
+from zipfile import ZipFile
+
+import pytest
+
+_SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
+sys.path.insert(0, str(_SCRIPTS))
+_SPEC = importlib.util.spec_from_file_location(
+    "nar_interim_official_odds_test", _SCRIPTS / "capture_nar_official_daily_odds_preoff_once.py",
+)
+assert _SPEC is not None and _SPEC.loader is not None
+S = importlib.util.module_from_spec(_SPEC)
+sys.modules[_SPEC.name] = S
+_SPEC.loader.exec_module(S)
+
+DAY = date(2026, 11, 10)
+OBSERVED = datetime(2026, 11, 10, 0, 30, tzinfo=timezone.utc)
+OFF = datetime(2026, 11, 10, 2, 35, tzinfo=timezone.utc)
+SOURCE = datetime(2026, 11, 10, 0, 28, tzinfo=timezone.utc)
+FILENAME = f"20261110_{int(SOURCE.timestamp())}_odds.zip"
+
+
+def frozen_real_style() -> dict:
+    return {
+        "schema": "NAR.PC2.OfficialDailyForwardBaseline.v1",
+        "day": DAY.isoformat(),
+        "earliest_off_utc": OFF.isoformat().replace("+00:00", "Z"),
+        "source_races": 2, "source_horses": 8,
+        "odds_observed": False, "no_real_tickets": True,
+        "complete_private_forecasts": [
+            {"race_id": f"NAR:20261110:架空競馬場:{num:02d}",
+             "scheduled_off_utc": OFF.isoformat(),
+             "winner_scores": {str(h): float(6-h) for h in range(1,5)},
+             "outsider_scores": {str(h): float(h) for h in range(1,5)},
+             "top3": ["1", "2", "3"], "outsider": "4"}
+            for num in (1, 2)
+        ],
+    }
+
+
+def zip_odds(*, duplicate=False, bad_number=False, no_prices=False,
+             date_error=False, unknown_race=False, wrong_zip_name=False,
+             header_only=False):
+    fields = ["競馬場", "競走年月日", "レース番号", "賭式",
+              "番号1", "番号2", "番号3", "オッズ", "オッズ（最大）", "人気"]
+    rows = []
+    for race in (1, 2):
+        for kind in ("単勝", "複勝"):
+            for horse in range(1, 5):
+                rows.append({
+                    "競馬場": "架空競馬場",
+                    "競走年月日": "20261109" if date_error else "20261110",
+                    "レース番号": str(3 if unknown_race else race),
+                    "賭式": kind, "番号1": "17" if bad_number else str(horse),
+                    "番号2": "", "番号3": "",
+                    "オッズ": "" if no_prices else "3.2",
+                    "オッズ（最大）": "4.1" if kind == "複勝" and not no_prices else "",
+                    "人気": str(horse),
+                })
+    if header_only:
+        rows = []
+    else:
+        rows.append({**rows[0], "賭式":"３連単", "番号1":"1",
+                     "番号2":"2", "番号3":"3", "オッズ":"123.4"})
+    if duplicate:
+        rows.append(rows[0].copy())
+    out = StringIO()
+    csv.DictWriter(out, fieldnames=fields).writeheader()
+    writer = csv.DictWriter(out, fieldnames=fields)
+    writer.writerows(rows)
+    sink = BytesIO()
+    name = "wrong_name.csv" if wrong_zip_name else "20261110_odds.csv"
+    with ZipFile(sink, "w") as z:
+        z.writestr(name, out.getvalue().encode("utf-8-sig"))
+    return sink.getvalue()
+
+
+def evaluate(blob, *, source=FILENAME, captured=OBSERVED):
+    return S.validate_private_official_odds_zip(
+        blob, day=DAY, source_filename=source,
+        captured_utc=captured, frozen=frozen_real_style(),
+    )
+
+
+def test_all_frozen_win_and_place_quotes_reconciled_without_selection_change():
+    audit, private = evaluate(zip_odds())
+    assert audit.registered_flat_races == 2
+    assert audit.frozen_registered_horses == 8
+    assert audit.market_rows == 17
+    assert audit.win_rows == 8
+    assert audit.place_rows == 8
+    assert audit.in_scope_races_with_win_quote == 2
+    assert audit.in_scope_races_with_place_quote == 2
+    assert audit.planned_win_tickets_with_price == 2
+    assert audit.planned_place_tickets_with_min_price == 2
+    assert audit.planned_place_tickets_with_max_price == 2
+    assert audit.planned_ticket_count == 4
+    assert audit.minutes_before_first_scheduled_off > 10
+    assert not audit.price_executable_at_order_time_verified
+    assert not audit.after_cost_positive_ev_verified
+    for item in private["selected_quotes_PRIVATE"]:
+        assert item["frozen_win_horse_number"] == "1"
+        assert item["frozen_place_horse_number"] == "4"
+        assert item["win_interim_odds"] == "3.2"
+        assert item["place_interim_odds_min"] == "3.2"
+        assert item["place_interim_odds_max"] == "4.1"
+        assert item["tickets_purchased"] is False
+
+
+def test_missing_market_quote_never_becomes_zero_or_selected_race_exclusion():
+    audit, private = evaluate(zip_odds(no_prices=True))
+    assert audit.registered_flat_races == 2
+    assert audit.planned_ticket_count == 4
+    assert audit.planned_win_tickets_with_price == 0
+    assert audit.planned_place_tickets_with_min_price == 0
+    assert audit.missing_win_prices == 2
+    assert audit.missing_place_min_prices == 2
+    assert all(x["win_interim_odds"] is None for x in private["selected_quotes_PRIVATE"])
+
+
+@pytest.mark.parametrize("kwargs", [
+    {"duplicate": True},
+    {"bad_number": True},
+    {"date_error": True},
+    {"unknown_race": True},
+    {"wrong_zip_name": True},
+])
+def test_odds_zip_rejects_untrusted_or_inconsistent_official_fixture(kwargs):
+    with pytest.raises(S.NarPreoffDailyHold):
+        evaluate(zip_odds(**kwargs))
+
+
+def test_source_clock_must_not_be_after_download_or_stale():
+    source_old = datetime(2026, 11, 9, 23, 40, tzinfo=timezone.utc)
+    with pytest.raises(S.NarPreoffDailyHold, match="STALE"):
+        evaluate(zip_odds(), source=f"20261110_{int(source_old.timestamp())}_odds.zip")
+    source_future = OBSERVED + timedelta(minutes=4)
+    with pytest.raises(S.NarPreoffDailyHold, match="STALE"):
+        evaluate(zip_odds(), source=f"20261110_{int(source_future.timestamp())}_odds.zip")
+
+
+def test_never_accept_first_off_already_close_or_past():
+    with pytest.raises(S.NarPreoffDailyHold, match="TOO_LATE|STALE"):
+        # Both late receipt and a two-hour-stale source must remain HOLD.
+        evaluate(zip_odds(), captured=OFF-timedelta(minutes=7))
+
+
+def test_zip_untrusted_or_wrong_day_is_rejected():
+    with pytest.raises(S.NarPreoffDailyHold):
+        evaluate(b"fake archive")
+    with pytest.raises(S.NarPreoffDailyHold):
+        evaluate(zip_odds(), source="20261109_1790000000_odds.zip")
+
+
+def test_direct_capture_has_no_extra_credential_or_unbounded_polling():
+    assert S._OFFICIAL_ODDS_URL == (
+        "https://www.keiba.go.jp/KeibaWeb/DataDownload/OddsDataDownload?type=daily"
+    )
+    assert S._MAX_SNAPSHOTS_PER_DAY <= 6
+    assert S._MIN_REQUEST_GAP.total_seconds() >= 120
+
+def test_empty_quoted_market_has_complete_fixed_denominator_not_false_profit():
+    audit, private = evaluate(zip_odds(no_prices=True))
+    assert audit.planned_ticket_count == 2*audit.registered_flat_races
+    assert audit.planned_win_tickets_with_price + audit.planned_place_tickets_with_min_price == 0
+    assert audit.missing_win_prices == audit.registered_flat_races
+    assert audit.missing_place_min_prices == audit.registered_flat_races
+    assert not audit.after_cost_positive_ev_verified
+
+
+def test_after_first_off_later_race_preoff_quote_remains_valid():
+    """Fictional two-race chronology: never discard later sales windows."""
+    snap = frozen_real_style()
+    later_off = OFF + timedelta(hours=5)
+    snap["complete_private_forecasts"][1]["scheduled_off_utc"] = later_off.isoformat()
+    after_first = OFF + timedelta(minutes=20)
+    file_time = after_first - timedelta(minutes=1)
+    audit, private = S.validate_private_official_odds_zip(
+        zip_odds(), day=DAY,
+        source_filename=f"20261110_{int(file_time.timestamp())}_odds.zip",
+        captured_utc=after_first, frozen=snap,
+    )
+    assert audit.registered_flat_races == 2  # full original denominator
+    assert audit.future_preoff_eligible_races == 1
+    assert audit.past_or_closed_races == 1
+    assert audit.after_cutoff_raw_quote_rows_ignored == 8
+    assert audit.planned_win_tickets_with_price == 1
+    assert audit.planned_place_tickets_with_min_price == 1
+    assert audit.missing_win_prices == 1
+    assert audit.missing_place_min_prices == 1
+    first, second = private["selected_quotes_PRIVATE"]
+    assert first["win_interim_odds"] is None
+    assert first["place_interim_odds_min"] is None
+    assert second["win_interim_odds"] == "3.2"
+    assert second["place_interim_odds_min"] == "3.2"
+    assert not private["all_market_per_race_PRIVATE"][first["race_id"]]["WIN"]
+
+
+def test_all_completed_or_within_ten_minutes_is_hold_without_backfill():
+    snap = frozen_real_style()
+    last_moment = OFF - timedelta(minutes=10)
+    fts = last_moment - timedelta(minutes=1)
+    with pytest.raises(S.NarPreoffDailyHold, match="TOO_LATE_FOR_ANY_FUTURE_RACE"):
+        S.validate_private_official_odds_zip(
+            zip_odds(),day=DAY,
+            source_filename=f"20261110_{int(fts.timestamp())}_odds.zip",
+            captured_utc=last_moment,frozen=snap,
+        )
+
+
+def test_closed_race_nonempty_prices_cannot_create_fake_retroactive_return():
+    snap = frozen_real_style()
+    snap["complete_private_forecasts"][1]["scheduled_off_utc"] = (
+        OFF + timedelta(hours=4)
+    ).isoformat()
+    now = OFF + timedelta(seconds=15)
+    generated = now - timedelta(seconds=5)
+    audit, data = S.validate_private_official_odds_zip(
+        zip_odds(),day=DAY,
+        source_filename=f"20261110_{int(generated.timestamp())}_odds.zip",
+        captured_utc=now,frozen=snap,
+    )
+    assert audit.win_rows == 8
+    assert audit.place_rows == 8
+    assert audit.planned_ticket_count == 4
+    assert audit.planned_win_tickets_with_price == 1
+    assert audit.after_cutoff_raw_quote_rows_ignored == 8
+    assert not audit.after_cost_positive_ev_verified
+
+
+def test_header_only_zip_is_real_capture_but_zero_market_evidence():
+    """An official header-only CSV is not a matched WIN quote."""
+    audit, private = evaluate(zip_odds(header_only=True))
+    assert audit.market_rows == audit.win_rows == audit.place_rows == 0
+    assert audit.registered_flat_races == 2
+    assert audit.future_preoff_eligible_races == 2
+    assert audit.planned_win_tickets_with_price == 0
+    assert audit.missing_win_prices == 2
+    assert all(x["win_interim_odds"] is None
+               for x in private["selected_quotes_PRIVATE"])
+    assert not audit.after_cost_positive_ev_verified
+
+
+@pytest.mark.parametrize("kind,expected_status,expected_exit", [
+    ("empty", "HOLD_OFFICIAL_DAILY_CSV_NO_MARKET_ROWS", 2),
+    ("unpriced", "HOLD_NO_FROZEN_WIN_PREOFF_QUOTES", 2),
+    ("priced", "PRIVATE_REAL_INTERIM_WIN_QUOTES_CAPTURED", 0),
+])
+def test_cli_distinguishes_source_capture_from_win_evidence(
+    monkeypatch, capsys, tmp_path, kind, expected_status, expected_exit,
+):
+    import json
+    import dataclasses
+    base = evaluate(zip_odds(header_only=kind=="empty",
+                             no_prices=kind=="unpriced"))[0]
+    monkeypatch.setattr(S, "capture_private_daily_odds_once", lambda _: base)
+    monkeypatch.setattr(sys, "argv", [
+        "capture_nar_official_daily_odds_preoff_once.py",
+        "--private-capture-dir", str(tmp_path),
+    ])
+    assert S.main() == expected_exit
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["result"] == expected_status
+    assert payload["source_uploaded"] is False
+    assert payload["after_cost_ev_proven"] is False
+    assert payload["actual_tickets"] == 0
+
+
+@pytest.mark.parametrize("minutes_to_off,expected", [
+    (180, "NAR_PREOFF_ODDS_NO_NEAR_OFF_RACE_YET"),
+    (36, "NAR_PREOFF_ODDS_NO_NEAR_OFF_RACE_YET"),
+    (35, "NEAR_OFF_WINDOW_READY"),
+    (25, "NEAR_OFF_WINDOW_READY"),
+    (11, "NEAR_OFF_WINDOW_READY"),
+    (10, "NAR_PREOFF_ODDS_CAPTURE_WINDOW_CLOSED"),
+    (-2, "NAR_PREOFF_ODDS_CAPTURE_WINDOW_CLOSED"),
+])
+def test_near_off_source_window_is_bounded_before_provider_request(
+    minutes_to_off, expected,
+):
+    frozen = [{"scheduled_off_utc": OFF.isoformat().replace("+00:00", "Z")}]
+    now = OFF - timedelta(minutes=minutes_to_off)
+    assert S._near_off_window_status(frozen, now) == expected
+
+
+def test_later_frozen_race_remains_eligible_after_first_off():
+    rows = [
+        {"scheduled_off_utc": OFF.isoformat().replace("+00:00", "Z")},
+        {"scheduled_off_utc": (OFF + timedelta(hours=3)).isoformat().replace("+00:00", "Z")},
+    ]
+    now = OFF + timedelta(hours=3, minutes=-25)
+    assert S._near_off_window_status(rows, now) == "NEAR_OFF_WINDOW_READY"

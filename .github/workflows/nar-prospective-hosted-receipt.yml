@@ -1,0 +1,82 @@
+name: NAR Prospective Digest GitHub-Hosted Receipt (No Racing Data)
+
+on:
+  push:
+    branches: ["feature/weekly-odds-free-note-20261021"]
+    paths:
+      - ".github/workflows/nar-prospective-hosted-receipt.yml"
+      - "src/horse_racing_predictions/nar_forward_hosted_witness.py"
+      - "scripts/anchor_nar_gh_hosted_receipt.py"
+      - "tests/test_nar_forward_hosted_witness.py"
+  workflow_dispatch:
+    inputs:
+      commitment_digest:
+        description: "PRIVATE SALTED SHA256 DIGEST ONLY (64 lowercase hex, no horse data)"
+        type: string
+        required: true
+      earliest_off_utc:
+        description: "Earliest race post time in UTC, e.g. 2026-11-14T06:00:00Z"
+        type: string
+        required: true
+      race_day_jst:
+        description: "Earliest race date in Japan, e.g. 2026-11-14"
+        type: string
+        required: true
+      registered_flat_races:
+        description: "Number of races in the PRIVATE complete frozen calendar, 1-400"
+        type: string
+        required: true
+      fictional_demo:
+        description: "true = fictional demonstration; false = prospective digest receipt pending independent review"
+        type: choice
+        options: ["true", "false"]
+        default: "true"
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nar-preoff-gh-hosted-${{ github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  synthetic-contract-tests:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout only public code
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install pytest only
+        run: python -m pip install --disable-pip-version-check --quiet pytest
+      - name: Validate recipient contract on fabricated GitHub event only
+        env:
+          PYTHONPATH: src:.
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: python -B -m pytest -q tests/test_nar_forward_hosted_witness.py
+
+  github-hosted-digest-receipt:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Checkout reviewed receipt-only code
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Register ONLY blinded preoff SHA256 digest on GitHub-hosted machine
+        env:
+          PYTHONPATH: src:.
+          PYTHONDONTWRITEBYTECODE: "1"
+          EXPECTED_RUNNER_ENVIRONMENT: ${{ runner.environment }}
+        run: |
+          set -euo pipefail
+          # Never interpolate untrusted workflow_dispatch strings into
+          # shell commands. Python reads GitHub's JSON event safely.
+          python -B scripts/anchor_nar_gh_hosted_receipt.py
+          # The actual immutable-ish GitHub created_at / dispatch inputs
+          # must be checked later by independent Github REST readback.
+          # Workflow logs are retention-limited, not permanent time stamps.

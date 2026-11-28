@@ -1,0 +1,60 @@
+name: NAR PC2 Wider Source Hints (Metadata Only)
+on:
+  push:
+    branches: ["feature/weekly-odds-free-note-20261021"]
+    paths:
+      - "scripts/inspect_pc2_nar_drivewide_candidate_names_readonly.ps1"
+      - ".github/workflows/nar-pc2-bounded-drive-source-hints.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: nar-pc2-bounded-drive-source-hints
+  cancel-in-progress: false
+jobs:
+  validate-source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Parse PowerShell and enforce metadata-only operation contract
+        shell: pwsh
+        run: |
+          $path = 'scripts/inspect_pc2_nar_drivewide_candidate_names_readonly.ps1'
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path $path).Path, [ref]$tokens, [ref]$errors
+          ) | Out-Null
+          if (@($errors).Count -ne 0) { throw 'NAR_PC2_SOURCE_SCRIPT_PARSE_FAILED' }
+          $src = Get-Content -LiteralPath $path -Raw
+          foreach ($banned in @(
+            '\bRemove-Item\b', '\bCopy-Item\b', '\bMove-Item\b',
+            '\bSet-Content\b', '\bAdd-Content\b', '\bOut-File\b',
+            '\bGet-Content\b', '\bImport-Csv\b',
+            '\bExpand-Archive\b', '\bReadAllBytes\b',
+            '\bInvoke-WebRequest\b', '\bInvoke-RestMethod\b',
+            '\bStart-Process\b', '\bInvoke-Expression\b',
+            '\bSet-Acl\b', '\bNew-Item\b'
+          )) {
+            if ($src -match $banned) { throw 'NAR_PC2_SOURCE_MUTATION_OR_CONTENT_READ_FORBIDDEN' }
+          }
+          Write-Host 'PASS: metadata-only PowerShell source parsed'
+  pc2-filename-hints:
+    needs: validate-source
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 12
+    steps:
+      - name: Checkout without cleaning untracked local data
+        uses: actions/checkout@v4
+        with:
+          clean: false
+          persist-credentials: false
+      - name: Bounded directory enumeration, names-only aggregate counts
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          & .\scripts\inspect_pc2_nar_drivewide_candidate_names_readonly.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
