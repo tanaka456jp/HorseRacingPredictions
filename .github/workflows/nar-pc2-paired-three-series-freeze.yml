@@ -1,0 +1,123 @@
+name: NAR PC2 Paired Three-Series Private Freeze and Hosted Receipt
+
+on:
+  push:
+    branches: ["feature/weekly-odds-free-note-20261021"]
+    paths:
+      - ".github/workflows/nar-pc2-paired-three-series-freeze.yml"
+      - "scripts/freeze_nar_paired_three_series_private.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nar-pc2-paired-three-series-freeze
+  cancel-in-progress: false
+
+jobs:
+  pc2-paired-private-freeze:
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 12
+    outputs:
+      ready: ${{ steps.freeze.outputs.ready }}
+      digest: ${{ steps.freeze.outputs.digest }}
+      earliest_off: ${{ steps.freeze.outputs.earliest_off }}
+      day: ${{ steps.freeze.outputs.day }}
+      races: ${{ steps.freeze.outputs.races }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          clean: false
+          persist-credentials: false
+      - name: Freeze only reviewed already-staged inputs
+        id: freeze
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:COMPUTERNAME -cne 'DESKTOP-MVV1FD4' -or
+              $env:GITHUB_REPOSITORY -cne 'tanaka456jp/HorseRacingPredictions' -or
+              $env:GITHUB_REF_NAME -cne 'feature/weekly-odds-free-note-20261021') {
+            Write-Host 'PAIRED_WRONG_PC_OR_CONTEXT_HOLD'
+            exit 2
+          }
+          $private = 'D:\Development\HorseRacingPredictions-PrivateReview'
+          $vpy = Join-Path $private 'nar-exploratory-venv\Scripts\python.exe'
+          if (-not (Test-Path -LiteralPath $vpy -PathType Leaf)) {
+            Write-Host 'PAIRED_PRIVATE_RUNTIME_HOLD'
+            exit 2
+          }
+          $env:PYTHONDONTWRITEBYTECODE = '1'
+          $env:PYTHONPATH = Join-Path (Get-Location).Path 'src'
+          $raw = @(& $vpy -B .\scripts\freeze_nar_paired_three_series_private.py --private-root $private 2>&1)
+          if ($LASTEXITCODE -ne 0 -or $raw.Count -ne 1) {
+            Write-Host 'PAIRED_PRIVATE_SOURCE_OR_DEADLINE_HOLD'
+            Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value 'ready=false'
+            exit 0
+          }
+          try {
+            $d = [string]$raw[0] | ConvertFrom-Json
+            if ($d.schema -cne 'NAR.PC2.PairedThreeSeriesFreezeSummary.v1' -or
+                $d.status -cne 'PRIVATE_PAIRED_FORECAST_FROZEN_RECEIPT_PENDING' -or
+                $d.raw_source_uploaded -ne $false -or $d.actual_bets -ne 0 -or
+                $d.positive_ev_proven -ne $false -or
+                $d.independent_preoff_receipt_verified -ne $false -or
+                [int]$d.races -lt 1 -or [int]$d.runners -lt 4 -or
+                [string]$d.blinded_digest -cnotmatch '^[0-9a-f]{64}$' -or
+                [string]$d.earliest_off_utc -cnotmatch '^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$' -or
+                [string]$d.race_day_jst -cnotmatch '^\d{4}-\d\d-\d\d$') {
+              throw 'UNTRUSTED'
+            }
+            Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value 'ready=true'
+            Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ('digest=' + [string]$d.blinded_digest)
+            Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ('earliest_off=' + [string]$d.earliest_off_utc)
+            Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ('day=' + [string]$d.race_day_jst)
+            Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ('races=' + [int]$d.races)
+            Write-Host 'PAIRED_PRIVATE_FROZEN_HOSTED_RECEIPT_PENDING'
+          } catch {
+            Write-Host 'PAIRED_PRIVATE_SUMMARY_INVALID_HOLD'
+            exit 2
+          }
+
+  github-hosted-paired-receipt:
+    needs: pc2-paired-private-freeze
+    if: ${{ needs.pc2-paired-private-freeze.outputs.ready == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      DIGEST: ${{ needs.pc2-paired-private-freeze.outputs.digest }}
+      OFF: ${{ needs.pc2-paired-private-freeze.outputs.earliest_off }}
+      DAY: ${{ needs.pc2-paired-private-freeze.outputs.day }}
+      RACES: ${{ needs.pc2-paired-private-freeze.outputs.races }}
+    steps:
+      - name: Timestamp blinded commitment, never private rows
+        env:
+          RUNNER_KIND: ${{ runner.environment }}
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from datetime import datetime, timedelta, timezone
+          import json, os, re
+          digest, off, day, races = (os.environ[x] for x in ("DIGEST", "OFF", "DAY", "RACES"))
+          now = datetime.now(timezone.utc)
+          assert os.environ["RUNNER_KIND"] == "github-hosted"
+          assert re.fullmatch(r"[0-9a-f]{64}", digest)
+          assert re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ", off)
+          assert re.fullmatch(r"\d{4}-\d\d-\d\d", day)
+          assert re.fullmatch(r"[1-9]\d{0,2}", races)
+          kickoff = datetime.fromisoformat(off.replace("Z", "+00:00"))
+          assert kickoff.astimezone(timezone(timedelta(hours=9))).date().isoformat() == day
+          assert now < kickoff - timedelta(minutes=5), "PAIRED_RECEIPT_TOO_LATE"
+          print(json.dumps({
+              "schema": "NAR.GitHubHostedPairedThreeSeriesReceipt.v1",
+              "blinded_digest": digest,
+              "github_hosted_observed_utc": now.isoformat(),
+              "earliest_off_utc": off,
+              "race_day_jst": day,
+              "frozen_races_declared": int(races),
+              "private_content_independently_verified": False,
+              "prospective_outcome_measured": False,
+              "actual_bets": 0,
+              "positive_ev_proven": False,
+          }, sort_keys=True))
+          PY
