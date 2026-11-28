@@ -85,3 +85,50 @@ def test_mismatched_or_contaminated_official_input_is_rejected(issue):
     with pytest.raises(ValueError, match="NAR_PAIRED"):
         compare_nar_future_rankings(**kw)
     assert not kw["loaded"].winner.model.calls
+
+
+def test_joint_commitment_binds_all_three_series_and_source_hashes():
+    from copy import deepcopy
+    from horse_racing_predictions.nar_paired_future_comparison import (
+        seal_paired_comparison, verify_paired_commitment,
+    )
+
+    comparison = compare_nar_future_rankings(**inputs())
+    sources = {"official_preoff_zip": "a"*64, "reviewed_entries": "b"*64,
+               "reviewed_prior_history": "c"*64}
+    record = seal_paired_comparison(comparison, source_sha256=sources,
+                                    private_salt=b"x"*32)
+    digest = record["blinded_digest"]
+    assert verify_paired_commitment(record, digest)
+    assert not verify_paired_commitment(record, "0"*64)
+    for key in ("catboost_3_of_5_PRIVATE",
+                "catboost_reviewed_5_feature_PRIVATE"):
+        modified = deepcopy(record)
+        modified["payload_PRIVATE"][key]["races"][0]["outsider"] = "999"
+        assert not verify_paired_commitment(modified, digest)
+    modified = deepcopy(record)
+    modified["payload_PRIVATE"]["fixed_career_baseline_PRIVATE"][0]["outsider"] = "999"
+    assert not verify_paired_commitment(modified, digest)
+    modified = deepcopy(record)
+    modified["payload_PRIVATE"]["source_sha256_PRIVATE"]["reviewed_prior_history"] = "d"*64
+    assert not verify_paired_commitment(modified, digest)
+    assert not verify_paired_commitment(
+        seal_paired_comparison(comparison, source_sha256=sources,
+                               private_salt=b"y"*32), digest)
+
+
+def test_joint_commitment_rejects_mismatched_baseline():
+    from horse_racing_predictions.nar_paired_future_comparison import seal_paired_comparison
+    comparison = compare_nar_future_rankings(**inputs())
+    comparison["fixed_career_baseline"][0]["race_id"] = "wrong"
+    with pytest.raises(ValueError, match="NAR_PAIRED_COMMITMENT_ROSTER"):
+        seal_paired_comparison(comparison, source_sha256={
+            "official_preoff_zip": "a"*64, "reviewed_entries": "b"*64,
+            "reviewed_prior_history": "c"*64}, private_salt=b"x"*32)
+
+
+def test_joint_commitment_rejects_incomplete_source_hashes():
+    from horse_racing_predictions.nar_paired_future_comparison import seal_paired_comparison
+    with pytest.raises(ValueError, match="NAR_PAIRED_COMMITMENT_SOURCE"):
+        seal_paired_comparison(compare_nar_future_rankings(**inputs()),
+                               source_sha256={}, private_salt=b"x"*32)
